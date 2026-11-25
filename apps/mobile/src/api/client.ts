@@ -508,12 +508,6 @@ export function createApiClient(deps: ApiDeps) {
     sellerList: () => call<unknown>('GET', '/v1/seller/list', { ok: 200 }),
     /** GET /v1/seller/analytics/overview: the server's default window (the last 30 days). */
     sellerOverview: (seller: string) => call<unknown>('GET', '/v1/seller/analytics/overview', { seller, ok: 200 }),
-    /** GET /v1/seller/orders: one server-defined bucket, cursor paged. */
-    sellerOrders: (seller: string, bucket: string, cursor: string | null) =>
-      call<unknown>('GET', '/v1/seller/orders', { seller, query: { bucket, cursor: cursor ?? undefined, limit: '20' }, ok: 200 }),
-    /** GET /v1/seller/orders/{id}: one Order of the active Seller. */
-    sellerOrder: (seller: string, id: string) =>
-      call<unknown>('GET', '/v1/seller/orders/{id}', { seller, params: { id }, ok: 200 }),
 
     /**
      * Buyer messaging (WO-013): the existing Chat API, Buyer side (ADU-API-01 S12.7). One

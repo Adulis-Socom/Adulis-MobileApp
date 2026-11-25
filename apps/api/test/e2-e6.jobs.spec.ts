@@ -25,10 +25,9 @@ import {
 } from '../src/jobs/e5-transport-ledger';
 import {
   subscriptionWarn,
-  subscriptionCollectReminder,
   nluHarvestUnmatched,
 } from '../src/jobs/e6-billing-nlu';
-import { S24_JOBS, S24_JOB_NAMES, RULED_JOBS, SCHEDULED_JOBS } from '../src/jobs/registry';
+import { S24_JOBS, S24_JOB_NAMES, SCHEDULED_JOBS } from '../src/jobs/registry';
 
 /**
  * E2-E6, plus the registry's agreement with S24 itself.
@@ -62,7 +61,7 @@ const T0 = new Date('2026-06-01T09:00:00.000Z');
 /** 08:00 in Addis (UTC+3) is 05:00 UTC — the whole point of the trap. */
 const EAT_0800 = new Date('2026-06-02T05:00:00.000Z');
 
-const timingCols = `reservation_window, payment_confirmation_window, fulfilment_window,
+const timingCols = `payment_confirmation_window, fulfilment_window,
   offline_sync_horizon, payout_activation_delay, recovery_cooling_period,
   deleted_number_cooling_period, refund_ack_window, media_retention,
   level_credit_grace, mobile_session_lifetime, console_session_lifetime,
@@ -70,7 +69,7 @@ const timingCols = `reservation_window, payment_confirmation_window, fulfilment_
   otp_ttl, otp_max_attempts, step_up_freshness, new_device_payout_lock,
   same_seller_cancellation_threshold, same_seller_cooldown,
   cross_seller_cooldown_ladder, cancellation_counter_decay, effective`;
-const timingVals = `'48 hours','24 hours','72 hours','7 days','24 hours','7 days',
+const timingVals = `'24 hours','72 hours','7 days','24 hours','7 days',
   '30 days','48 hours','90 days','24 hours','30 days','12 hours','30 minutes',
   '7 days','8 hours','5 minutes',5,'5 minutes','24 hours',3,'1 hour',
   ARRAY['1 day','2 days','4 days']::interval[],'30 days',
@@ -168,7 +167,6 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
       `DELETE FROM core.notification WHERE recipient_account_id IN ('${OWNER}','${BUYER}')`,
       `DELETE FROM core.notification_preference WHERE seller_id='${SELLER}'`,
       `DELETE FROM core.stock_event WHERE seller_id='${SELLER}'`,
-      `DELETE FROM core.reservation WHERE order_id IN (SELECT id FROM core."order" WHERE market_id='${M}')`,
       `DELETE FROM core.order_state_transition WHERE order_id IN (SELECT id FROM core."order" WHERE market_id='${M}')`,
       `DELETE FROM core.cart_line WHERE seller_id='${SELLER}'`,
       `DELETE FROM core.cart WHERE seller_id='${SELLER}'`,
@@ -191,10 +189,42 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
   });
 
   describe('the registry agrees with ADU-DB-01 S24', () => {
-    it('registers exactly the twenty jobs S24 names, and no others', () => {
+    /**
+     * The transcription, written out. S24_JOB_NAMES is a list in the same file
+     * as S24_JOBS, so asserting one against the other alone would let a job be
+     * dropped from both silently. Retirements are deliberate (migration 0063).
+     */
+    const EXPECTED = [
+      'notification.send',
+      'notification.morning_reminder',
+      'stock.confidence_nudge',
+      'level.recompute',
+      'financial.purge_payment_evidence',
+      'media.lifecycle',
+      'subscription.warn',
+      'waitlist.retention_purge',
+      'nlu.harvest_unmatched',
+      'analytics.create_partition',
+      'ledger.assert_zero',
+      'social_post.availability_check',
+      'idempotency.purge_expired',
+      'rate_limit.purge_stale',
+      'notification.push_seller',
+      'device.purge_unbound',
+    ];
+    const RETIRED = [
+      'order.expire_sweep',
+      'order.close_confirmation_window',
+      'buyer_cooldown.decay',
+      'subscription.collect_reminder',
+      'payout.activate_due',
+    ];
+
+    it('registers exactly the sixteen retained S24 jobs, and no others', () => {
       const registered = S24_JOBS.map((j) => j.name).sort();
-      expect(registered).toHaveLength(20);
+      expect(registered).toHaveLength(16);
       expect(registered).toEqual([...S24_JOB_NAMES].sort());
+      expect([...S24_JOB_NAMES].sort()).toEqual([...EXPECTED].sort());
     });
 
     it('every job carries a cadence and a note tracing it to the document', () => {
@@ -204,33 +234,17 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
       }
     });
 
-    /**
-     * THE LIST THAT KEEPS THE LIST ABOVE HONEST (T20 S6.1).
-     *
-     * A job required by a document other than S24 has to be registered
-     * somewhere, and the tempting place is E5_JOBS -- which is where payout
-     * activation first went, turning the twenty into twenty-one and turning a
-     * transcription assertion into a number somebody edits. It is filed under
-     * its own document instead, and these assertions are what stop the two
-     * lists from merging again: an S24 name may never appear in RULED_JOBS,
-     * and a RULED job may never cite S24.
-     */
-    it('jobs from other documents are registered separately and cite those documents', () => {
-      expect(RULED_JOBS.length).toBeGreaterThan(0);
-      for (const job of RULED_JOBS) {
-        expect(job.cron).toBeTruthy();
-        expect(job.cadenceNote).not.toContain('S24');
-        expect(S24_JOB_NAMES).not.toContain(job.name);
-      }
-      expect(RULED_JOBS.map((j) => j.name)).toContain('payout.activate_due');
-    });
-
-    it('the worker schedules both lists and nothing else', () => {
+    it('the worker schedules exactly the S24 list, once each, and no retired job', () => {
+      expect(SCHEDULED_JOBS).toBe(S24_JOBS);
       const names = SCHEDULED_JOBS.map((j) => j.name).sort();
-      expect(names).toEqual([...S24_JOB_NAMES, ...RULED_JOBS.map((j) => j.name)].sort());
+      expect(names).toEqual([...EXPECTED].sort());
       // No name is scheduled twice -- two cron items with one identifier is a
       // job that runs, and is recorded, under a name it shares.
       expect(new Set(names).size).toBe(names.length);
+      for (const gone of RETIRED) {
+        expect(names).not.toContain(gone);
+        expect(S24_JOB_NAMES).not.toContain(gone);
+      }
     });
 
     /**
@@ -316,7 +330,7 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
       // it is carried into the failure message below so a red is readable
       // without a console statement the lint rules forbid.
       expect({ denied, otherRaises }).toEqual({ denied: [], otherRaises });
-      expect(SCHEDULED_JOBS.length).toBe(21);
+      expect(SCHEDULED_JOBS.length).toBe(16);
 
       // The coverage hole, pinned. Exactly these two may be un-probed, and only
       // because they open their own transaction; each is run for real below.
@@ -836,43 +850,6 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
         [OWNER],
       );
       expect(warnings.rows[0].n).toBe(1);
-    });
-
-    it('subscription.collect_reminder sends once and stamps the record', async () => {
-      const sub = await admin.query(`SELECT id FROM billing.subscription WHERE seller_id=$1`, [
-        SELLER,
-      ]);
-      await admin.query(
-        `INSERT INTO billing.collection_record (subscription_id, amount_minor, currency, provider_kind)
-         VALUES ($1, 100000, 'ETB', 'BANK_TRANSFER')`,
-        [sub.rows[0].id],
-      );
-      h.clock.set(T0);
-      // SCOPED TO THIS SELLER, not to a global count. The job's `sent` is
-      // repository-wide, so asserting it equals 1 asserts that no other suite
-      // has an outstanding collection at that instant -- which is D-83's own
-      // rule ("no global sweep") broken by the test that relies on it, and it
-      // fails the moment suite scheduling shifts. What this test is actually
-      // about is: this record is stamped once and its seller is told once.
-      const mine = () => h.sms.sent.filter((m) => m.phone === '+251912001701').length;
-      const stamp = async (): Promise<Date | null> => {
-        const r = await admin.query(
-          `SELECT reminder_sent_at FROM billing.collection_record WHERE subscription_id = $1`,
-          [sub.rows[0].id],
-        );
-        return r.rows[0].reminder_sent_at as Date | null;
-      };
-
-      const before = mine();
-      await subscriptionCollectReminder.run(h.ctx);
-      const first = await stamp();
-      expect(first).not.toBeNull();
-      expect(mine()).toBe(before + 1);
-
-      // Inside the seven-day window, no second nag and no re-stamp.
-      await subscriptionCollectReminder.run(h.ctx);
-      expect(await stamp()).toEqual(first);
-      expect(mine()).toBe(before + 1);
     });
 
     it('nlu.harvest_unmatched carries text and NO identity across the store boundary', async () => {

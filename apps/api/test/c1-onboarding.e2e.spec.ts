@@ -71,8 +71,7 @@ describe('C1 — onboarding and verification', () => {
       [M],
     );
     await admin.query(
-      `INSERT INTO core.timing_config (id, market_id, reservation_window,
-         payment_confirmation_window, fulfilment_window, offline_sync_horizon,
+      `INSERT INTO core.timing_config (id, market_id, payment_confirmation_window, fulfilment_window, offline_sync_horizon,
          payout_activation_delay, recovery_cooling_period,
          deleted_number_cooling_period, refund_ack_window, media_retention,
          level_credit_grace, mobile_session_lifetime, console_session_lifetime,
@@ -81,7 +80,7 @@ describe('C1 — onboarding and verification', () => {
          new_device_payout_lock, same_seller_cancellation_threshold,
          same_seller_cooldown, cross_seller_cooldown_ladder,
          cancellation_counter_decay)
-       VALUES (gen_random_uuid(), $1, '48 hours','24 hours','72 hours','7 days',
+       VALUES (gen_random_uuid(), $1,'24 hours','72 hours','7 days',
          '24 hours','7 days','30 days','48 hours','90 days','24 hours',
          '30 days','12 hours','30 minutes','7 days','8 hours','5 minutes',5,
          '5 minutes','24 hours',3,'1 hour',
@@ -165,8 +164,14 @@ describe('C1 — onboarding and verification', () => {
       `DELETE FROM verification.identity_attestation WHERE person_id IN
          (SELECT person_id FROM core.seller WHERE market_id='${M}' AND person_id IS NOT NULL)`,
       `UPDATE core.seller SET person_id = NULL WHERE market_id='${M}'`,
+      `DELETE FROM core.moderation_queue_item WHERE target_id IN (SELECT id FROM core.product WHERE market_id='${M}')`,
+      `DELETE FROM core.product WHERE market_id='${M}'`,
+      `DELETE FROM billing.subscription_state_transition WHERE subscription_id IN
+         (SELECT id FROM billing.subscription WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id='${M}'))`,
+      `DELETE FROM billing.subscription WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id='${M}')`,
       `DELETE FROM core.seller_public_stats WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id='${M}')`,
       `DELETE FROM core.seller WHERE market_id='${M}'`,
+      `DELETE FROM core.ladder_config WHERE market_id='${M}'`,
       // WAS A TABLE-WIDE ORPHAN SWEEP (T22, D-273). "Every person nothing
       // references" deletes another worker's row the instant that suite has
       // detached it and not yet re-attached it -- a window every suite with a
@@ -449,7 +454,7 @@ describe('C1 — onboarding and verification', () => {
   });
 
   describe('GET /v1/seller/readiness', () => {
-    it('200 with the nine items in order', async () => {
+    it('200 with the eight items in order -- payout details are not a readiness item (0063)', async () => {
       const r = await request(app.getHttpServer())
         .get('/v1/seller/readiness')
         .set('Cookie', cookie(OWNER_S))
@@ -458,7 +463,7 @@ describe('C1 — onboarding and verification', () => {
       expect(r.body.items.map((i: { code: string }) => i.code)).toEqual([
         'ACCOUNT_CREATED', 'SELLER_TYPE_DECLARED', 'ELIGIBILITY_SATISFIED',
         'IDENTITY_VERIFIED', 'COMPANY_DETAILS', 'STORE_PROFILE',
-        'PAYOUT_DETAILS', 'FULFILMENT_CONFIG', 'AT_LEAST_ONE_PRODUCT',
+        'FULFILMENT_CONFIG', 'AT_LEAST_ONE_PRODUCT',
       ]);
     });
 
@@ -486,6 +491,152 @@ describe('C1 — onboarding and verification', () => {
         .get('/v1/seller/readiness')
         .set('Cookie', cookie(OWNER_S))
         .expect(400);
+    });
+  });
+
+  /**
+   * BE-READY-01: payout details left readiness with payout collection (migration 0063).
+   * Two sellers identical but for one genuine requirement: the fulfilment method.
+   */
+  describe('publication readiness without payout details (BE-READY-01)', () => {
+    const READY_OWNER = '66666666-5555-4000-8000-0000000000b1';
+    const BLOCKED_OWNER = '66666666-5555-4000-8000-0000000000b2';
+    const READY_S = '66666666-5555-4000-8000-0000000000b3';
+    const BLOCKED_S = '66666666-5555-4000-8000-0000000000b4';
+    const READY = '66666666-5555-4000-8000-0000000000b5';
+    const BLOCKED = '66666666-5555-4000-8000-0000000000b6';
+
+    const readiness = (seller: string, token: string) =>
+      request(app.getHttpServer())
+        .get('/v1/seller/readiness')
+        .set('Cookie', cookie(token))
+        .set('X-Adulis-Seller', seller);
+    const createProduct = async (seller: string, token: string): Promise<string> =>
+      (
+        await post('/v1/seller/products', token)
+          .set('X-Adulis-Seller', seller)
+          .send({ name: 'Basket', base_price_minor: 1000, base_price_currency: 'ETB' })
+          .expect(201)
+      ).body.product_id as string;
+    const visibility = async (product: string): Promise<string> =>
+      (await admin.query(`SELECT visibility FROM core.product WHERE id = $1`, [product])).rows[0]
+        .visibility as string;
+
+    beforeAll(async () => {
+      await admin.query(
+        `INSERT INTO core.account (id, phone_e164, market_id, status) VALUES
+          ($1,'+251911661004',$3,'ACTIVE'), ($2,'+251911661005',$3,'ACTIVE')`,
+        [READY_OWNER, BLOCKED_OWNER, M],
+      );
+      await admin.query(
+        `INSERT INTO core.session (id, account_id, audience, device_id, expires_at) VALUES
+          ($1,$3,'CONSOLE',$5, now()+interval '12 hours'),
+          ($2,$4,'CONSOLE',$5, now()+interval '12 hours')`,
+        [READY_S, BLOCKED_S, READY_OWNER, BLOCKED_OWNER, DEVICE],
+      );
+      await armFixtureSessions(admin, [READY_S, BLOCKED_S]);
+      await admin.query(
+        `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type,
+                                  store_name, handle, status, description, category_id) VALUES
+          ($1,$3,$4,'INDIVIDUAL','C1 Ready','c1-ready','ACTIVE','sells',$3),
+          ($2,$3,$5,'INDIVIDUAL','C1 Blocked','c1-blocked','ACTIVE','sells',$3)`,
+        [READY, BLOCKED, M, READY_OWNER, BLOCKED_OWNER],
+      );
+      await admin.query(
+        `INSERT INTO core.seller_eligibility_evaluation (id, seller_id, evaluated_at, path, outcome, reasons)
+         VALUES (gen_random_uuid(), $1, now(), 'AUDIENCE', 'SATISFIED', '{}'),
+                (gen_random_uuid(), $2, now(), 'AUDIENCE', 'SATISFIED', '{}')`,
+        [READY, BLOCKED],
+      );
+      // Only the ready seller has a fulfilment method; NEITHER has payout details.
+      await admin.query(
+        `INSERT INTO core.seller_fulfilment_method (seller_id, method, handoff_note, is_active)
+         VALUES ($1, 'BUYER_COLLECTION', 'Piassa', true)`,
+        [READY],
+      );
+      // The publication cap: BETA (uncapped tier) under this market's NEW-level cap.
+      await admin.query(
+        `INSERT INTO billing.subscription (seller_id, state, beta_started_at)
+         VALUES ($1,'BETA', now()), ($2,'BETA', now())`,
+        [READY, BLOCKED],
+      );
+      await admin.query(
+        `INSERT INTO core.ladder_config (id, market_id, established_min_handoffs,
+           established_window, established_min_avg_rating, established_max_claim_rate,
+           trusted_min_handoffs, trusted_window, trusted_min_scan_completion_rate,
+           trusted_max_claim_rate, demotion_max_claim_rate,
+           demotion_max_cancellation_rate, demotion_min_scan_completion_rate,
+           demotion_window, new_level_product_cap, new_level_transaction_cap_minor,
+           distinct_buyer_window, distinct_buyer_max_count)
+         VALUES (gen_random_uuid(), $1, 25,'90 days',4.0,0.02,100,'180 days',0.9,
+           0.01,0.05,0.25,0.5,'60 days',5,500000,'30 days',3)`,
+        [M],
+      );
+    });
+
+    it('a seller with NO payout details who meets every other item is ready, and can publish', async () => {
+      const payout = await admin.query(`SELECT 1 FROM core.payout_details WHERE seller_id = $1`, [READY]);
+      expect(payout.rowCount).toBe(0);
+
+      const product = await createProduct(READY, READY_S);
+      const r = await readiness(READY, READY_S).expect(200);
+      expect(r.body.items.map((i: { code: string }) => i.code)).not.toContain('PAYOUT_DETAILS');
+      expect(r.body.items.filter((i: { satisfied: boolean }) => !i.satisfied)).toEqual([]);
+
+      await post(`/v1/seller/products/${product}/publish`, READY_S)
+        .set('X-Adulis-Seller', READY)
+        .send({})
+        .expect(200);
+      expect(await visibility(product)).toBe('PUBLISHED');
+    });
+
+    it('a seller missing a genuine requirement is still blocked with that item, and only that item', async () => {
+      const product = await createProduct(BLOCKED, BLOCKED_S);
+      const r = await readiness(BLOCKED, BLOCKED_S).expect(200);
+      const unsatisfied = r.body.items.filter((i: { satisfied: boolean }) => !i.satisfied);
+      expect(unsatisfied).toEqual([
+        expect.objectContaining({
+          code: 'FULFILMENT_CONFIG',
+          resolving_action: { kind: 'ADD_FULFILMENT_METHOD' },
+        }),
+      ]);
+
+      const refused = await post(`/v1/seller/products/${product}/publish`, BLOCKED_S)
+        .set('X-Adulis-Seller', BLOCKED)
+        .send({})
+        .expect(409);
+      expect(refused.body.code).toBe('PUBLICATION_BLOCKED');
+      expect(refused.body.items.map((i: { slots: { item: string } }) => i.slots.item)).toEqual([
+        'FULFILMENT_CONFIG',
+      ]);
+      expect(await visibility(product)).toBe('DRAFT');
+    });
+
+    it('an unauthorized caller is still refused: another seller gets 404, a role without the permission 403', async () => {
+      const product = (
+        await admin.query(`SELECT id FROM core.product WHERE seller_id = $1`, [BLOCKED])
+      ).rows[0].id as string;
+
+      // The ready owner holds no relationship to BLOCKED: a scope failure, no detail.
+      const foreign = await post(`/v1/seller/products/${product}/publish`, READY_S)
+        .set('X-Adulis-Seller', BLOCKED)
+        .send({})
+        .expect(404);
+      expect(foreign.body.code).toBe('NOT_FOUND');
+      await readiness(BLOCKED, READY_S).expect(404);
+
+      // An ANALYST on the store lacks seller.products:publish.
+      await admin.query(
+        `INSERT INTO core.seller_team_member (id, seller_id, account_id, role)
+         VALUES (gen_random_uuid(), $1, $2, 'ANALYST')`,
+        [BLOCKED, ANALYST],
+      );
+      const denied = await post(`/v1/seller/products/${product}/publish`, ANALYST_S)
+        .set('X-Adulis-Seller', BLOCKED)
+        .send({})
+        .expect(403);
+      expect(denied.body.code).toBe('PERMISSION_DENIED');
+      expect(await visibility(product)).toBe('DRAFT');
     });
   });
 

@@ -3,8 +3,8 @@ import { grepMigrations, ok, bad } from './_lib.mjs';
 /**
  * Appendix C check 12 — the state machine cannot widen at runtime.
  *
- * Guards ADU-DB-01 v1.8 section 12.2. `core.order_state_transition_legal` and
- * `core.reservation_state_transition_legal` are writable only by
+ * Guards ADU-DB-01 v1.8 section 12.2. `core.order_state_transition_legal` (its
+ * Reservation twin was retired by migration 0063) is writable only by
  * `adulis_migrate`:
  *
  *     REVOKE INSERT, UPDATE, DELETE ON core.order_state_transition_legal FROM adulis_app;

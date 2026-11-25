@@ -20,9 +20,18 @@ is always the authority on what governs.
 
 **What this is:** the *full* seller management system. **Nine of the ten
 publication-readiness items are reachable from nowhere else**, so this is the only
-surface on which a person becomes a seller. It also carries **one screen for a different
-user entirely** — the courier (SC-C1): same deployment, same audience value, separate
-route tree, **no seller navigation**.
+surface on which a person becomes a seller. (The courier screen SC-C1 it once carried was
+removed by the Reservation retirement, 2026-11-25; courier RELATIONSHIP management,
+SC-23, stays.)
+
+> **Reservation retirement (founder pre-launch authorization, 2026-11-25).** The legacy
+> Reservation/Order model is retired outright, not quarantined. The console no longer has
+> Orders, order detail (incl. Can't Fulfil), handoff QR, payment evidence, the clock module,
+> Claims, Payout, the courier order screen, purchase intent / mark-transferred, or the
+> order/reservation/handoff/conversion analytics tiles -- their routes, nav entries, calls,
+> types and fixture rows are gone. Nothing replaces them; do not rebuild any of them without a
+> work order. `GET /v1/seller/obligations` always answers `{ data: [] }` and Home renders it
+> generically. Rules below that describe those screens are history.
 
 > **This file CITES the specifications; it does not replace them** (ADU-REPO-01 v1.2 S6).
 > Where a rule is inlined below for practicality, **the citation beside it governs, and the
@@ -34,12 +43,8 @@ route tree, **no seller navigation**.
 Source: `Governance/DECISION_REGISTER_2026-11-24.md` and the Console amendment of the Nov 24
 pack. Working authority, not a signed approval. **No Console code was changed by this note.**
 
-- **Payment controls are legacy, not approved MVP behaviour (D24-01).** *Confirm Payment
-  Received*, *Payment Not Received*, bank-proof/evidence viewing and every Seller-written PAID
-  control are to be removed or quarantined from active MVP routes by a console work order. The
-  "verbatim labels" and "payment decisions" rules below describe the code that exists today and
-  keep applying to it **until that quarantine lands**; do not extend them, do not add payment
-  UI, and do not delete the code in passing.
+- **Payment controls are legacy, not approved MVP behaviour (D24-01).** They were removed
+  from the console by the Reservation retirement (2026-11-25). Do not add payment UI.
 - **Seller Stories are in the MVP (D24-04)**: Console editor, list, withdraw and preview, one
   photo and short text, one same-Seller Product or Scene link, a 24-hour public life; the
   backend owns time and visibility. No screen exists yet.
@@ -124,13 +129,10 @@ backfill. It earns its place on C-4.
 
 - **The seller id lives in the URL** (`/s/:sellerId/*`), **never in a store.** Two stores
   in two tabs are two URLs and cannot be confused (ADU-AUTH-01 §8.3). The failure this
-  prevents is a seller confirming a payment on the wrong store.
+  prevents is a seller acting on the wrong store.
 - **The console computes no business state.** It renders `state`, `allowed_actions` and
   `readiness[]` as the server resolved them. A countdown may *display* a server deadline;
   it may not *decide* anything when it reaches zero — it refetches.
-- **The verbatim labels** of ADU-CON-03 §4.1. *"Confirm Payment Received"*, **never**
-  *"Accept Payment"*. The verify-in-your-own-bank sentence is adjacent, always visible,
-  never behind a disclosure.
 - **The forbidden controls** of ADU-CON-03 §16: no accept-reservation, no review reply or
   hide, no level control, no delivery tracking, no countdown on a confirmed order, no
   generative assistance. These are the client-side face of the load-bearing absences —
@@ -147,42 +149,14 @@ backfill. It earns its place on C-4.
 - **A missing Amharic key is a compile error**, not a fallback.
 - **Idempotency keys are minted on control *mount*, not on click** — a key minted on click
   is a new key per tap, which is exactly the retry the header exists to defeat.
-- **Evidence is viewed through a blob URL, revoked on unmount.** Never a predictable URL,
-  never in a notification preview.
 - **Screens whose endpoints do not exist are not built.** ADU-CON-03 §17 lists the four.
 
-### C-4's four rules, and where each one lives
+### C-4's four rules -- retired
 
-Every one of these is transcribed from ADU-CON-03 v1.1 S7 (carried unchanged through v1.3 S7), not designed. They
-are the rules most likely to be "improved" by someone who has not read why.
-
-- **The three clock treatments are ONE module** -- `lib/clock.tsx`. SC-03's row
-  and SC-04's clock region ask it the same question, so they cannot drift.
-  `CREATED`/`NOTIFIED` shows the reservation window; `PAYMENT_SUBMITTED` shows
-  the CONFIRMATION window and **not** the reservation one ("irrelevant", S7);
-  `PAYMENT_CONFIRMED` and after show **no countdown at all** -- not a stopped
-  one, not "0:00". `<Deadline>` renders null, so a paid order has no clock
-  region to mistake for a stopped one.
-  **`if (Date.now() > order.expiresAt)` is the defining violation of "the
-  console computes no business state."** At zero the countdown REFETCHES and
-  the server says what the order is. It also measures against `serverTime`
-  from `/v1/bootstrap`, not the device clock.
-- **The payment decisions are equally weighted, and `.decision` has no
-  variant.** No `.primary`, no `.danger`. The only difference between the two
-  buttons is the words. **"Confirm Payment Received", verbatim, never "Accept
-  Payment."** The verify-in-your-own-bank sentence renders before both, always,
-  never inside a disclosure. Confirming WITHOUT opening the evidence is a
-  normal path (ADU-ARCH-01 S3.3) -- nothing nags, blocks, or badges the
-  evidence as unread. Rejection is two steps and step two states the
-  consequence in full.
-- **R20: the handoff region is DISABLED, not hidden**, and that is all four
-  controls. `disabled` is the only thing state changes; the region and its
-  explaining line stay in the document. "A region that disappears makes a
-  seller wonder what they broke."
-- **Evidence renders from a blob URL revoked on unmount**, with no download,
-  print, share, save or "looks valid" affordance of any kind. The revoke is
-  asserted by FETCHING the URL after close and requiring it to fail --
-  checking the `<img>` is gone would pass with the blob still alive.
+C-4's clock module (`lib/clock.tsx`), equally weighted payment decisions, R20's handoff
+region and the evidence blob viewer were removed with their screens by the Reservation
+retirement (2026-11-25). Their reasoning is in git history; nothing in the console carries
+them now. The general rule stands: a displayed server deadline decides nothing.
 
 ## Structure (§9.2)
 
@@ -192,22 +166,22 @@ directory.
 
 ```
 src/
-  router.tsx        /s/:sellerId/*  and  /courier
+  router.tsx        /s/:sellerId/*  (unknown top-level paths -> /)
   api/client.ts     thin wrapper over @adulis/api-client. DO NOT hand-edit types.
   auth/             SC-00 sign-in, SC-31 step-up, remember-device (R17), idle warning
   layout/           Shell (sidebar >=1024px, bottom bar <1024px), SellerSwitcher, nav
   features/
-    entry/          SC-01 SC-02          trade/     SC-03 SC-04 SC-05 SC-06
+    entry/          SC-01 SC-02          (trade/ SC-03..SC-06: retired 2026-11-25)
     catalogue/      SC-07 .. SC-11       conversation/ SC-20 SC-21
-    trust/          SC-12 .. SC-16       store/     SC-17 SC-18 SC-19 SC-22 SC-23
-    admin/          SC-24 .. SC-29       notifications/ SC-30
-  courier/          SC-C1. No seller nav. Mobile layout only.
+    trust/          SC-12 .. SC-14       store/     SC-17 SC-18 SC-19 SC-22 SC-23
+    admin/          SC-25 .. SC-29       notifications/ SC-30
   components/       primitives on @adulis/tokens
-  lib/              intl.ts · idempotency.ts · blob-viewer.ts · states.ts
+  lib/              intl.ts · idempotency.ts · states.ts
 ```
 
 `SellerSwitcher` renders **only** when the account holds more than one seller.
-`nav.ts` carries **five destinations, no more.**
+The Shell carries **four primary destinations** (Home, Products, Inbox, More) since Orders
+was retired -- the spec's five is a ceiling, not a target.
 
 ## Build order (§9.5)
 
@@ -219,11 +193,11 @@ the shell, the states and the client first.
 | **C-1** | A placeholder route renders inside the shell at both breakpoints, with the twelve states demonstrable |
 | **C-2** | A seeded seller signs in against the real API and is warned before idle expiry (T7 §7.1; was "the mock" before Tier 3 existed) |
 | **C-3** | Nine readiness items render from `readiness[]`, in any order, resumable -- **landed T9 Phase 4**: SC-01 Life 1 and SC-02, with the market-context provider (D-103). Life 2, the daily brief, waits for C-4's clock rules (D-148) |
-| **C-4** | Three clock treatments visible; handoff gated on `PAYMENT_CONFIRMED`; payment decisions equally weighted -- **landed T10 Phase 5**: SC-03, SC-04, SC-05, SC-06, each rule asserted by `console-e2e` and proved by planting its violation. Six gaps found and stated rather than filled (D-153 buyer name, D-154 no filter parameter, D-155 no `allowed_actions`, D-156 QR serialisation, D-157 courier ids, D-158 evidence bytes) |
+| **C-4** | Landed T10 Phase 5 (SC-03..SC-06); **retired 2026-11-25** with the Reservation model |
 | **C-5** | Set-count and confirm-stock are visibly **two** actions |
-| **C-6** | Payout's five disclosures; cancel present **only** with a pending change |
-| **C-7** | Reviews read-only; the empty claims list reads as good news |
-| **C-8** | SC-C1 courier: mobile only, no seller nav, QR only after custody |
+| **C-6** | Store and admin screens; Payout (SC-24) **retired 2026-11-25** |
+| **C-7** | Reviews read-only; Claims (SC-15/16) **retired 2026-11-25** |
+| **C-8** | SC-C1 courier screen **retired 2026-11-25** |
 
 > **The unblock note that used to sit here is history** (T7 Phase 4): Tier 3 landed,
 > the contract is committed with its 110 `/v1` path keys (four governing-document

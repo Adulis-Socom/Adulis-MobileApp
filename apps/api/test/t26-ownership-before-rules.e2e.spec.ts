@@ -67,7 +67,6 @@ const A_OWNER = `${N}02`;
 const B_OWNER = `${N}03`;
 const BUYER_A = `${N}04`;
 const BUYER_B = `${N}05`;
-const COURIER = `${N}06`;
 const DEVICE_A = `${N}07`;
 const DEVICE_B = `${N}08`;
 const SELLER_A = `${N}09`;
@@ -76,48 +75,24 @@ const A_OWNER_S = `${N}0b`;
 const B_OWNER_S = `${N}0c`;
 const BUYER_A_S = `${N}0d`;
 const BUYER_B_S = `${N}0e`;
-const COURIER_S = `${N}0f`;
 
 // Seller B's objects. Every one of them is a thing seller A must not be able
 // to confirm the existence of.
 const B_PRODUCT = `${N}10`;
 const B_VARIANT = `${N}11`;
-const B_ORDER = `${N}12`;
-const B_RESERVATION = `${N}13`;
-const B_RES_REFUNDED = `${N}14`;
-const B_REFUND = `${N}15`;
-const B_CLAIM = `${N}16`;
 const B_CONVERSATION = `${N}17`;
 const B_TEAM_MEMBER = `${N}18`;
 const B_COURIER_INVITE = `${N}19`;
 const B_NOTIFICATION = `${N}1a`;
 const B_SOCIAL = `${N}1b`;
 const B_IMAGE = `${N}1c`;
-const B_EVIDENCE = `${N}1d`;
-const B_SUBMISSION = `${N}1e`;
 const B_ACCOUNT_DEVICE = `${N}1f`;
 const B_CART = `${N}20`;
 const B_CART_LINE = `${N}21`;
 const B_TEAM_ACCOUNT = `${N}22`;
-const B_PAYOUT = `${N}23`;
-const B_SNAPSHOT = `${N}24`;
 const OTP = `${N}25`;
 /** Seller B's natural person -- what a company representative would name. */
 const B_PERSON = `${N}28`;
-/*
- * A SECOND ORDER FOR SELLER B, PAST PAYMENT_CONFIRMED, WITH ITS QR MINTED.
- *
- * D-360's signal is "this order has a token", and a token exists only from
- * PAYMENT_CONFIRMED (R20). B_ORDER is PAYMENT_SUBMITTED, so against the
- * pre-fix handler it answered REJECTED_UNKNOWN_ORDER on both branches and the
- * case passed while proving nothing -- the first version of this fixture did
- * exactly that. Writing a token onto a PAYMENT_SUBMITTED order would be a
- * fixture lie; a second order in the state that legitimately carries one is
- * the honest way to make the case discriminate.
- */
-const B_ORDER_READY = `${N}2b`;
-const B_RES_READY = `${N}2c`;
-const B_QR = `${N}2d`;
 /*
  * Seller A's owner also holds an INDIVIDUAL store, so A_OWNER has a
  * `core.person` -- the only thing a company representative may legitimately
@@ -135,7 +110,7 @@ const A_CART_LINE = `${N}2a`;
 const storage = new FakeMediaStorageAdapter();
 const links = new FakePostLinkAdapter();
 
-type Actor = 'SELLER_A' | 'BUYER_A' | 'COURIER';
+type Actor = 'SELLER_A' | 'BUYER_A';
 type Method = 'get' | 'post' | 'patch' | 'put' | 'delete';
 
 interface Case {
@@ -152,13 +127,7 @@ interface Case {
    * Step-up challenges are single-use, so each request gets its own even
    * though a rolled-back handler leaves the challenge unconsumed (D-323).
    */
-  readonly stepUp?: 'REISSUE_INSTRUCTIONS' | 'TEAM_CHANGE';
-  /**
-   * The status both branches must answer, where it is not 404. Only one
-   * endpoint needs it and the reason is required beside it, because an
-   * expectation that can be relaxed silently is not an expectation.
-   */
-  readonly status?: { readonly code: number; readonly why: string };
+  readonly stepUp?: 'TEAM_CHANGE';
 }
 
 @Module({ imports: [AppModule] })
@@ -181,10 +150,8 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
         .set('Cookie', cookie(A_OWNER_S))
         .set('Origin', CONSOLE_ORIGIN)
         .set('X-Adulis-Seller', SELLER_A);
-    } else if (c.actor === 'BUYER_A') {
-      r = r.set('Authorization', `Bearer ${sessionToken(BUYER_A_S)}`).set('X-Adulis-Device', DEVICE_A);
     } else {
-      r = r.set('Authorization', `Bearer ${sessionToken(COURIER_S)}`).set('X-Adulis-Device', DEVICE_A);
+      r = r.set('Authorization', `Bearer ${sessionToken(BUYER_A_S)}`).set('X-Adulis-Device', DEVICE_A);
     }
     if (c.method === 'post') r = r.set('Idempotency-Key', randomUUID());
     const body = c.body ? (c.body(ids) as Record<string, unknown>) : undefined;
@@ -205,10 +172,9 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
    *  - `request_id`: the per-request correlation id, different between ANY
    *    two requests including two identical ones.
    *  - THE IDS THE CALLER SUPPLIED. An endpoint that echoes back the object
-   *    id it was given discloses nothing -- the caller sent it. This matters
-   *    for POST /v1/handoffs/sync, which returns a per-scan result carrying
-   *    `order_ref`; without the substitution its two branches could never
-   *    compare equal and the case would assert nothing.
+   *    id it was given discloses nothing -- the caller sent it; without the
+   *    substitution such a case's two branches could never compare equal and
+   *    it would assert nothing.
    */
   const comparable = (body: unknown, ids: readonly string[] = []): string => {
     if (body === null || typeof body !== 'object') return JSON.stringify(body);
@@ -241,8 +207,7 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
       [M],
     );
     await admin.query(
-      `INSERT INTO core.timing_config (id, market_id, reservation_window,
-         payment_confirmation_window, fulfilment_window, offline_sync_horizon,
+      `INSERT INTO core.timing_config (id, market_id, payment_confirmation_window, fulfilment_window, offline_sync_horizon,
          payout_activation_delay, recovery_cooling_period,
          deleted_number_cooling_period, refund_ack_window, media_retention,
          level_credit_grace, mobile_session_lifetime, console_session_lifetime,
@@ -251,7 +216,7 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
          new_device_payout_lock, same_seller_cancellation_threshold,
          same_seller_cooldown, cross_seller_cooldown_ladder,
          cancellation_counter_decay)
-       VALUES (gen_random_uuid(), $1, '48 hours','24 hours','72 hours','7 days',
+       VALUES (gen_random_uuid(), $1,'24 hours','72 hours','7 days',
          '24 hours','7 days','30 days','48 hours','90 days','24 hours',
          '30 days','12 hours','30 minutes','7 days','8 hours','5 minutes',5,
          '5 minutes','24 hours',3,'1 hour',
@@ -262,9 +227,9 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
     await admin.query(
       `INSERT INTO core.account (id, phone_e164, market_id, status) VALUES
         ($1,'+251922260001',$6,'ACTIVE'), ($2,'+251922260002',$6,'ACTIVE'),
-        ($3,'+251922260003',$6,'ACTIVE'), ($4,'+251922260004',$6,'ACTIVE'),
-        ($5,'+251922260005',$6,'ACTIVE'), ($7,'+251922260006',$6,'ACTIVE')`,
-      [A_OWNER, B_OWNER, BUYER_A, BUYER_B, COURIER, M, B_TEAM_ACCOUNT],
+        ($3,'+251922260003',$5,'ACTIVE'), ($4,'+251922260004',$5,'ACTIVE'),
+        ($6,'+251922260006',$5,'ACTIVE')`,
+      [A_OWNER, B_OWNER, BUYER_A, BUYER_B, M, B_TEAM_ACCOUNT],
     );
     await admin.query(
       `INSERT INTO core.device (id, platform, market_id) VALUES ($1,'ANDROID',$3), ($2,'ANDROID',$3)`,
@@ -292,17 +257,16 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
 
     await admin.query(
       `INSERT INTO core.session (id, account_id, audience, device_id, expires_at) VALUES
-        ($1,$6,'CONSOLE',$11, now()+interval '12 hours'),
-        ($2,$7,'CONSOLE',$12, now()+interval '12 hours'),
-        ($3,$8,'MOBILE',$11, now()+interval '12 hours'),
-        ($4,$9,'MOBILE',$12, now()+interval '12 hours'),
-        ($5,$10,'MOBILE',$11, now()+interval '12 hours')`,
+        ($1,$5,'CONSOLE',$9, now()+interval '12 hours'),
+        ($2,$6,'CONSOLE',$10, now()+interval '12 hours'),
+        ($3,$7,'MOBILE',$9, now()+interval '12 hours'),
+        ($4,$8,'MOBILE',$10, now()+interval '12 hours')`,
       [
-        A_OWNER_S, B_OWNER_S, BUYER_A_S, BUYER_B_S, COURIER_S,
-        A_OWNER, B_OWNER, BUYER_A, BUYER_B, COURIER, DEVICE_A, DEVICE_B,
+        A_OWNER_S, B_OWNER_S, BUYER_A_S, BUYER_B_S,
+        A_OWNER, B_OWNER, BUYER_A, BUYER_B, DEVICE_A, DEVICE_B,
       ],
     );
-    await armFixtureSessions(admin, [A_OWNER_S, B_OWNER_S, BUYER_A_S, BUYER_B_S, COURIER_S]);
+    await armFixtureSessions(admin, [A_OWNER_S, B_OWNER_S, BUYER_A_S, BUYER_B_S]);
 
     // ---- seller B's catalogue -------------------------------------------
     await admin.query(
@@ -336,61 +300,6 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
       `INSERT INTO core.stock_event (id, variant_id, seller_id, delta, reason)
        VALUES (gen_random_uuid(), $1, $2, 10, 'RESTOCK')`,
       [B_VARIANT, SELLER_B],
-    );
-
-    // ---- seller B's order, with a live reservation ------------------------
-    // The ACTIVE reservation is what made D-320 a SELLING signal rather than
-    // an existence signal: the pre-check counted exactly this row.
-    await admin.query(
-      `INSERT INTO core.payout_details (id, seller_id, bank_code, account_last4,
-         state, requested_by_account_id, activated_at)
-       VALUES ($1,$2,'CBE','4321','ACTIVE',$3, now())`,
-      [B_PAYOUT, SELLER_B, B_OWNER],
-    );
-    await admin.query(
-      `INSERT INTO core.order_payout_snapshot (id, seller_id, payout_details_id,
-         bank_code, account_last4)
-       VALUES ($1,$2,$3,'CBE','4321')`,
-      [B_SNAPSHOT, SELLER_B, B_PAYOUT],
-    );
-    await admin.query(
-      `INSERT INTO core."order" (id, seller_id, buyer_account_id, market_id,
-         state, total_minor, total_currency, display_currency, expires_at,
-         payout_snapshot_id)
-       VALUES ($1,$2,$3,$4,'PAYMENT_SUBMITTED',1000,'ETB','ETB',
-               now()+interval '48 hours', $5)`,
-      [B_ORDER, SELLER_B, BUYER_B, M, B_SNAPSHOT],
-    );
-    await admin.query(
-      `INSERT INTO core.reservation (id, order_id, seller_id, buyer_account_id,
-         variant_id, quantity, unit_price_minor, unit_price_currency, state)
-       VALUES ($1,$3,$4,$5,$6,1,1000,'ETB','ACTIVE'),
-              ($2,$3,$4,$5,$6,1,1000,'ETB','REFUNDED')`,
-      [B_RESERVATION, B_RES_REFUNDED, B_ORDER, SELLER_B, BUYER_B, B_VARIANT],
-    );
-    await admin.query(
-      `INSERT INTO core.refund (id, reservation_id, amount_minor, amount_currency,
-         reported_by_seller_at)
-       VALUES ($1,$2,1000,'ETB', now())`,
-      [B_REFUND, B_RES_REFUNDED],
-    );
-    await admin.query(
-      `INSERT INTO financial.payment_evidence (id, order_id, object_key,
-         encryption_key_ref, frame_count)
-       VALUES ($1,$2,'evidence/framed/b/x','EVID_V1',1)`,
-      [B_EVIDENCE, B_ORDER],
-    );
-    await admin.query(
-      `INSERT INTO core.payment_submission (id, order_id, submitted_at,
-         evidence_ref, state, sla_deadline)
-       VALUES ($1,$2, now(), $3, 'SUBMITTED', now()+interval '24 hours')`,
-      [B_SUBMISSION, B_ORDER, B_EVIDENCE],
-    );
-    await admin.query(
-      `INSERT INTO core.claim (id, order_id, opened_by_kind, opened_by_account_id,
-         trigger, state, severity)
-       VALUES ($1,$2,'BUYER',$3,'GOODS_NOT_RECEIVED','AWAITING_SELLER_EVIDENCE','ORDINARY')`,
-      [B_CLAIM, B_ORDER, BUYER_B],
     );
 
     // ---- seller B's people, threads and inbox -----------------------------
@@ -452,25 +361,6 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
      * by `representative_person_id`, and this is the person id an attacker
      * would name to borrow somebody else's identity attestation (D-361).
      */
-    await admin.query(
-      `INSERT INTO core."order" (id, seller_id, buyer_account_id, market_id,
-         state, total_minor, total_currency, display_currency, expires_at,
-         clock_stopped_at, payout_snapshot_id)
-       VALUES ($1,$2,$3,$4,'PAYMENT_CONFIRMED',1000,'ETB','ETB',
-               now()+interval '48 hours', now(), $5)`,
-      [B_ORDER_READY, SELLER_B, BUYER_B, M, B_SNAPSHOT],
-    );
-    await admin.query(
-      `INSERT INTO core.reservation (id, order_id, seller_id, buyer_account_id,
-         variant_id, quantity, unit_price_minor, unit_price_currency, state)
-       VALUES ($1,$2,$3,$4,$5,1,1000,'ETB','FULFILLED')`,
-      [B_RES_READY, B_ORDER_READY, SELLER_B, BUYER_B, B_VARIANT],
-    );
-    await admin.query(
-      `INSERT INTO core.order_qr_token (id, order_id, nonce, signing_key_version)
-       VALUES ($1,$2,$1,1)`,
-      [B_QR, B_ORDER_READY],
-    );
     await admin.query(`INSERT INTO core.person (id) VALUES ($1)`, [B_PERSON]);
     await admin.query(`INSERT INTO core.person (id) VALUES ($1)`, [A_PERSON]);
     await admin.query(
@@ -489,17 +379,6 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
        VALUES (gen_random_uuid(), $1, $2, 'ADMIN', $3)`,
       [SELLER_A, A_STAFF, A_OWNER],
     );
-    /*
-     * COURIER is a live courier OF SELLER B. Without this row the batch case
-     * below cannot discriminate: a non-courier is answered
-     * REJECTED_UNKNOWN_ORDER before COURIER_CANNOT_SCAN is ever considered, so
-     * the case would pass against the placement it exists to refuse.
-     */
-    await admin.query(
-      `INSERT INTO core.seller_courier (id, seller_id, account_id)
-       VALUES (gen_random_uuid(), $1, $2)`,
-      [SELLER_B, COURIER],
-    );
     await admin.query(
       `INSERT INTO core.session (id, account_id, audience, device_id, expires_at)
        VALUES ($1,$2,'CONSOLE',$3, now()+interval '12 hours')`,
@@ -510,27 +389,12 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
       B_PERSON,
       SELLER_B,
     ]);
-    /*
-     * THE RESERVING EVENT for B's live reservation. D-173: fn_cancel_line
-     * releases stock derived from the ORDER_CREATED event, and a reservation
-     * with none aborts the transaction on the release guard -- which is how
-     * T25's attacker's own fixture MASKED D-325, reporting the break as an
-     * unrelated error. Without this row the positive control below would fail
-     * for the wrong reason and prove nothing.
-     */
-    await admin.query(
-      `INSERT INTO core.stock_event (id, variant_id, seller_id, delta, reason,
-         order_id, reservation_id)
-       VALUES (gen_random_uuid(), $1, $2, -1, 'ORDER_CREATED', $3, $4)`,
-      [B_VARIANT, SELLER_B, B_ORDER, B_RESERVATION],
-    );
-
     // The OTP row every step-up challenge hangs off.
     await admin.query(
       `INSERT INTO core.otp_challenge (id, purpose, phone_e164, code_hash,
          expires_at, consumed_at, step_up_action)
        VALUES ($1,'STEP_UP','+251922260001', decode('00','hex'),
-               now()+interval '1 hour', now(), 'REISSUE_INSTRUCTIONS')`,
+               now()+interval '1 hour', now(), 'TEAM_CHANGE')`,
       [OTP],
     );
     const moduleRef = await Test.createTestingModule({ imports: [T26AppModule] })
@@ -548,30 +412,17 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
     await app?.close();
     await admin.query(`SET session_replication_role = replica`);
     for (const q of [
-      `DELETE FROM core.idempotency_record WHERE actor_id IN ('${A_OWNER}','${BUYER_A}','${COURIER}','${A_STAFF}')`,
+      `DELETE FROM core.idempotency_record WHERE actor_id IN ('${A_OWNER}','${BUYER_A}','${A_STAFF}')`,
       `DELETE FROM core.cart_line WHERE cart_id IN ('${B_CART}','${A_CART}')`,
       `DELETE FROM core.cart WHERE id IN ('${B_CART}','${A_CART}')`,
       `DELETE FROM core.seller_company_detail WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,
       `DELETE FROM core.account_device WHERE id='${B_ACCOUNT_DEVICE}'`,
       // INF-03: A_STAFF too -- its session's NEW_DEVICE_SIGNIN notice outlived the account.
-      `DELETE FROM core.notification WHERE recipient_account_id IN ('${A_OWNER}','${B_OWNER}','${BUYER_A}','${BUYER_B}','${COURIER}','${B_TEAM_ACCOUNT}','${A_STAFF}')`,
+      `DELETE FROM core.notification WHERE recipient_account_id IN ('${A_OWNER}','${B_OWNER}','${BUYER_A}','${BUYER_B}','${B_TEAM_ACCOUNT}','${A_STAFF}')`,
       `DELETE FROM core.seller_courier_invite WHERE seller_id='${SELLER_B}'`,
-      `DELETE FROM core.seller_courier WHERE seller_id='${SELLER_B}'`,
       `DELETE FROM core.seller_team_member WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,
       `DELETE FROM chat.message WHERE conversation_id='${B_CONVERSATION}'`,
       `DELETE FROM chat.conversation WHERE id='${B_CONVERSATION}'`,
-      `DELETE FROM core.claim_evidence_item WHERE claim_id='${B_CLAIM}'`,
-      `DELETE FROM core.claim WHERE id='${B_CLAIM}'`,
-      `DELETE FROM core.order_qr_token WHERE order_id='${B_ORDER_READY}'`,
-      `DELETE FROM core.payment_submission WHERE order_id='${B_ORDER}'`,
-      `DELETE FROM financial.access_log WHERE subject_id='${B_EVIDENCE}' OR order_id='${B_ORDER}'`,
-      `DELETE FROM financial.payment_evidence WHERE id='${B_EVIDENCE}'`,
-      `DELETE FROM core.refund WHERE id='${B_REFUND}'`,
-      `DELETE FROM core.reservation WHERE order_id IN ('${B_ORDER}','${B_ORDER_READY}')`,
-      `DELETE FROM core.order_state_transition WHERE order_id IN ('${B_ORDER}','${B_ORDER_READY}')`,
-      `DELETE FROM core."order" WHERE id IN ('${B_ORDER}','${B_ORDER_READY}')`,
-      `DELETE FROM core.order_payout_snapshot WHERE seller_id='${SELLER_B}'`,
-      `DELETE FROM core.payout_details WHERE seller_id='${SELLER_B}'`,
       `DELETE FROM core.stock_event WHERE seller_id='${SELLER_B}'`,
       `DELETE FROM core.seller_social_account WHERE seller_id='${SELLER_B}'`,
       `DELETE FROM core.product_video WHERE product_id='${B_PRODUCT}'`,
@@ -588,7 +439,7 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
       `DELETE FROM core.person WHERE id IN ('${B_PERSON}','${A_PERSON}')`,
       `DELETE FROM core.step_up_challenge WHERE account_id='${A_OWNER}'`,
       `DELETE FROM core.otp_challenge WHERE id='${OTP}'`,
-      `DELETE FROM core.session WHERE account_id IN ('${A_OWNER}','${B_OWNER}','${BUYER_A}','${BUYER_B}','${COURIER}','${A_STAFF}')`,
+      `DELETE FROM core.session WHERE account_id IN ('${A_OWNER}','${B_OWNER}','${BUYER_A}','${BUYER_B}','${A_STAFF}')`,
       `DELETE FROM core.device WHERE id IN ('${DEVICE_A}','${DEVICE_B}')`,
       `DELETE FROM core.account WHERE market_id='${M}'`,
       `DELETE FROM core.timing_config WHERE market_id='${M}'`,
@@ -605,13 +456,18 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
    * in its path. Adding a route to a controller and not to this table is the
    * omission the sweep exists to make visible, so the count is asserted below.
    *
-   * THE POPULATION IS 62, AND THIS TABLE HOLDS 55 (register D-363). The first
+   * THE POPULATION WAS 62, AND THIS TABLE HELD 55 (register D-363). The first
    * version of this file counted PATH parameters and stopped -- 53 routes,
    * arithmetically right and answering a narrower question than the one asked.
    * Nine more routes take an owned-object id ONLY in the BODY, and the two
-   * worst findings of this phase were both among them (D-360, D-361), which is
-   * why both now have cases here. The other seven were traced by hand and are
-   * clean; D-363 lists them and says what each does instead.
+   * worst findings of this phase were both among them (D-360, D-361). The
+   * other seven were traced by hand and are clean; D-363 lists them.
+   *
+   * THE RESERVATION RETIREMENT (migration 0063) REMOVED 26 ROWS with their
+   * routes: buyer and seller orders, payment, refunds, the financial boundary,
+   * handoff (D-360's POST /v1/handoffs/sync with it), courier orders, claims
+   * and review creation. Those routes now 404 for everybody, which is not an
+   * ownership answer and so is not swept here. 29 rows remain.
    *
    * NOT IN THE TABLE, and each for a stated reason rather than by oversight:
    *   - PUT/DELETE /v1/seller/availability-overrides/{date}: the path segment
@@ -670,42 +526,7 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
     { route: 'POST /v1/seller/products/{id}/social-posts', method: 'post', actor: 'SELLER_A',
       foreign: [B_PRODUCT], path: (i) => `/v1/seller/products/${i[0]}/social-posts`,
       body: () => ({ url: 'https://www.tiktok.com/@x/video/1234567890123456789' }) },
-    // ---- seller orders -------------------------------------------------
-    { route: 'GET /v1/seller/orders/{id}', method: 'get', actor: 'SELLER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/seller/orders/${i[0]}` },
-    { route: 'POST /v1/seller/orders/{id}/ready', method: 'post', actor: 'SELLER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/seller/orders/${i[0]}/ready` },
-    { route: 'POST /v1/seller/orders/{id}/payment/confirm', method: 'post', actor: 'SELLER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/seller/orders/${i[0]}/payment/confirm` },
-    { route: 'POST /v1/seller/orders/{id}/payment/reject', method: 'post', actor: 'SELLER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/seller/orders/${i[0]}/payment/reject`,
-      body: () => ({ reason: 'no' }) },
-    // D-325: a COMMITTED cross-tenant destructive write before 0051.
-    { route: 'POST /v1/seller/orders/{id}/reservations/{rid}/cancel', method: 'post', actor: 'SELLER_A',
-      foreign: [B_ORDER, B_RESERVATION],
-      path: (i) => `/v1/seller/orders/${i[0]}/reservations/${i[1]}/cancel` },
-    { route: 'POST /v1/seller/orders/{id}/refunds', method: 'post', actor: 'SELLER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/seller/orders/${i[0]}/refunds`,
-      body: () => ({ reservation_id: B_RES_REFUNDED, amount_minor: 1, currency: 'ETB' }) },
-    // ---- the financial boundary ----------------------------------------
-    { route: 'GET /v1/seller/orders/{id}/payment-evidence', method: 'get', actor: 'SELLER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/seller/orders/${i[0]}/payment-evidence` },
-    { route: 'POST /v1/seller/orders/{id}/reissue-instructions', method: 'post', actor: 'SELLER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/seller/orders/${i[0]}/reissue-instructions`,
-      body: () => ({}), stepUp: 'REISSUE_INSTRUCTIONS' },
-    // ---- handoff, seller side ------------------------------------------
-    { route: 'GET /v1/seller/orders/{id}/qr', method: 'get', actor: 'SELLER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/seller/orders/${i[0]}/qr` },
-    { route: 'POST /v1/seller/orders/{id}/custody-transfer', method: 'post', actor: 'SELLER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/seller/orders/${i[0]}/custody-transfer`,
-      body: () => ({ courier_account_id: COURIER }) },
-    { route: 'POST /v1/seller/orders/{id}/courier-assignment', method: 'post', actor: 'SELLER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/seller/orders/${i[0]}/courier-assignment`,
-      body: () => ({ courier_account_id: COURIER }) },
-    // ---- seller: people and claims --------------------------------------
-    { route: 'POST /v1/seller/claims/{id}/remedy', method: 'post', actor: 'SELLER_A',
-      foreign: [B_CLAIM], path: (i) => `/v1/seller/claims/${i[0]}/remedy`,
-      body: () => ({ remedy: 'REFUND' }) },
+    // ---- seller: people ---------------------------------------------------
     { route: 'DELETE /v1/seller/team/{id}', method: 'delete', actor: 'SELLER_A',
       foreign: [B_TEAM_MEMBER], path: (i) => `/v1/seller/team/${i[0]}`,
       body: () => ({}), stepUp: 'TEAM_CHANGE' },
@@ -714,33 +535,6 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
     { route: 'POST /v1/seller/social-accounts/{id}/verify', method: 'post', actor: 'SELLER_A',
       foreign: [B_SOCIAL], path: (i) => `/v1/seller/social-accounts/${i[0]}/verify` },
     // ---- the buyer's side, one buyer against another --------------------
-    { route: 'GET /v1/orders/{id}', method: 'get', actor: 'BUYER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/orders/${i[0]}` },
-    { route: 'POST /v1/orders/{id}/cancel', method: 'post', actor: 'BUYER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/orders/${i[0]}/cancel` },
-    { route: 'POST /v1/orders/{id}/confirm-receipt', method: 'post', actor: 'BUYER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/orders/${i[0]}/confirm-receipt` },
-    { route: 'POST /v1/orders/{id}/reservations/{rid}/cancel', method: 'post', actor: 'BUYER_A',
-      foreign: [B_ORDER, B_RESERVATION],
-      path: (i) => `/v1/orders/${i[0]}/reservations/${i[1]}/cancel` },
-    { route: 'POST /v1/orders/{id}/refunds/{rid}/acknowledge', method: 'post', actor: 'BUYER_A',
-      foreign: [B_ORDER, B_REFUND],
-      path: (i) => `/v1/orders/${i[0]}/refunds/${i[1]}/acknowledge` },
-    { route: 'GET /v1/orders/{id}/payment-instructions', method: 'get', actor: 'BUYER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/orders/${i[0]}/payment-instructions` },
-    { route: 'POST /v1/orders/{id}/payment-evidence', method: 'post', actor: 'BUYER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/orders/${i[0]}/payment-evidence`,
-      body: () => ({ action: 'REQUEST_UPLOAD' }) },
-    { route: 'POST /v1/orders/{id}/review', method: 'post', actor: 'BUYER_A',
-      foreign: [B_ORDER], path: (i) => `/v1/orders/${i[0]}/review`,
-      body: () => ({ seller_rating: 5 }) },
-    { route: 'GET /v1/claims/{id}', method: 'get', actor: 'BUYER_A',
-      foreign: [B_CLAIM], path: (i) => `/v1/claims/${i[0]}` },
-    { route: 'POST /v1/claims/{id}/evidence', method: 'post', actor: 'BUYER_A',
-      foreign: [B_CLAIM], path: (i) => `/v1/claims/${i[0]}/evidence`,
-      body: () => ({ kind: 'BANK_RECORD', reference_id: B_SUBMISSION }) },
-    { route: 'POST /v1/claims/{id}/evidence-export', method: 'post', actor: 'BUYER_A',
-      foreign: [B_CLAIM], path: (i) => `/v1/claims/${i[0]}/evidence-export` },
     { route: 'GET /v1/conversations/{id}/messages', method: 'get', actor: 'BUYER_A',
       foreign: [B_CONVERSATION], path: (i) => `/v1/conversations/${i[0]}/messages` },
     { route: 'POST /v1/conversations/{id}/messages', method: 'post', actor: 'BUYER_A',
@@ -759,14 +553,6 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
       foreign: [B_OWNER_S], path: (i) => `/v1/auth/sessions/${i[0]}` },
     { route: 'DELETE /v1/auth/remembered-devices/{id}', method: 'delete', actor: 'BUYER_A',
       foreign: [B_ACCOUNT_DEVICE], path: (i) => `/v1/auth/remembered-devices/${i[0]}` },
-    // ---- the courier's side ---------------------------------------------
-    // Isolation here is ROW-LEVEL SECURITY, not a WHERE clause: the courier
-    // policy on core."order" is the one tenant policy this schema has (D-319),
-    // and it must answer the two ids identically like everything else.
-    { route: 'GET /v1/courier/orders/{id}', method: 'get', actor: 'COURIER',
-      foreign: [B_ORDER], path: (i) => `/v1/courier/orders/${i[0]}` },
-    { route: 'POST /v1/courier/orders/{id}/custody-accept', method: 'post', actor: 'COURIER',
-      foreign: [B_ORDER], path: (i) => `/v1/courier/orders/${i[0]}/custody-accept` },
     /*
      * ---- the object id in the BODY, not the path -------------------------
      *
@@ -776,26 +562,6 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
      * it; a route that reads one from its body is in the class exactly as
      * much as one that reads it from its path.
      */
-    // D-360. The outcome string, not the status code, was the oracle: an
-    // order past PAYMENT_CONFIRMED answered REJECTED_SIGNATURE and everything
-    // else REJECTED_UNKNOWN_ORDER, so a 200 body said "that stranger's order
-    // is real and is being fulfilled right now".
-    { route: 'POST /v1/handoffs/sync {order_ref}', method: 'post', actor: 'BUYER_A',
-      foreign: [B_ORDER_READY], path: () => '/v1/handoffs/sync',
-      body: (i) => ({
-        scans: [{
-          order_ref: i[0],
-          nonce: '26262626-2626-4000-8000-0000000000ff',
-          signed_at: 1788000000000,
-          signature: 'f'.repeat(64),
-        }],
-      }),
-      status: {
-        code: 200,
-        why: 'the batch endpoint reports per-item outcomes and 200 means the '
-          + 'BATCH was well formed (12.6.1); the disclosure lives in the '
-          + 'outcome string, which is what the byte comparison covers',
-      } },
     // D-361. `representative_person_id` was written straight through, and
     // fn_seller_attestation_person hands it to has_attestation -- so naming
     // another store's person borrowed that person's identity verification.
@@ -815,7 +581,7 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
     // A number, so that adding a route without adding a case is a failing
     // test rather than a silent gap. The three deliberate exclusions are
     // named in the comment above CASES.
-    expect(CASES.length).toBe(55);
+    expect(CASES.length).toBe(29);
     expect(new Set(CASES.map((c) => c.route)).size).toBe(CASES.length);
   });
 
@@ -831,22 +597,19 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
         const missing = await send(c, missingIds, stepB);
 
         // 1. NOT FOUND, on both. 403 confirms the object exists; 409 confirms
-        //    more than that, which is what D-320 was. One endpoint answers
-        //    200 by contract and carries its reason in the table.
-        const want = c.status?.code ?? 404;
+        //    more than that, which is what D-320 was.
         expect({ route: c.route, status: foreign.status }).toEqual({
           route: c.route,
-          status: want,
+          status: 404,
         });
         expect({ route: c.route, status: missing.status }).toEqual({
           route: c.route,
-          status: want,
+          status: 404,
         });
 
         // 2. THE BYTE COMPARISON. This is the half that catches D-320: the
         //    status alone was already 404 for a foreign product WITHOUT a live
-        //    reservation, and 409 only for one that was selling. It is also
-        //    the ONLY half that catches D-360, where both branches were 200.
+        //    reservation, and 409 only for one that was selling.
         expect({
           route: c.route,
           body: comparable(foreign.body, c.foreign),
@@ -864,43 +627,12 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
   /*
    * ---------------------------------------------------- the review's findings
    *
-   * Two regressions the first version of these fixes introduced, each pinned
-   * by the test that would have caught it. Both were found by review, after
-   * the sweep above was green -- which is the point of running one.
+   * A regression the first version of these fixes introduced, pinned by the
+   * test that would have caught it. Found by review, after the sweep above
+   * was green -- which is the point of running one. (Its handoff twin went
+   * with the handoff routes in 0063.)
    */
   describe('the fixes did not cost what they were fixing', () => {
-    it('a batch carrying a foreign order id still returns 200 with per-item outcomes', async () => {
-      /*
-       * COURIER_CANNOT_SCAN THROWS, so it escapes processScan and takes the
-       * WHOLE BATCH with it -- against 12.6.1's "200 whenever the batch was
-       * well-formed". Hoisting it above the signature check made it reachable
-       * on an order id alone, so one courier typo would have discarded a queue
-       * of doorway scans collected offline. It sits below the signature again,
-       * where it needs the real QR, and this asserts the batch survives.
-       */
-      const r = await request(app.getHttpServer())
-        .post('/v1/handoffs/sync')
-        .set('Authorization', `Bearer ${sessionToken(COURIER_S)}`)
-        .set('X-Adulis-Device', DEVICE_A)
-        .set('Idempotency-Key', randomUUID())
-        .send({
-          scans: [
-            { order_ref: B_ORDER_READY, nonce: randomUUID(),
-              signed_at: 1788000000000, signature: 'a'.repeat(64) },
-            { order_ref: randomUUID(), nonce: randomUUID(),
-              signed_at: 1788000000001, signature: 'b'.repeat(64) },
-          ],
-        });
-      expect(r.status).toBe(200);
-      expect(r.body.results).toHaveLength(2);
-      // The courier's own signature is wrong, so item one is a per-item
-      // rejection like any other -- and item two still gets its outcome.
-      expect(r.body.results.map((x: { outcome: string }) => x.outcome)).toEqual([
-        'REJECTED_SIGNATURE',
-        'REJECTED_UNKNOWN_ORDER',
-      ]);
-    });
-
     it('a team member with seller.store:write may still set company details', async () => {
       /*
        * The representative is resolved against the STORE'S OWNER, not the
@@ -928,133 +660,52 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
   });
 
   /**
-   * The D-320 reproduction, stated as the register states it. The middle line
-   * is the one that used to be a 409, and it is here as its own test because a
-   * table row that passes for the wrong reason is worth nothing: this asserts
-   * the ACTIVE reservation really is there, so the pre-check really would have
-   * counted it.
+   * The D-320 endpoints, after the Reservation retirement (0063). Their
+   * live-reservation 409 is gone with the model, but the ownership resolution
+   * that had to precede it is not: a foreign Product or Variant still answers
+   * the same 404 as an absent one, and seller B's rows are left untouched.
    */
-  describe('D-320, reproduced', () => {
-    it("seller B's product has a live reservation, and A still cannot tell", async () => {
-      const live = await admin.query(
-        `SELECT count(*)::int AS n
-           FROM core.reservation r
-           JOIN core.product_variant v ON v.id = r.variant_id
-          WHERE v.product_id = $1 AND r.state = 'ACTIVE'`,
-        [B_PRODUCT],
-      );
-      expect(live.rows[0].n).toBe(1);
+  describe('D-320, after the live-reservation guard was retired', () => {
+    const asSellerA = (r: request.Test) =>
+      r.set('Cookie', cookie(A_OWNER_S)).set('Origin', CONSOLE_ORIGIN).set('X-Adulis-Seller', SELLER_A);
 
-      const selling = await request(app.getHttpServer())
-        .delete(`/v1/seller/products/${B_PRODUCT}`)
-        .set('Cookie', cookie(A_OWNER_S))
-        .set('Origin', CONSOLE_ORIGIN)
-        .set('X-Adulis-Seller', SELLER_A);
-      const absent = await request(app.getHttpServer())
-        .delete(`/v1/seller/products/${randomUUID()}`)
-        .set('Cookie', cookie(A_OWNER_S))
-        .set('Origin', CONSOLE_ORIGIN)
-        .set('X-Adulis-Seller', SELLER_A);
+    it("seller A cannot delete seller B's product, nor tell it from an absent one", async () => {
+      const foreign = await asSellerA(request(app.getHttpServer()).delete(`/v1/seller/products/${B_PRODUCT}`));
+      const absent = await asSellerA(request(app.getHttpServer()).delete(`/v1/seller/products/${randomUUID()}`));
 
-      expect(selling.status).toBe(404);
-      expect(selling.body.code).not.toBe('PRODUCT_HAS_ACTIVE_ORDERS');
-      expect(comparable(selling.body)).toBe(comparable(absent.body));
+      expect(foreign.status).toBe(404);
+      expect(foreign.body.code).not.toBe('PRODUCT_HAS_ACTIVE_ORDERS');
+      expect(comparable(foreign.body)).toBe(comparable(absent.body));
+      const still = await admin.query(`SELECT 1 FROM core.product WHERE id = $1`, [B_PRODUCT]);
+      expect(still.rowCount).toBe(1);
     });
 
-    it("seller B's variant with a live reservation is equally silent", async () => {
-      const selling = await request(app.getHttpServer())
-        .delete(`/v1/seller/variants/${B_VARIANT}`)
-        .set('Cookie', cookie(A_OWNER_S))
-        .set('Origin', CONSOLE_ORIGIN)
-        .set('X-Adulis-Seller', SELLER_A);
-      expect(selling.status).toBe(404);
-      expect(selling.body.code).not.toBe('VARIANT_HAS_ACTIVE_ORDERS');
+    it("seller A cannot withdraw seller B's variant, by DELETE or by PATCH", async () => {
+      const byDelete = await asSellerA(request(app.getHttpServer()).delete(`/v1/seller/variants/${B_VARIANT}`));
+      const byPatch = await asSellerA(
+        request(app.getHttpServer()).patch(`/v1/seller/variants/${B_VARIANT}`),
+      ).send({ status: 'WITHDRAWN' });
+      const absent = await asSellerA(
+        request(app.getHttpServer()).patch(`/v1/seller/variants/${randomUUID()}`),
+      ).send({ status: 'WITHDRAWN' });
+
+      expect(byDelete.status).toBe(404);
+      expect(byPatch.status).toBe(404);
+      expect(comparable(byPatch.body)).toBe(comparable(absent.body));
+      const v = await admin.query<{ status: string }>(
+        `SELECT status::text AS status FROM core.product_variant WHERE id = $1`,
+        [B_VARIANT],
+      );
+      expect(v.rows[0]?.status).not.toBe('WITHDRAWN');
     });
   });
 
   /**
-   * D-325, at the layer it lives in. The HTTP case is in the table above; this
-   * asserts the DATABASE refuses too, because the function is reachable from
-   * two merged migrations as well as from the endpoint, and because a service
-   * fix over a broken guard is the shape that produced this defect's cousin.
+   * D-362, at the function layer. Its sibling cases on fn_cancel_line (D-325)
+   * went with the function in 0063; the NULL-actor guard on the ownership
+   * transfer is unrelated to Reservations and stays pinned.
    */
-  describe('D-325, at the function layer', () => {
-    it('fn_cancel_line refuses a stranger acting as seller, and changes nothing', async () => {
-      await expect(
-        admin.query(`SELECT core.fn_cancel_line($1, $2, $3, true)`, [
-          B_ORDER,
-          B_RESERVATION,
-          A_OWNER,
-        ]),
-      ).rejects.toMatchObject({ code: 'U0002' });
-
-      const after = await admin.query(
-        `SELECT state::text AS state FROM core.reservation WHERE id = $1`,
-        [B_RESERVATION],
-      );
-      expect(after.rows[0].state).toBe('ACTIVE');
-    });
-
-    it('a total stranger to every seller is refused on the same arm', async () => {
-      await expect(
-        admin.query(`SELECT core.fn_cancel_line($1, $2, $3, true)`, [
-          B_ORDER,
-          B_RESERVATION,
-          BUYER_A,
-        ]),
-      ).rejects.toMatchObject({ code: 'U0002' });
-    });
-
-    it('the buyer arm still refuses a NULL actor rather than falling through', async () => {
-      await expect(
-        admin.query(`SELECT core.fn_cancel_line($1, $2, NULL, false)`, [
-          B_ORDER,
-          B_RESERVATION,
-        ]),
-      ).rejects.toMatchObject({ code: 'U0002' });
-    });
-
-    /*
-     * THE POSITIVE CONTROL, and the first version of it was worthless.
-     *
-     * It asserted that seller B's owner row exists -- which the fixture's own
-     * INSERT already guarantees -- and never called the function. It would
-     * have passed identically if 0051's rewritten guard raised U0002 for the
-     * LEGITIMATE owner too, which is the single failure mode a rewritten guard
-     * most needs a control for. Found by the refutation pass.
-     *
-     * This one calls it, on its own connection, inside a transaction that
-     * ROLLS BACK -- so the rest of this suite still sees an ACTIVE
-     * reservation, and the sweep case above is unaffected by the order it
-     * happens to run in.
-     */
-    it("the order's own seller is still allowed -- the guard did not close on everybody", async () => {
-      const c = await admin.connect();
-      try {
-        await c.query('BEGIN');
-        await c.query(`SELECT core.fn_cancel_line($1, $2, $3, true)`, [
-          B_ORDER,
-          B_RESERVATION,
-          B_OWNER,
-        ]);
-        const after = await c.query<{ state: string }>(
-          `SELECT state::text AS state FROM core.reservation WHERE id = $1`,
-          [B_RESERVATION],
-        );
-        expect(after.rows[0]?.state).toBe('CANCELLED_BY_SELLER');
-      } finally {
-        await c.query('ROLLBACK');
-        c.release();
-      }
-
-      // And outside that transaction nothing moved.
-      const outside = await admin.query<{ state: string }>(
-        `SELECT state::text AS state FROM core.reservation WHERE id = $1`,
-        [B_RESERVATION],
-      );
-      expect(outside.rows[0]?.state).toBe('ACTIVE');
-    });
-
+  describe('D-362, at the function layer', () => {
     /*
      * D-362, the class member 0051's grep missed. `NOT IN` against a list of
      * NOT NULL columns is total on the list side and NOT total on the actor's:

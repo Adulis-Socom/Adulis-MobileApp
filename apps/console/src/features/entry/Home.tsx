@@ -29,7 +29,7 @@
  * configuration, so an availability gate would be satisfied for everyone
  * forever, and a gate that never fails teaches the reader that satisfied rows
  * mean nothing. The count is not asserted here either: the list is whatever
- * the server sends, and if that ever stops being nine the fix is upstream.
+ * the server sends (eight since migration 0063 removed PAYOUT_DETAILS).
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
@@ -37,9 +37,9 @@ import { en, type MessageKey } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
 import { ScreenState } from '../../components/ScreenState';
 import type { UiState } from '../../lib/states';
-import { fillTemplate } from '../../lib/intl';
+import { fillTemplate, timeFormatter } from '../../lib/intl';
+import { useMarketContext } from '../../lib/market';
 import { ITEM_LABEL } from '../../lib/readiness';
-import { ObligationDeadline } from '../../lib/clock';
 
 interface ReadinessItem {
   code: string;
@@ -77,38 +77,22 @@ const ACTION_ROUTE: Readonly<Record<string, string>> = {
   ADD_A_PRODUCT: 'products',
 };
 
-/** GET /v1/seller/obligations -- the server owns the set (v1.10 S12.12b). */
+/**
+ * GET /v1/seller/obligations -- the server owns the set (v1.10 S12.12b). Since
+ * the Reservation retirement (2026-11-25) it always answers { data: [] }: all
+ * three kinds were retired-flow. The list stays generic -- no kind is known
+ * here, so a row renders its code, its server deadline and its consequence.
+ */
 interface Obligation {
   readonly kind: string;
-  readonly object_kind: 'ORDER' | 'CLAIM';
   readonly object_id: string;
   readonly deadline: string;
   readonly consequence_key: string;
 }
 
-/**
- * kind -> the screen that opens the object: the ACTION_ROUTE precedent above,
- * and the recorded reading of S12.12b's "route" cell (D-235 F5) -- a URL is a
- * client artifact, so the server names the object and this table names the
- * screen. An unknown kind renders unlinked with its code visible, exactly
- * like an unrouted readiness action.
- */
-const OBLIGATION_ROUTE: Readonly<Record<string, (id: string) => string>> = {
-};
-
-/**
- * Obligations of a deferred workflow (D24-01 payment, B02-D02 payout): the Seller can no longer
- * act on them here, so showing a deadline with a consequence would invite a miss that nothing in
- * this console can prevent. They are not shown; the server still returns them (a backend gap).
- */
-const DEFERRED_OBLIGATION: ReadonlySet<string> = new Set([
-  'PAYMENT_AWAITING_CONFIRMATION',
-  'ORDER_NOT_READY',
-  'CLAIM_AWAITING_SELLER',
-]);
-
 export function Home() {
   const { sellerId } = useParams<{ sellerId: string }>();
+  const market = useMarketContext();
   const [state, setState] = useState<UiState>('LOADING');
   const [items, setItems] = useState<ReadinessItem[]>([]);
   const [problem, setProblem] = useState<ApiError | null>(null);
@@ -144,7 +128,7 @@ export function Home() {
     if (!sellerId) return;
     try {
       const r = await api<{ data: Obligation[] }>('/seller/obligations', { sellerId });
-      setObligations(r.data.filter((o) => !DEFERRED_OBLIGATION.has(o.kind)));
+      setObligations(r.data);
       setObligationsFailed(false);
     } catch {
       // Failure is not emptiness: the region says it could not load and the
@@ -171,9 +155,9 @@ export function Home() {
         find out what needs them should not scroll past a chart). FLAT,
         nearest-deadline first AS SERVED: no client sort, no grouping (S3.2 --
         grouping by kind buries the urgent thing under a heading). Each row:
-        what (the kind's title), which object (a link), when (the server
-        deadline, displayed and refetched at zero, deciding nothing), and what
-        happens if not (the SERVER's consequence_key, rendered verbatim).
+        what (the kind's title, or its code), when (the server deadline,
+        displayed, deciding nothing), and what happens if not (the SERVER's
+        consequence_key, rendered verbatim).
         Empty is a GOOD state and says so beside the summary in Life 2; over
         an unfinished readiness list it says nothing extra -- the readiness
         items are what need that seller, and they are already on screen.
@@ -188,20 +172,15 @@ export function Home() {
           <h2 id="obligations-heading">{en['console.home.obligations_title']}</h2>
           <ul className="obligation-list">
             {obligations.map((o) => {
-              const route = OBLIGATION_ROUTE[o.kind];
               const title =
                 (en as Record<string, string>)[`obligation.${o.kind.toLowerCase()}.title`] ?? o.kind;
               const consequence = (en as Record<string, string>)[o.consequence_key];
               return (
                 <li key={`${o.kind}-${o.object_id}`} data-obligation={o.kind}>
-                  {route ? (
-                    <Link className="obligation-title" to={route(o.object_id)}>
-                      {title}
-                    </Link>
-                  ) : (
-                    <span className="obligation-title unrouted">{o.kind}</span>
-                  )}
-                  <ObligationDeadline deadline={o.deadline} onElapsed={() => void loadObligations()} />
+                  <span className="obligation-title">{title}</span>
+                  <time className="deadline" dateTime={o.deadline}>
+                    {market ? timeFormatter(market).format(new Date(o.deadline)) : o.deadline}
+                  </time>
                   {/* The server's sentence, verbatim. An unknown key renders
                       AS the key -- visible and greppable, the Feedback.tsx
                       precedent for message_key -- because a row whose stakes
@@ -273,10 +252,6 @@ export function Home() {
 }
 
 function ResolvingLink({ kind }: { kind: string }) {
-  // B02-D02: Payout is deferred entirely and is never a thing the Seller is asked to do here.
-  if (kind === 'ADD_PAYOUT_DETAILS') {
-    return <span className="readiness-action deferred" data-deferred="payout">{en['console.deferred.payout']}</span>;
-  }
   const route = ACTION_ROUTE[kind];
   // An action the server names and this build has no route for is SHOWN and
   // not linked, with its own code visible. Rendering nothing would hide a
@@ -297,48 +272,26 @@ function ResolvingLink({ kind }: { kind: string }) {
  * the old plan is the obligations region above (the server owns that set);
  * what remains here is R23's summary.
  *
- * R23 -- A ROLLING 7 DAYS AGAINST THE PRECEDING 7, FIXED, AND THERE IS NO
- * PICKER. Seven days smooths the weekday/weekend swing without hiding a
- * change worth acting on. The picker belongs on SC-12, where a seller goes to
- * ASK a question; Home answers the one they did not ask. Two windowed
- * overview reads (the v1.10 date parameters) supply the pair; ONLY `orders`
- * is windowed on that endpoint, so orders is the compared number and the
- * point-in-time tiles (products, reservations, handoffs, followers) render
- * once as current totals -- comparing a point-in-time count across windows
- * would be a fabricated trend. No client-derived rates: two server numbers,
- * side by side.
+ * R23 -- THERE IS NO PICKER. The picker belongs on SC-12, where a seller
+ * goes to ASK a question; Home answers the one they did not ask. The
+ * week-on-week orders line went with the Reservation retirement (orders was
+ * the only windowed overview count), so what remains is the point-in-time
+ * tiles, rendered once as current totals -- comparing a point-in-time count
+ * across windows would be a fabricated trend.
  */
 function DailyBrief({ nothingNeeded }: { readonly nothingNeeded: boolean }) {
   const { sellerId } = useParams<{ sellerId: string }>();
   const [thisWeek, setThisWeek] = useState<BriefWindow | null>(null);
-  const [prevWeek, setPrevWeek] = useState<BriefWindow | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     if (!sellerId) return;
     let cancelled = false;
-    const day = 86400000;
-    const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
-    const now = Date.now();
     (async () => {
       try {
-        // The endpoint's window is INCLUSIVE calendar dates (hi = to + 1 day),
-        // so seven DISJOINT days each: this week = the 6 previous calendar
-        // days plus today; previous = the 7 before that, ending the day
-        // before this week starts. The pass's major: from=now-7d/to=now-7d
-        // made the previous window 8 days and counted the boundary day in
-        // BOTH numbers -- two honest figures answering a dishonest question.
-        const cur = await api<BriefWindow>(
-          `/seller/analytics/overview?from=${iso(now - 6 * day)}`,
-          { sellerId },
-        );
-        const prev = await api<BriefWindow>(
-          `/seller/analytics/overview?from=${iso(now - 13 * day)}&to=${iso(now - 7 * day)}`,
-          { sellerId },
-        );
+        const cur = await api<BriefWindow>('/seller/analytics/overview', { sellerId });
         if (cancelled) return;
         setThisWeek(cur);
-        setPrevWeek(prev);
         setFailed(false);
       } catch {
         if (!cancelled) setFailed(true);
@@ -363,30 +316,20 @@ function DailyBrief({ nothingNeeded }: { readonly nothingNeeded: boolean }) {
         <p className="problem" role="alert">
           {en['console.common.refetch_failed']}
         </p>
-      ) : thisWeek && prevWeek ? (
-        <>
-          <p className="brief-orders" data-brief-orders>
-            {fillTemplate(en['console.home.brief_orders'], {
-              n: String(thisWeek.orders),
-              prev: String(prevWeek.orders),
-            })}
-          </p>
-          <div className="kpi-tiles">
-            {(
-              [
-                ['console.insights.analytics.products_published', thisWeek.products_published],
-                ['console.insights.analytics.active_reservations', thisWeek.active_reservations],
-                ['console.insights.analytics.completed_handoffs', thisWeek.completed_handoffs],
-                ['console.insights.analytics.followers', thisWeek.followers],
-              ] as const
-            ).map(([key, value]) => (
-              <div key={key} className="kpi-tile">
-                <span className="kpi-label">{en[key as MessageKey]}</span>
-                <span className="kpi-value">{value}</span>
-              </div>
-            ))}
-          </div>
-        </>
+      ) : thisWeek ? (
+        <div className="kpi-tiles">
+          {(
+            [
+              ['console.insights.analytics.products_published', thisWeek.products_published],
+              ['console.insights.analytics.followers', thisWeek.followers],
+            ] as const
+          ).map(([key, value]) => (
+            <div key={key} className="kpi-tile">
+              <span className="kpi-label">{en[key as MessageKey]}</span>
+              <span className="kpi-value">{value}</span>
+            </div>
+          ))}
+        </div>
       ) : null}
     </section>
   );
@@ -395,9 +338,6 @@ function DailyBrief({ nothingNeeded }: { readonly nothingNeeded: boolean }) {
 /** The overview fields the brief renders (suffix-free since v1.10). */
 interface BriefWindow {
   readonly products_published: number;
-  readonly orders: number;
-  readonly active_reservations: number;
-  readonly completed_handoffs: number;
   readonly followers: number;
   readonly window: { readonly from: string; readonly to: string };
 }

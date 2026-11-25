@@ -119,9 +119,6 @@ export function Inbox() {
         <div className="empty" data-state="EMPTY">
           <h3>{en['console.inbox.empty_heading']}</h3>
           <p>{en['console.inbox.empty_body']}</p>
-          <Link className="button primary" to={`/s/${sellerId}/orders`}>
-            {en['console.inbox.view_orders']}
-          </Link>
         </div>
       ) : (
         <>

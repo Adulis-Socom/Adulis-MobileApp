@@ -11,8 +11,9 @@
  * ITEM_LABEL rule: the keys are the server's verbatim, a key without a label
  * renders AS ITSELF, visible and greppable, never dropped).
  *
- * Deep links: order_id -> the order; slots.conversation_id -> the thread.
- * A row with neither carries no link, and that is the truth of the row.
+ * Deep links: slots.conversation_id -> the thread. A row without one carries
+ * no link, and that is the truth of the row (an order_id has no screen since
+ * the Reservation retirement, 2026-11-25).
  *
  * Both read POSTs are runIdempotent -- keys minted on mount, reminted after
  * each success (the Stock.tsx per-action pattern).
@@ -136,13 +137,6 @@ export function NotificationCentre() {
   const fmt = market ? timeFormatter(market) : null;
 
   const link = (row: NotificationRow) => {
-    if (row.order_id) {
-      return (
-        <Link to={`/s/${sellerId}/orders/${row.order_id}`}>
-          {en['console.notifications.open_order']}
-        </Link>
-      );
-    }
     const conv = row.slots?.['conversation_id'];
     if (typeof conv === 'string') {
       return (

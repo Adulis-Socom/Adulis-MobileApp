@@ -12,7 +12,7 @@
  * scarce and trustworthy.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { useParams } from 'react-router';
 import { en } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
 import { ProblemBanner } from '../../components/Feedback';
@@ -121,9 +121,6 @@ export function Reviews() {
                 {r.badge ? (
                   <span className="badge badge-review">{BADGE_LABEL[r.badge] ?? r.badge}</span>
                 ) : null}
-                <Link to={`/s/${sellerId}/orders/${r.order_id}`} className="review-order">
-                  {en['console.insights.reviews.open_order']}
-                </Link>
                 <span className="review-date">
                   {fmt ? fmt.format(new Date(r.published_at)) : r.published_at}
                 </span>

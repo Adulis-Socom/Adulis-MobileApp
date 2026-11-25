@@ -2,8 +2,8 @@ import { productionSources, repoFile } from '../testing/source-scan';
 
 /**
  * The app places no Order and takes no payment, so none of its code may name the older cart, Order,
- * payment, receipt, refund, billing, payout, claim or checkout routes. The Seller Companion's two reads of
- * its own store's orders are a different path and are not matched. The list is checked against the contract
+ * payment, receipt, refund, billing, payout, claim or checkout routes, nor the retired Seller and Courier
+ * Order routes (removed with the Reservation model). The list is checked against the contract
  * itself (read only): a route that touches those words and is neither denied nor allowed below fails. Comments are ignored, so explaining a rule never trips
  * it, and each pattern is proved on a sample it exists to catch, so one that stops matching cannot pass
  * silently. Adding any of these is a product decision and changes this test on purpose.
@@ -47,6 +47,8 @@ const DENIED: ReadonlyArray<[what: string, pattern: RegExp, sample: string]> = [
   ['a Seller payment decision', /payment\/(confirm|reject)/, "'/payment/confirm'"],
   ['a checkout route', /\/v1\/checkout/, "'/v1/checkout/sessions'"],
   ['a payment attempt route', /payment-attempt/, "'/payment-attempts'"],
+  ['a Seller Order route', /\/v1\/seller\/orders\b/, "'/v1/seller/orders/{id}/qr'"],
+  ['a Courier Order route', /\/v1\/courier\/orders\b/, "'/v1/courier/orders'"],
 ];
 
 describe('the app names no cart, Order, payment, receipt, refund, billing, payout, claim or checkout route', () => {
@@ -60,7 +62,7 @@ describe('the app names no cart, Order, payment, receipt, refund, billing, payou
     expect(sources.length).toBeGreaterThan(100);
     expect(files).toEqual(expect.arrayContaining(['api/client.ts', 'seller/seller-api.ts']));
     const client = sources.find((s) => s.file === 'api/client.ts')!;
-    expect(client.text).toContain('/v1/seller/orders');
+    expect(client.text).toContain('/v1/seller/analytics/overview');
   });
 
   it.each(DENIED)('no source names %s', (_what, pattern) => {
@@ -75,13 +77,6 @@ describe('the app names no cart, Order, payment, receipt, refund, billing, payou
       expect(pattern.test(stripComments(`// ${sample}\nconst a = 1;`))).toBe(false);
     },
   );
-
-  it("does not match the Seller Companion's own store orders", () => {
-    for (const [, pattern] of DENIED) {
-      expect(pattern.test("'/v1/seller/orders'")).toBe(false);
-      expect(pattern.test("'/v1/seller/orders/{id}'")).toBe(false);
-    }
-  });
 });
 
 describe('every contract route that touches a cart, an Order, money or a claim is decided here', () => {
@@ -91,28 +86,25 @@ describe('every contract route that touches a cart, an Order, money or a claim i
   const TOUCHES =
     /cart|order|payment|refund|reissue|billing|payout|claim|checkout|handoff|remedy|reservation|receipt/i;
 
-  /**
-   * Routes that name one of those words and are still allowed, each for a reviewed reason: the Seller
-   * Companion and Courier operate on their own store's or assigned Orders, and an image position is not an Order.
-   */
-  const ALLOWED = [
-    '/v1/seller/orders',
-    '/v1/seller/orders/{id}',
-    '/v1/seller/orders/{id}/ready',
-    '/v1/seller/orders/{id}/courier-assignment',
-    '/v1/seller/orders/{id}/custody-transfer',
-    '/v1/seller/orders/{id}/qr',
-    '/v1/courier/orders',
-    '/v1/courier/orders/{id}',
-    '/v1/courier/orders/{id}/custody-accept',
-    '/v1/seller/products/{id}/images/order',
-  ];
+  /** Routes that name one of those words and are still allowed, each for a reviewed reason: an image position is not an Order. */
+  const ALLOWED = ['/v1/seller/products/{id}/images/order'];
   const denied = (path: string) => DENIED.some(([, pattern]) => pattern.test(`'${path}'`));
 
-  it('reads the contract: it has the cart and Order routes', () => {
-    expect(contractPaths).toEqual(
-      expect.arrayContaining(['/v1/cart', '/v1/cart/lines', '/v1/orders']),
-    );
+  it('reads the contract: it has the cart routes', () => {
+    expect(contractPaths).toEqual(expect.arrayContaining(['/v1/cart', '/v1/cart/lines']));
+  });
+
+  // The Reservation retirement removed these families from the API; the regenerated contract must not carry them.
+  it.each([
+    ['Order', /^\/v1\/orders\b/],
+    ['Seller Order', /^\/v1\/seller\/orders\b/],
+    ['Courier Order', /^\/v1\/courier\/orders\b/],
+    ['claim', /^\/v1\/(?:seller\/)?claims\b/],
+    ['handoff', /^\/v1\/handoffs\b/],
+    ['Seller payout', /^\/v1\/seller\/payout\b/],
+    ['billing purchase', /^\/v1\/billing\/(?:purchase-intent|mark-transferred)\b/],
+  ])('the contract has no retired %s route', (_what, pattern) => {
+    expect(contractPaths.filter((path) => pattern.test(path))).toEqual([]);
   });
 
   it('leaves no such route undecided: a new one fails here until it is denied or allowed on purpose', () => {

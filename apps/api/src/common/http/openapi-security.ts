@@ -25,10 +25,7 @@ export const OPTIONAL_SECURITY: readonly Record<string, string[]>[] = [{}, { coo
  */
 export const LEGACY_COMMERCE_CONTROLLERS: ReadonlySet<string> = new Set([
   'BillingController',
-  'ClaimsController',
   'CouriersController',
-  'FinancialController',
-  'HandoffController',
   'ObligationsController',
   'OrdersController',
   'ReviewsController',

@@ -217,7 +217,7 @@ export function Products() {
                     <span className="product-thumb product-thumb-empty" aria-hidden="true" />
                   )}
                   <span className="product-name">{p.name}</span>
-                  <span className={`badge badge-${p.visibility.toLowerCase()}`}>
+                  <span className={`badge badge-${p.visibility.toLowerCase()}`} data-badge={p.visibility}>
                     {STATUS_LABEL[p.visibility]}
                   </span>
                   <span className="product-price">

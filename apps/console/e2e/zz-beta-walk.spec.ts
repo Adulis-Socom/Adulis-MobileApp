@@ -166,28 +166,7 @@ test.describe('T17 -- what a beta seller can actually do', () => {
     }
 
     mark('step 6 done');
-    // ---------------------------------------------------------------- step 4
-    // Payout details, on the day the seller signs up -- one of the nine.
-    await page.goto(`/s/${sellerId}/payouts`);
-    await page.waitForTimeout(1500);
-    await shot('06b-payout-day-one');
-    const lock = page.locator('[data-payout-lock]');
-    if (await lock.count()) {
-      const why = (await lock.textContent({ timeout: 2000 }).catch(() => '')) ?? '';
-      const changeDisabled = await page
-        .locator('[data-action="change-payout"]')
-        .isDisabled({ timeout: 2000 })
-        .catch(() => null);
-      note(
-        '4',
-        'CANNOT',
-        `on day one the payout control is ${changeDisabled ? 'DISABLED' : 'enabled'} and the screen says: "${why.replace(/\s+/g, ' ').trim()}"`,
-      );
-    } else {
-      note('4', 'OK', 'payout details can be set on the day of sign-up');
-    }
-
-    mark('step 4 done');
+    // (Step 4, payout details on day one, went with the Reservation retirement, 2026-11-25.)
     // ---------------------------------------------------------------- step 5
     // List a product with photographs, variants, prices and stock.
     await page.goto(`/s/${sellerId}/products/new`);
@@ -368,21 +347,7 @@ test.describe('T17 -- what a beta seller can actually do', () => {
           ? 'a redirected seller still reaches "Create a store", from the switcher'
           : 'a redirected seller cannot reach store creation without typing /s/new',
       );
-
-      await back.getByRole('button', { name: /sign out/i }).click({ timeout: 10_000 });
-      await back.waitForURL(/sign-in/, { timeout: 20_000 });
-      await back
-        .getByRole('link', { name: /deliveries assigned to you/i })
-        .click({ timeout: 10_000 });
-      const armed = await back.locator('[data-courier-resume]').count();
-      note(
-        '14',
-        armed > 0 ? 'OK' : 'CANNOT',
-        armed > 0
-          ? 'signing out reaches the courier entry point, which says it will resume there'
-          : 'the courier entry point was not reachable after signing out',
-      );
-      await back.screenshot({ path: path.join(SHOTS, '13-courier-from-signin.png'), fullPage: true });
+      // (The courier entry point from sign-in went with the courier order screen, 2026-11-25.)
     } catch (e) {
       note('14', 'CANNOT', `could not reach the recovered routes: ${String(e).slice(0, 90)}`);
     } finally {

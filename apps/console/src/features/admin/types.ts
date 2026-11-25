@@ -1,43 +1,9 @@
 /**
  * features/admin/types.ts -- LOCAL transcriptions of the admin-group service
- * shapes (financial, team, ownership, billing, deletion, notifications, auth
+ * shapes (team, ownership, billing, deletion, notifications, auth
  * sessions). The D-98 class: schema-less in the contract; transcribed from
  * the services and marked for deletion the day the contract carries schemas.
  */
-
-/** GET /v1/seller/payout -- financial.service.ts. Only last4 exists in core. */
-export interface PayoutRow {
-  readonly id: string;
-  readonly bank_code: string;
-  readonly account_last4: string;
-  readonly state: string;
-  readonly requested_at: string;
-  readonly activates_at: string | null;
-  readonly activated_at: string | null;
-}
-export interface PayoutState {
-  readonly active: PayoutRow | null;
-  readonly pending: PayoutRow | null;
-  /**
-   * T15 Phase 4 (S15.0c): the lock state, read PROACTIVELY so SC-24 draws a
-   * panel rather than discovering it on a 409. `reason` is the write path's own
-   * vocabulary (RECOVERY_COOLING | NEW_DEVICE | NO_TIMING_CONFIG); null when
-   * unlocked. `payout_locked_until` is the lift, null for NO_TIMING_CONFIG.
-   */
-  readonly payout_locked_until: string | null;
-  readonly reason: string | null;
-  /** D-155: the server's answer to what this seller may do to payout. */
-  readonly allowed_actions: readonly string[];
-}
-
-/** GET /v1/seller/payout/history -- fixed LIMIT 100, newest first. */
-export interface PayoutHistoryRow {
-  readonly id: string;
-  readonly previous_last4: string | null;
-  readonly new_last4: string | null;
-  readonly outcome: string;
-  readonly occurred_at: string;
-}
 
 /** GET /v1/seller/team -- team.service.ts. `id` is the MEMBERSHIP id. */
 export interface TeamMember {
@@ -74,35 +40,8 @@ export interface Subscription {
   readonly locked_rate_minor: number | null;
   readonly locked_rate_currency: string | null;
 }
-export interface PurchaseIntent {
-  readonly intent_id: string;
-  readonly collection_record_id: string;
-  readonly tier: string;
-  readonly term: string;
-  readonly amount_minor: number;
-  readonly currency: string;
-  readonly expires_at: string;
-  /**
-   * T15 Phase 4 (A7): the transfer reference the POST minted, now on the GET
-   * too -- a seller who closed the tab reads back what to write on the bank
-   * transfer instead of waiting for the quote to expire.
-   */
-  readonly reference: string;
-  readonly marked_transferred_at: string | null;
-}
 export interface SubscriptionState {
   readonly subscription: Subscription | null;
-  readonly intent: PurchaseIntent | null;
-}
-export interface IntentCreated {
-  readonly intent_id: string;
-  readonly collection_record_id: string;
-  readonly amount_minor: number;
-  readonly currency: string;
-  readonly reference: string;
-  readonly tier: string;
-  readonly term: string;
-  readonly expires_at: string;
 }
 
 /**

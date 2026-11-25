@@ -54,19 +54,10 @@ const PERMITTED_FUNCTIONS = [
   // exactly this; reads that disclose still go only through
   // read_attestation and its access log.
   'verification.has_attestation',
-  'financial.read_payment_evidence',
-  'financial.render_payment_instructions',
-  // Register D-16: the boundary's WRITE path. The document prints only the
-  // readers; a read-only boundary with no commit path would force app table
-  // grants in financial - the exact hole section 13 exists to close. The
-  // narrow definer (insert + log, nothing else) is app-callable; the
-  // retention marker is NOT (triggers and jobs reach it as adulis_migrate).
-  'financial.write_payment_evidence',
-  // The payout credential's writer (migration 0022) - D-16's argument on
-  // the payout side: ciphertext in, nothing out, upsert on details id.
-  // The app supplies ciphertext it encrypted with a key Postgres never
-  // held; a read stays impossible outside render_payment_instructions.
-  'financial.write_payout_credential',
+  // The payment-evidence reader and writer, the payment-instruction renderer and the
+  // payout-credential writer were DROPPED by migration 0063 (payment collection and payout
+  // collection retired before launch). A grant on any of them could not reappear unnoticed:
+  // check 2 below fails on an EXECUTE grant to anything not listed.
   // The purge (migration 0023, S16.9 "Payout details: Purged"): ids in,
   // a row count out, DELETE and nothing else. Deletion's one crossing of
   // the boundary discloses nothing - ciphertext goes away, none returns.

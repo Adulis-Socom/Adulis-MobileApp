@@ -9,11 +9,15 @@ import { expectConforms } from './contract-support';
 import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
- * C7 — chat (12.7), claims (12.4, X15), reviews (12.4, 12.11, S12): R10's
- * defaultless scope, the cascade's implementable layers with escalation as
- * a notification, the evidence bundle attaching at open, the bank-record
- * single transaction, the identity-free export, the seller's remedy, and
- * reviews whose badge nobody sends.
+ * C7 — chat (12.7) and seller review reads (12.11, S12): R10's defaultless
+ * scope, the cascade's implementable layers with escalation as a
+ * notification, and reviews whose badge nobody sends.
+ *
+ * Claims and review creation were retired with the Reservation model
+ * (migration 0063): every /v1/claims* and /v1/seller/claims* route and
+ * POST /v1/orders/{id}/review are gone, and this file pins that they 404.
+ * The one review the seller reads is an inert historical row on an inert
+ * order, inserted directly -- no function creates either any more.
  */
 
 const CONSOLE_ORIGIN = 'http://localhost:5173';
@@ -42,6 +46,7 @@ const STRANGER_S = 'dddd7777-3333-4000-8000-00000000000e';
 const OWNER2_S = 'dddd7777-3333-4000-8000-00000000000f';
 const INTENT_PLAIN = 'dddd7777-3333-4000-8000-000000000010';
 const INTENT_SLOTTED = 'dddd7777-3333-4000-8000-000000000011';
+const ORDER = 'dddd7777-3333-4000-8000-000000000012'; // inert, COMPLETED
 
 const P = {
   owner: '+251911551701',
@@ -57,9 +62,6 @@ describe('C7 — chat, claims, reviews', () => {
   let app: INestApplication;
   let admin: Pool;
   let conversationId = '';
-  let order1 = ''; // review order — driven terminal
-  let order2 = ''; // claim order
-  let claimId = '';
 
   const key = () => randomUUID();
   const http = () => request(app.getHttpServer());
@@ -89,8 +91,7 @@ describe('C7 — chat, claims, reviews', () => {
       [M],
     );
     await admin.query(
-      `INSERT INTO core.timing_config (id, market_id, reservation_window,
-         payment_confirmation_window, fulfilment_window, offline_sync_horizon,
+      `INSERT INTO core.timing_config (id, market_id, payment_confirmation_window, fulfilment_window, offline_sync_horizon,
          payout_activation_delay, recovery_cooling_period,
          deleted_number_cooling_period, refund_ack_window, media_retention,
          level_credit_grace, mobile_session_lifetime, console_session_lifetime,
@@ -99,7 +100,7 @@ describe('C7 — chat, claims, reviews', () => {
          new_device_payout_lock, same_seller_cancellation_threshold,
          same_seller_cooldown, cross_seller_cooldown_ladder,
          cancellation_counter_decay)
-       VALUES (gen_random_uuid(), $1, '48 hours','24 hours','72 hours','7 days',
+       VALUES (gen_random_uuid(), $1,'24 hours','72 hours','7 days',
          '24 hours','7 days','30 days','48 hours','90 days','24 hours',
          '30 days','12 hours','30 minutes','7 days','8 hours','5 minutes',5,
          '5 minutes','24 hours',3,'1 hour',
@@ -155,11 +156,22 @@ describe('C7 — chat, claims, reviews', () => {
        VALUES (gen_random_uuid(),$1,$2,10,'SELLER_SET')`,
       [VARIANT, SELLER],
     );
+    // The historical review the seller reads: an inert COMPLETED order and
+    // its review, badge derived by the trigger (the caller's value is ignored).
     await admin.query(
-      `INSERT INTO core.payout_details (id, seller_id, bank_code, account_last4,
-         state, activated_at, requested_by_account_id)
-       VALUES (gen_random_uuid(), $1,'CBE','1234','ACTIVE', now(), $2)`,
-      [SELLER, OWNER],
+      `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id, state,
+         expires_at, clock_stopped_at, total_minor, total_currency, display_currency)
+       VALUES ($1,$2,$3,$4,'COMPLETED', now(), now(), 30000,'ETB','ETB')`,
+      [ORDER, M, SELLER, BUYER],
+    );
+    const review = await admin.query<{ id: string }>(
+      `INSERT INTO core.review (order_id, buyer_account_id, seller_id, seller_rating, body, badge)
+       VALUES ($1,$2,$3,4,'Quick handoff.','CLAIM_UPHELD') RETURNING id`,
+      [ORDER, BUYER, SELLER],
+    );
+    await admin.query(
+      `INSERT INTO core.review_item_rating (review_id, product_id, rating) VALUES ($1,$2,5)`,
+      [review.rows[0]?.id, PRODUCT],
     );
     // BETA subscription: chatbot on all products (the seeded BETA tier row).
     await admin.query(
@@ -205,34 +217,6 @@ describe('C7 — chat, claims, reviews', () => {
     app = moduleRef.createNestApplication();
     await configureApp(app, CONSOLE_ORIGIN);
     await app.init();
-
-    // Two orders through the API: one to review, one to claim on.
-    for (const target of ['order1', 'order2'] as const) {
-      await buyerReq('post', '/v1/cart/lines')
-        .send({ variant_id: VARIANT, quantity: 1 })
-        .expect(201);
-      const cart = await buyerReq('get', '/v1/cart').expect(200);
-      const order = await buyerReq('post', '/v1/orders')
-        .send({ cart_id: cart.body.cart_id, expected: [{ variant_id: VARIANT, unit_price_minor: 30000 }] })
-        .expect(201);
-      if (target === 'order1') order1 = order.body.id;
-      else order2 = order.body.id;
-      // Distinct-variant exclusion: settle the first line before the next
-      // order reserves the same variant.
-      if (target === 'order1') {
-        await admin.query(
-          `SET session_replication_role = replica;
-           UPDATE core.reservation SET state='FULFILLED' WHERE order_id='${order.body.id}';
-           UPDATE core."order" SET state='COMPLETED', clock_stopped_at=now() WHERE id='${order.body.id}';
-           SET session_replication_role = DEFAULT`,
-        );
-      }
-    }
-    await admin.query(
-      `SET session_replication_role = replica;
-       UPDATE core."order" SET state='PAYMENT_CONFIRMED', clock_stopped_at=now() WHERE id='${order2}';
-       SET session_replication_role = DEFAULT`,
-    );
   });
 
   afterAll(async () => {
@@ -250,7 +234,6 @@ describe('C7 — chat, claims, reviews', () => {
       `DELETE FROM core.claim WHERE order_id IN (SELECT id FROM core."order" WHERE market_id='${M}')`,
       `DELETE FROM core.stock_event WHERE seller_id IN ('${SELLER}','${SELLER2}')`,
       `DELETE FROM core.buyer_cancellation_counter WHERE buyer_account_id='${BUYER}'`,
-      `DELETE FROM core.reservation WHERE order_id IN (SELECT id FROM core."order" WHERE market_id='${M}')`,
       `DELETE FROM core.order_payout_snapshot WHERE seller_id IN ('${SELLER}','${SELLER2}')`,
       `DELETE FROM core.notification WHERE recipient_account_id IN ('${OWNER}','${BUYER}','${OWNER2}')`,
       `DELETE FROM core."order" WHERE market_id='${M}'`,
@@ -387,121 +370,39 @@ describe('C7 — chat, claims, reviews', () => {
     });
   });
 
-  describe('claims (12.4, X15, S14)', () => {
-    it('opening a claim attaches the evidence bundle by trigger; one open claim per scope', async () => {
-      const r = await buyerReq('post', '/v1/claims')
-        .send({ order_id: order2, trigger: 'GOODS_NOT_RECEIVED' })
-        .expect(201);
-      claimId = r.body.claim_id;
-      expect(r.body.state).toBe('AWAITING_SELLER_EVIDENCE');
-      const bundle = await admin.query(
-        `SELECT count(*)::int AS n FROM core.claim_evidence_item WHERE claim_id=$1`,
-        [claimId],
+  describe('retired: claims and review creation (migration 0063)', () => {
+    const CLAIM = randomUUID();
+    it.each([
+      ['buyer', 'get', '/v1/claims'],
+      ['buyer', 'post', '/v1/claims'],
+      ['buyer', 'get', `/v1/claims/${CLAIM}`],
+      ['buyer', 'post', `/v1/claims/${CLAIM}/evidence`],
+      ['buyer', 'post', `/v1/claims/${CLAIM}/evidence-export`],
+      ['buyer', 'post', `/v1/orders/${ORDER}/review`],
+      ['seller', 'get', '/v1/seller/claims'],
+      ['seller', 'post', `/v1/seller/claims/${CLAIM}/remedy`],
+    ] as const)('%s %s %s is 404 and writes nothing', async (who, method, path) => {
+      const r = who === 'buyer' ? buyerReq(method, path) : sellerReq(method, path);
+      const res = await (method === 'post'
+        ? r.send({ order_id: ORDER, trigger: 'GOODS_NOT_RECEIVED', seller_rating: 5, remedy: 'REFUND' })
+        : r);
+      expect(res.status).toBe(404);
+      const written = await admin.query(
+        `SELECT (SELECT count(*) FROM core.claim WHERE order_id = $1)::int AS claims,
+                (SELECT count(*) FROM core.review WHERE seller_id = $2)::int AS reviews,
+                (SELECT count(*) FROM core."order" WHERE market_id = $3)::int AS orders,
+                (SELECT count(*) FROM core.stock_event WHERE seller_id = $2)::int AS stock_events`,
+        [ORDER, SELLER, M],
       );
-      expect(bundle.rows[0].n).toBeGreaterThan(0);
-      const dup = await buyerReq('post', '/v1/claims')
-        .send({ order_id: order2, trigger: 'NOT_AS_DESCRIBED' })
-        .expect(409);
-      expect(dup.body.code).toBe('IDEMPOTENCY_KEY_REUSED');
-    });
-
-    it("a stranger's read is 404; the buyer's and seller's succeed", async () => {
-      await buyerReq('get', `/v1/claims/${claimId}`, STRANGER_S).expect(404);
-      const mine = await buyerReq('get', `/v1/claims/${claimId}`).expect(200);
-      expect(mine.body.viewer).toBe('BUYER');
-      expect(mine.body.evidence.length).toBeGreaterThan(0);
-      const sellers = await sellerReq('get', `/v1/seller/claims`).expect(200);
-      expect(sellers.body.data.map((c: { id: string }) => c.id)).toContain(claimId);
-      const buyers = await buyerReq('get', '/v1/claims').expect(200);
-      expect(buyers.body.data.map((c: { id: string }) => c.id)).toContain(claimId);
-    });
-
-    it('the bank record attaches once — a single transaction, not a statement', async () => {
-      const ref = randomUUID();
-      await buyerReq('post', `/v1/claims/${claimId}/evidence`)
-        .send({ kind: 'BANK_RECORD', reference_id: ref })
-        .expect(201);
-      const dup = await buyerReq('post', `/v1/claims/${claimId}/evidence`)
-        .send({ kind: 'BANK_RECORD', reference_id: ref })
-        .expect(409);
-      expect(dup.body.code).toBe('IDEMPOTENCY_KEY_REUSED');
-    });
-
-    it("the export carries the buyer's own transaction and nothing about who the seller is", async () => {
-      const r = await buyerReq('post', `/v1/claims/${claimId}/evidence-export`).expect(200);
-      expect(r.body.order.id).toBe(order2);
-      // The fixture drove the state under replica, so the transition log is
-      // legitimately empty — the export's SHAPE is what X15 specifies.
-      expect(Array.isArray(r.body.order_transitions)).toBe(true);
-      expect(Array.isArray(r.body.payment_submissions)).toBe(true);
-      expect(Array.isArray(r.body.handoff_scans)).toBe(true);
-      expect(r.body.chat_history.length).toBeGreaterThan(0);
-      const flat = JSON.stringify(r.body);
-      expect(flat).not.toContain('C7 Store');
-      expect(flat).not.toContain('c7-store');
-      expect(flat).not.toContain(P.owner);
-      expect(flat).not.toContain(OWNER);
-    });
-
-    it('the remedy is the seller choice, console-only; MOBILE gets 403', async () => {
-      const mobile = await http()
-        .post(`/v1/seller/claims/${claimId}/remedy`)
-        .set('Authorization', `Bearer ${sessionToken(OWNER_MOB_S)}`)
-        .set('X-Adulis-Seller', SELLER)
-        .set('Idempotency-Key', key())
-        .send({ remedy: 'REFUND' })
-        .expect(403);
-      expect(mobile.body.code).toBe('PERMISSION_DENIED');
-      const r = await sellerReq('post', `/v1/seller/claims/${claimId}/remedy`)
-        .send({ remedy: 'REFUND' })
-        .expect(200);
-      expect(r.body).toMatchObject({ remedy: 'REFUND', state: 'UNDER_REVIEW' });
+      expect(written.rows[0]).toEqual({ claims: 0, reviews: 1, orders: 1, stock_events: 1 });
     });
   });
 
   describe('reviews (S12)', () => {
-    it('a non-terminal order cannot be reviewed; a terminal one can, once, badge derived', async () => {
-      const early = await buyerReq('post', `/v1/orders/${order2}/review`)
-        .send({ seller_rating: 5 })
-        .expect(409);
-      expect(early.body.slots.reason).toBe('ORDER_NOT_TERMINAL');
-
-      const r = await buyerReq('post', `/v1/orders/${order1}/review`)
-        .send({
-          seller_rating: 4,
-          body: 'Quick handoff.',
-          item_ratings: [{ product_id: PRODUCT, rating: 5 }],
-        })
-        .expect(201);
-      // No confirmation evidence on this order: the trigger derives the
-      // lowest badge; the caller sent none and could send none.
-      expect(r.body.badge).toBe('UNVERIFIED');
-
-      const dup = await buyerReq('post', `/v1/orders/${order1}/review`)
-        .send({ seller_rating: 1 })
-        .expect(409);
-      expect(dup.body.code).toBe('IDEMPOTENCY_KEY_REUSED');
-    });
-
-    it('a foreign product cannot ride the item ratings', async () => {
-      // order2 turns terminal here; it is still unreviewed, so the item
-      // validation is what answers. (VARIANT is a variant id, not one of
-      // this order's product ids.)
-      await admin.query(
-        `SET session_replication_role = replica;
-         UPDATE core."order" SET state='COMPLETED' WHERE id='${order2}';
-         SET session_replication_role = DEFAULT`,
-      );
-      const r = await buyerReq('post', `/v1/orders/${order2}/review`)
-        .send({ seller_rating: 4, item_ratings: [{ product_id: VARIANT, rating: 1 }] })
-        .expect(400);
-      expect(r.body.code).toBe('VALIDATION_FAILED');
-      expect(r.body.slots.path).toBe('item_ratings');
-    });
-
     it('the seller reads reviews with badges and item ratings, and can write nothing', async () => {
       const r = await sellerReq('get', '/v1/seller/reviews').expect(200);
       const review = r.body.data[0];
+      // The fixture sent CLAIM_UPHELD; the trigger derived the badge from evidence, of which there is none.
       expect(review).toMatchObject({ seller_rating: 4, badge: 'UNVERIFIED' });
       expect(review.item_ratings).toHaveLength(1);
     });

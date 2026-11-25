@@ -267,14 +267,6 @@
       "SELLER",
       "STOREFRONT"
     ],
-    "core.reservation_state": [
-      "ACTIVE",
-      "FULFILLED",
-      "CANCELLED_BY_BUYER",
-      "CANCELLED_BY_SELLER",
-      "REFUNDED",
-      "EXPIRED"
-    ],
     "core.review_badge": [
       "CLAIM_UPHELD",
       "VERIFIED_HANDOFF",

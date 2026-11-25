@@ -112,26 +112,41 @@ test.describe('the store chooser -- D-97 closed', () => {
     await expect(page).toHaveURL(/\/s\/5eed0000-0000-4000-8000-0000000000ff$/);
   });
 
-  test('courier delivery is deferred: the switcher offers no courier link and /courier is an honest state (D24-01)', async ({
+  test('the retired trade, payout, claims and courier URLs are gone: each lands on the store home and calls no retired endpoint', async ({
     page,
   }) => {
     /*
-     * SUPERSEDES "a seller reaches COURIER WORK from inside their store (T20 S3)". That test followed
-     * the switcher's courier link into SC-C1. Live courier delivery depends on a confirmed payment
-     * and handoff, both deferred, so the link and the screen are removed from the MVP console. The
-     * original expectation is in git history.
+     * Reservation retirement (founder, 2026-11-25): Orders, order detail, Payout, Claims and the
+     * courier order screen are removed with their routes -- not deferred. A stored link meets the
+     * catch-all (one store, so `/` forwards into it), and nothing on the way asks the server for
+     * a retired route. Supersedes the deferred-state tests that stood in trade, courier, claims
+     * and payout specs; they are in git history.
      */
-    await page.goto('/');
-    await expect(page).toHaveURL(new RegExp(`/s/${SEEDED.sellerId}$`));
+    const retired: string[] = [];
+    page.on('request', (r) => {
+      const u = new URL(r.url());
+      if (u.pathname.startsWith('/v1/') && /orders|payment|payout|claim|handoff|custody|\/qr|courier\/|purchase-intent|mark-transferred/i.test(u.pathname)) {
+        retired.push(`${r.method()} ${u.pathname}`);
+      }
+    });
+    const home = new RegExp(`/s/${SEEDED.sellerId}$`);
+    const base = `/s/${SEEDED.sellerId}`;
+    for (const url of [
+      `${base}/orders`,
+      `${base}/orders/5eed0000-0000-4000-8000-000000000012`,
+      `${base}/payouts`,
+      `${base}/claims`,
+      `${base}/claims/99999999-9999-4999-8999-999999999999`,
+      '/courier',
+    ]) {
+      await page.goto(url);
+      await expect(page, url).toHaveURL(home);
+    }
+    await expect(page.locator('nav.sidenav a[href$="/orders"]')).toHaveCount(0);
     await page.locator('[data-switcher-toggle]').click();
     await expect(page.locator('[data-switcher-menu]')).toBeVisible();
     await expect(page.locator('[data-switcher-menu]').getByRole('link', { name: /courier deliveries/i })).toHaveCount(0);
-    await expect(page.locator('.switcher-courier')).toHaveCount(0);
-
-    await page.goto('/courier');
-    await expect(page.locator('[data-deferred-screen="courier"]')).toBeVisible();
-    await expect(page.locator('[data-screen="SC-C1"]')).toHaveCount(0);
-    await expect(page.getByText('Courier delivery is not part of this release.')).toBeVisible();
+    expect(retired, retired.join(' | ')).toEqual([]);
   });
 
   test('a FAILED store list is never mistaken for "you have one store" (T19 P1)', async ({

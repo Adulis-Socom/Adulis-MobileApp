@@ -26,25 +26,8 @@ const B = { id: 'bbbbbbbb-0000-4000-8000-00000000000b', handle: 'store-b', store
 type Row = typeof A;
 const overview = (n: number) => ({
   products_published: n,
-  orders: n + 1,
-  active_reservations: n + 2,
-  completed_handoffs: n + 3,
   followers: n + 4,
   window: { from: '2026-10-13', to: '2026-11-12' },
-});
-const order = (n: number, overrides: Record<string, unknown> = {}) => ({
-  id: `f5b00000-0000-4000-8000-${String(n).padStart(12, '0')}`,
-  state: 'CREATED',
-  total_minor: '0',
-  total_currency: 'ETB',
-  expires_at: '2026-11-14T16:49:54.868Z',
-  ready_at: null,
-  clock_stopped_at: null,
-  created_at: '2026-11-12T16:49:54.868Z',
-  line_count: '2',
-  payment_sla_deadline: null,
-  total: { amount_minor: 120000, currency: 'ETB' },
-  ...overrides,
 });
 const notice = (n: number, overrides: Record<string, unknown> = {}) => ({
   id: `de800000-0000-4000-8000-${String(n).padStart(12, '0')}`,
@@ -70,11 +53,10 @@ type Server = {
   available?: boolean | null;
   sellers?: Row[];
   overview?: Record<string, Reply | (() => Reply | Promise<Reply>)>;
-  orders?: Record<string, Record<string, unknown[][]>>;
   notifications?: Record<string, unknown[][]>;
 };
 /** The Seller side of the server for one test. Pages: arrays of rows, the cursor is the page index. */
-function installSeller({ available = true, sellers = [A], overview: views = {}, orders = {}, notifications = {} }: Server = {}) {
+function installSeller({ available = true, sellers = [A], overview: views = {}, notifications = {} }: Server = {}) {
   const state = { sellers, available };
   api.on('GET /v1/bootstrap', (call) => {
     if (!call.headers.Authorization) return ok(bootstrapBody());
@@ -96,18 +78,6 @@ function installSeller({ available = true, sellers = [A], overview: views = {}, 
     const next = pages && i + 1 < pages.length ? String(i + 1) : null;
     return { data: rows, has_more: next !== null, next_cursor: next };
   };
-  api.on('GET /v1/seller/orders', (call) => {
-    if (!sellerHeader(call)) return problem(400, 'SELLER_CONTEXT_REQUIRED', 'request');
-    if (!held(call)) return problem(404, 'NOT_FOUND', 'request');
-    return ok(page(orders[sellerHeader(call)!]?.[call.query.bucket ?? ''], call.query.cursor));
-  });
-  api.onPattern('GET', /^\/v1\/seller\/orders\/[^/]+$/, (call) => {
-    if (!held(call)) return problem(404, 'NOT_FOUND', 'request');
-    const id = call.path.split('/').pop();
-    const all = Object.values(orders[sellerHeader(call)!] ?? {}).flat(2) as Array<{ id: string }>;
-    const found = all.find((o) => o.id === id);
-    return found ? ok({ allowed_actions: ['seller.orders:respond'], ...found, lines: [{}, {}], payment_submissions: [{ id: 'x' }], history: [] }) : problem(404, 'NOT_FOUND', 'request');
-  });
   api.on('GET /v1/notifications', (call) => {
     if (call.query.as === 'buyer') return ok({ data: [notice(90, { template_key: 'BUYER_FIXTURE_NOTICE' })], next_cursor: null });
     if (call.query.as !== 'seller' || !call.query.seller_id || sellerHeader(call) !== call.query.seller_id) return problem(400, 'SCOPE_PARAMETER_REQUIRED', 'request');
@@ -279,7 +249,7 @@ describe('store selection', () => {
     const fetchMock = api.fetchMock;
     const client = createApiClient({ deviceId: async () => '0b6f1a3e-9999-4999-8999-999999999999', token: () => GOOD_TOKEN, onSessionEnded: () => undefined });
     await expect(client.sellerOverview('store-a')).rejects.toThrow('invalid seller context');
-    await expect(client.sellerOrders('', 'active', null)).rejects.toThrow('invalid seller context');
+    await expect(client.sellerNotifications('', null)).rejects.toThrow('invalid seller context');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -305,26 +275,24 @@ describe('store selection', () => {
 });
 
 describe('basic overview', () => {
-  it('21, 22, 23, 28. the server\'s counts, Published Products as a current total, Orders with its window; nothing else', async () => {
+  it('21, 22, 23, 28. the server\'s counts, Published Products as a current total; nothing else, and no Orders', async () => {
     signedIn();
     installSeller();
     await renderRouter(APP_DIR, { initialUrl: '/seller' });
     expect(await screen.findByText('Published Products now: 4')).toBeOnTheScreen();
-    expect(screen.getByText(/^Orders from Oct 13, 2026 to Nov 12, 2026: 5$/)).toBeOnTheScreen();
-    expect(screen.getByText('Active reservations: 6')).toBeOnTheScreen();
-    expect(screen.getByText('Completed handoffs: 7')).toBeOnTheScreen();
     expect(screen.getByText('Followers: 8')).toBeOnTheScreen();
-    expect(screen.queryByText(/revenue|profit|conversion|ETB/i)).not.toBeOnTheScreen();
+    expect(screen.queryByText(/revenue|profit|conversion|ETB|Orders from|reservations|handoffs/i)).not.toBeOnTheScreen();
+    // The Orders screen was retired with the Reservation model: Home offers no way to it.
+    expect(screen.queryByRole('button', { name: en['seller.orders.title'] })).not.toBeOnTheScreen();
     const [call] = api.callsTo('GET /v1/seller/analytics/overview');
     expect(sellerHeader(call!)).toBe(A.id);
   });
 
-  it('24. a missing count is not shown, and Orders without a window is not claimed', async () => {
+  it('24. a missing count is not shown', async () => {
     signedIn();
-    installSeller({ overview: { [A.id]: ok({ products_published: 2, orders: 9, followers: 'many' }) } });
+    installSeller({ overview: { [A.id]: ok({ products_published: 2, followers: 'many' }) } });
     await renderRouter(APP_DIR, { initialUrl: '/seller' });
     expect(await screen.findByText('Published Products now: 2')).toBeOnTheScreen();
-    expect(screen.queryByText(/Orders from/)).not.toBeOnTheScreen();
     expect(screen.queryByText(/Followers/)).not.toBeOnTheScreen();
     expect(screen.queryByText(/undefined|NaN|null/)).not.toBeOnTheScreen();
   });
@@ -459,73 +427,7 @@ describe('security review fixes', () => {
   });
 });
 
-describe('read-only Orders', () => {
-  it('40, 41, 43, 44. the server\'s buckets, its states, Load more by cursor, and no action on any Order', async () => {
-    signedIn();
-    // Active's first page is taller than the Jest viewport, so nothing loads until Load more.
-    const activeFirst = Array.from({ length: 20 }, (_, i) => order(300 + i));
-    installSeller({
-      orders: {
-        [A.id]: {
-          needs_action: [[order(201, { state: 'PAYMENT_SUBMITTED' }), order(204, { state: 'SOMETHING_NEW' })]],
-          active: [activeFirst, [order(203)]],
-        },
-      },
-    });
-    await renderRouter(APP_DIR, { initialUrl: '/seller/orders' });
-    expect(await screen.findByText(en['seller.orders.read_only'])).toBeOnTheScreen();
-    expect(await screen.findByText('Payment submitted by the Buyer')).toBeOnTheScreen();
-    // A state this version does not know is shown neutrally, never guessed.
-    expect(screen.getByText(en['seller.order.state.other'])).toBeOnTheScreen();
-    expect(api.callsTo('GET /v1/seller/orders')[0]!.query).toMatchObject({ bucket: 'needs_action', limit: '20' });
-    await fireEvent.press(screen.getByTestId('filter-tab-active'));
-    expect((await screen.findAllByText('Created')).length).toBeGreaterThan(0);
-    // Only the Active bucket's Orders: the other bucket's are gone.
-    expect(screen.queryByText('Payment submitted by the Buyer')).not.toBeOnTheScreen();
-    expect(screen.getAllByText('Total: ETB 1,200.00').length).toBeGreaterThan(0);
-    await settle();
-    expect(api.callsTo('GET /v1/seller/orders')).toHaveLength(2);
-    await fireEvent.press(screen.getByRole('button', { name: en['buyer.list.load_more'] }));
-    await waitFor(() => expect(api.callsTo('GET /v1/seller/orders')).toHaveLength(3));
-    expect(api.callsTo('GET /v1/seller/orders').map((c) => [c.query.bucket, c.query.cursor])).toEqual([
-      ['needs_action', undefined],
-      ['active', undefined],
-      ['active', '1'],
-    ]);
-    for (const action of [/confirm/i, /ready/i, /cancel/i, /refund/i, /payment received/i]) {
-      expect(screen.queryByRole('button', { name: action })).not.toBeOnTheScreen();
-    }
-  });
-
-  it('42, 44. an Order\'s detail: state, total, product count; no payment data and no action', async () => {
-    signedIn();
-    installSeller({ orders: { [A.id]: { needs_action: [[order(201, { state: 'PAYMENT_CONFIRMED', ready_at: '2026-11-13T09:00:00.000Z' })]] } } });
-    await renderRouter(APP_DIR, { initialUrl: '/seller/orders' });
-    await fireEvent.press(await screen.findByRole('button', { name: /^Payment confirmed, Placed/ }));
-    expect(await screen.findByRole('header', { name: 'Status: Payment confirmed' })).toBeOnTheScreen();
-    expect(screen.getByText('Products in this Order: 2')).toBeOnTheScreen();
-    expect(screen.getByText(/^Ready /)).toBeOnTheScreen();
-    expect(screen.queryByText(/payment submission|evidence/i)).not.toBeOnTheScreen();
-    expect(screen.queryAllByRole('button').filter((b) => /confirm|ready|cancel|refund|reject/i.test(String(b.props.accessibilityLabel)))).toEqual([]);
-  });
-
-  it('46. an Order of another store is not shown under this one (the server answers 404)', async () => {
-    signedIn();
-    installSeller({ orders: { [A.id]: { needs_action: [[order(201)]] } } });
-    await renderRouter(APP_DIR, { initialUrl: '/seller/orders/f5b00000-0000-4000-8000-000000000999' });
-    expect(await screen.findByText(en['seller.order.gone'])).toBeOnTheScreen();
-    await renderRouter(APP_DIR, { initialUrl: '/seller/orders/not-an-id' });
-    expect(await screen.findByText(en['seller.order.gone'])).toBeOnTheScreen();
-  });
-
-  it('47. a 403 says Orders are not available for this role', async () => {
-    signedIn();
-    installSeller();
-    api.on('GET /v1/seller/orders', () => problem(403, 'PERMISSION_DENIED', 'auth'));
-    await renderRouter(APP_DIR, { initialUrl: '/seller/orders' });
-    expect(await screen.findByText(en['seller.orders.unavailable'])).toBeOnTheScreen();
-  });
-
+describe('leaving Seller mode', () => {
   it('49. the Buyer tabs still work after a visit to Seller mode', async () => {
     signedIn();
     installSeller();

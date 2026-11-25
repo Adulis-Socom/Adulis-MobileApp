@@ -285,7 +285,7 @@ describe('what the navigator draws: tab labels and header titles', () => {
 
   it('reads the title keys of the tab bar and of the Buyer and Seller Companion stacks', () => {
     expect(keys.length).toBeGreaterThanOrEqual(20);
-    for (const key of ['buyer.tab.home', 'buyer.tab.you', 'buyer.messages', 'seller.title', 'seller.orders.title'] as const) {
+    for (const key of ['buyer.tab.home', 'buyer.tab.you', 'buyer.messages', 'seller.title', 'seller.notifications.title'] as const) {
       expect({ key, read: keys.includes(key) }).toEqual({ key, read: true });
     }
   });

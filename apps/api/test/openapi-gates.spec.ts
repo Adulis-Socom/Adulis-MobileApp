@@ -21,7 +21,7 @@ import { SELLER_SIDE_ONLY, deriveGate, permissionSurfaces, routeLabel, scanGates
  */
 
 const contract = loadContract();
-const COMMERCE_MODULES = new Set(['billing', 'claims', 'couriers', 'financial', 'handoff', 'obligations', 'orders', 'reviews']);
+const COMMERCE_MODULES = new Set(['billing', 'couriers', 'obligations', 'orders', 'reviews']);
 const routes = scanRoutes().filter((r) => !COMMERCE_MODULES.has(r.module));
 const protectedRoutes = routes.filter((r) => !r.isPublic);
 const gates = scanGates();

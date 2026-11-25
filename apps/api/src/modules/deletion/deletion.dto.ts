@@ -22,7 +22,7 @@ export class DeletionResolvingActionDto {
 
 /** One reason the deletion cannot proceed yet. */
 export class DeletionBlockerDto {
-  @ApiProperty({ description: 'The blocker, e.g. NON_TERMINAL_RESERVATIONS.' }) code!: string;
+  @ApiProperty({ description: 'The blocker, e.g. SUBSCRIPTION_PAST_DUE.' }) code!: string;
   @ApiProperty() message_key!: string;
   @ApiPropertyOptional({ type: DeletionBlockerSubjectDto, description: 'The store it concerns; absent for an Account-level blocker.' })
   subject?: DeletionBlockerSubjectDto;

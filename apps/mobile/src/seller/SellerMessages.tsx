@@ -21,7 +21,7 @@ import { useTheme } from '../theme/theme';
 import { parseStoreConversationPage, storeConversationsKey, useStoreReply, type StoreConversation } from './seller-chat';
 import type { SellerRow } from './seller-api';
 import { useSellerContext } from './seller-context';
-import { WithStore } from './SellerOrders';
+import { WithStore } from './SellerNotifications';
 
 /**
  * Any 403 (PERMISSION_DENIED, AUDIENCE_NOT_PERMITTED or another code, review S21-01): this role or

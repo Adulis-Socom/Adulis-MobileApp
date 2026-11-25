@@ -224,7 +224,6 @@ describe('migrations 02-03 — configuration, accounts, sessions', () => {
   // -------------------------------------------------------------------------
   describe('core.timing_config (sections 5.3, 6.6a)', () => {
     const base = {
-      reservation_window: '48 hours',
       fulfilment_window: '72 hours',
       offline_sync_horizon: '7 days',
       payout_activation_delay: '24 hours',

@@ -13,7 +13,7 @@ import { SELLER_SIDE_ONLY, deriveGate, scanGates } from './gate-support';
  * left out of every comparison below.
  */
 
-const COMMERCE_MODULES = new Set(['billing', 'claims', 'couriers', 'financial', 'handoff', 'obligations', 'orders', 'reviews']);
+const COMMERCE_MODULES = new Set(['billing', 'couriers', 'obligations', 'orders', 'reviews']);
 
 const contract = loadContract();
 const routes = scanRoutes();

@@ -32,8 +32,6 @@ export type CoreAttributeDataType = "BOOLEAN" | "ENUM" | "NUMBER" | "TEXT";
 
 export type CoreBroadcastKind = "DISCOUNT" | "RESTOCK";
 
-export type CoreCancelledBy = "BUYER" | "SELLER" | "SYSTEM";
-
 export type CoreCartStatus = "ABANDONED" | "ACTIVE" | "CONVERTED";
 
 export type CoreClaimEvidenceKind = "ACTING_TEAM_MEMBER" | "BANK_RECORD" | "CHAT_HISTORY" | "ORDER_TRANSITIONS" | "PAYMENT_EVIDENCE" | "SCAN_RECORD" | "SELLER_LEVEL_AT_ORDER" | "STOCK_EVENTS";
@@ -105,8 +103,6 @@ export type CoreRateLimitSubjectKind = "ACCOUNT" | "DEVICE" | "IP_HASH" | "PHONE
 export type CoreRecoveryDecision = "APPROVED" | "REJECTED";
 
 export type CoreReportTargetKind = "MESSAGE" | "PRODUCT" | "REVIEW" | "SELLER" | "STOREFRONT";
-
-export type CoreReservationState = "ACTIVE" | "CANCELLED_BY_BUYER" | "CANCELLED_BY_SELLER" | "EXPIRED" | "FULFILLED" | "REFUNDED";
 
 export type CoreReviewBadge = "CLAIM_UPHELD" | "CONFIRMED_BY_BUYER" | "UNVERIFIED" | "VERIFIED_HANDOFF";
 
@@ -522,7 +518,6 @@ export interface CoreClaim {
   outcome: CoreClaimOutcome | null;
   outcome_reason: string | null;
   remedy: CoreClaimRemedy | null;
-  reservation_id: string | null;
   review_deadline: Generated<Timestamp>;
   severity: CoreClaimSeverity | null;
   state: CoreClaimState;
@@ -1221,45 +1216,6 @@ export interface CoreRateLimitBucket {
   window_start: Timestamp;
 }
 
-export interface CoreRefund {
-  acknowledged_by_buyer_at: Timestamp | null;
-  amount_currency: string;
-  /**
-   * Section 12.5 - THE CAPTURED AMOUNT, never a recomputed one. The seller owes the line's price as agreed, not as it stands today.
-   */
-  amount_minor: Int8;
-  created_at: Generated<Timestamp>;
-  id: string;
-  reported_by_seller_at: Timestamp | null;
-  reservation_id: string;
-}
-
-export interface CoreReservation {
-  active_window: Generated<string>;
-  buyer_account_id: string;
-  cancellation_reason: string | null;
-  cancelled_at: Timestamp | null;
-  cancelled_by: CoreCancelledBy | null;
-  created_at: Generated<Timestamp>;
-  id: string;
-  order_id: string;
-  penalty_exempt: Generated<boolean>;
-  quantity: number;
-  seller_id: string;
-  state: Generated<CoreReservationState>;
-  unit_price_currency: string;
-  unit_price_minor: Int8;
-  variant_id: string;
-}
-
-export interface CoreReservationStateTransitionLegal {
-  from_state: CoreReservationState;
-  ratified_at: Timestamp | null;
-  ratified_by: string | null;
-  to_state: CoreReservationState;
-  written_by: string;
-}
-
 export interface CoreReview {
   anonymised_at: Timestamp | null;
   badge: CoreReviewBadge;
@@ -1487,8 +1443,6 @@ export interface CoreSellerPublicStats {
   orders_completed_count: Generated<number>;
   payments_confirmed_count: Generated<number>;
   payments_decided_count: Generated<number>;
-  reservations_cancelled_count: Generated<number>;
-  reservations_terminal_count: Generated<number>;
   scan_completion_rate: Numeric | null;
   seller_id: string;
   unresolved_claim_count: Generated<number>;
@@ -1573,7 +1527,6 @@ export interface CoreStockEvent {
   occurred_at: Generated<Timestamp>;
   order_id: string | null;
   reason: CoreStockEventReason;
-  reservation_id: string | null;
   /**
    * Written by core.fn_apply_stock_event as the count AFTER this event, which is what makes the log auditable without replaying it. It is populated only because the trigger is BEFORE INSERT - see this migration's header.
    */
@@ -1610,7 +1563,6 @@ export interface CoreTimingConfig {
   payout_activation_delay: Interval;
   recovery_cooling_period: Interval;
   refund_ack_window: Interval;
-  reservation_window: Interval;
   same_seller_cancellation_threshold: number;
   same_seller_cooldown: Interval;
   step_up_freshness: Interval;
@@ -1845,9 +1797,6 @@ export interface DB {
   "core.product_video": CoreProductVideo;
   "core.prohibited_keyword": CoreProhibitedKeyword;
   "core.rate_limit_bucket": CoreRateLimitBucket;
-  "core.refund": CoreRefund;
-  "core.reservation": CoreReservation;
-  "core.reservation_state_transition_legal": CoreReservationStateTransitionLegal;
   "core.review": CoreReview;
   "core.review_item_rating": CoreReviewItemRating;
   "core.role_permission": CoreRolePermission;

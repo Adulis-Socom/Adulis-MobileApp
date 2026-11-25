@@ -53,8 +53,6 @@ test.describe('SC-01 -- the readiness hub', () => {
         code: row.getAttribute('data-item'),
         href: row.querySelector('a.readiness-action')?.getAttribute('href') ?? null,
         unrouted: row.querySelector('.readiness-action.unrouted') !== null,
-        // B02-D02: the payout item is shown as deferred text, never as a link.
-        deferred: row.querySelector('.readiness-action[data-deferred]') !== null,
       })),
     );
     expect(targets.length).toBeGreaterThan(0);
@@ -78,10 +76,9 @@ test.describe('SC-01 -- the readiness hub', () => {
      * here and their routes are exercised only by this table being checked
      * at review, not by this navigation loop.)
      */
-    // The ONLY row allowed to carry no link is the deferred payout item (B02-D02); the server
-    // still lists it (a backend contract gap), the console asks for nothing.
-    expect(targets.filter((t) => t.deferred).map((t) => t.code)).toEqual(['PAYOUT_DETAILS']);
-    const unrouted = targets.filter((t) => !t.deferred && (t.unrouted || !t.href));
+    // Migration 0063 removed PAYOUT_DETAILS from readiness: no row asks for payout details.
+    expect(targets.map((t) => t.code)).not.toContain('PAYOUT_DETAILS');
+    const unrouted = targets.filter((t) => t.unrouted || !t.href);
     expect(
       unrouted.map((t) => t.code),
       'every unsatisfied readiness row must carry a routed resolving link -- ' +
@@ -93,7 +90,7 @@ test.describe('SC-01 -- the readiness hub', () => {
     // work, does nothing visible, and teaches that the readiness list is
     // decorative. Following each one is the only way to know; reading the
     // route table is what missed it.
-    for (const t of targets.filter((x) => !x.deferred)) {
+    for (const t of targets) {
       await page.goto(t.href as string);
 
       // THE URL IS THE ASSERTION, and the first version of this test got that
@@ -114,43 +111,19 @@ test.describe('SC-01 -- the readiness hub', () => {
 });
 
 test.describe('SC-01 -- what needs you (T16 Phase 3)', () => {
-  /*
-   * THE STRONGEST ASSERTION IS THE ORDERING (the work order's own words):
-   * obligations of THREE different kinds, nearest deadline first, from the
-   * REAL server. The seed supplies two payment entries (one overdue -- the
-   * lapsed order; the harness runs no jobs, so no SYSTEM claim exists and it
-   * rightly carries the pre-lapse sentence) and the confirmed-unready order
-   * (clock_stopped_at + the 7-day window). The third KIND arrives through the
-   * BUYER WIRE: the seeded buyer files a real claim (review deadline +2 days),
-   * which must interleave STRICTLY BETWEEN the fresh payment (+~1 day) and
-   * the unready order (+90h, ~3.8 days) -- an ordering neither a per-kind grouping
-   * nor a client-side sort of anything else would reproduce.
-   *
-   * Residue: the claim stays open (no delete path). Later specs tolerate it
-   * -- SC-29 is already deletion-blocked by the live orders, and nothing
-   * after this file asserts an empty claims list (insights-inbox, which
-   * does, runs alphabetically BEFORE this file).
-   */
-  test('obligations of deferred workflows are served but not shown (D24-01; supersedes the three-kinds ordering test)', async ({
+  test('the real server answers an empty obligations list and Home draws no obligation rows', async ({
     page,
   }) => {
     /*
-     * SUPERSEDES "three kinds, nearest deadline first, consequences from the server". That test
-     * filed a real buyer claim and asserted the order of payment, claim and unready-order
-     * obligations and a link into the claim. Payment confirmation, claims and handoff are removed
-     * from the MVP console, so the Seller cannot act on any of them; drawing their deadlines would
-     * invite a miss nothing here can prevent. The server STILL returns them (a backend gap, not
-     * touched here): this proves the console receives them and shows none. The original is in git
-     * history. Residue: the old test's real claim is no longer filed.
+     * Since the Reservation retirement (2026-11-25) all three obligation kinds were retired-flow
+     * and GET /v1/seller/obligations always answers { data: [] }. Over an unfinished readiness
+     * list the empty answer adds nothing -- the readiness items are what need this seller.
      */
     const served = page.waitForResponse(
       (r) => r.url().includes('/v1/seller/obligations') && r.request().method() === 'GET',
     );
     await page.goto(`/s/${SEEDED.sellerId}`);
-    const kinds = (((await (await served).json()) as { data: Array<{ kind: string }> }).data ?? []).map((o) => o.kind);
-    expect(kinds, 'the seed must still produce deferred-kind obligations, or this proves nothing').toEqual(
-      expect.arrayContaining(['PAYMENT_AWAITING_CONFIRMATION', 'ORDER_NOT_READY']),
-    );
+    expect(((await (await served).json()) as { data: unknown[] }).data).toEqual([]);
     await expect(page.locator('[data-item]').first()).toBeVisible();
     await expect(page.locator('[data-obligation]')).toHaveCount(0);
     await expect(page.locator('[data-obligations]')).toHaveCount(0);
@@ -165,7 +138,7 @@ test.describe('SC-01 -- what needs you (T16 Phase 3)', () => {
      * BOTH facts are planted at the wire (the R21 pattern; only the client
      * renders here): readiness all-satisfied summons life 2, and an empty
      * obligations list summons the good state. The summary's numbers stay
-     * REAL -- the two windowed overview reads hit the live API.
+     * REAL -- the overview read hits the live API.
      */
     await context.route('**/v1/seller/readiness', async (route) => {
       const real = await route.fetch();
@@ -187,8 +160,10 @@ test.describe('SC-01 -- what needs you (T16 Phase 3)', () => {
     await expect(page.locator('[data-brief]')).toBeVisible();
     await expect(page.locator('[data-nothing-needed]')).toHaveText('Nothing needs you right now.');
 
-    // R23: the week-on-week orders line renders from TWO real windowed reads.
-    await expect(page.locator('[data-brief-orders]')).toContainText(/Orders this week: \d+ \(previous 7 days: \d+\)/);
+    // The summary is the point-in-time tiles; the orders line and commerce tiles are retired.
+    await expect(page.locator('[data-brief] .kpi-tile', { hasText: 'Published products' })).toBeVisible();
+    await expect(page.locator('[data-brief-orders]')).toHaveCount(0);
+    await expect(page.locator('[data-brief] .kpi-tile', { hasText: /reservations|handoffs/i })).toHaveCount(0);
 
     // AND THERE IS NO PICKER. SC-12 owns it; Home answers a question nobody
     // asked when it offers one.

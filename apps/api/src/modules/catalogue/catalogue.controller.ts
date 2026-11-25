@@ -228,7 +228,7 @@ export class CatalogueController {
   @ApiGate({ permission: ['seller.products:write'], surfaces: ['CONSOLE'] })
   @ApiOkResponse({ type: ProductDeletedDto })
   @Delete('seller/products/:id')
-  @ApiOperation({ summary: '409 PRODUCT_HAS_ACTIVE_ORDERS where any reservation is live.' })
+  @ApiOperation({ summary: 'Deletes an owned Product and schedules its media; 404 for a foreign Product.' })
   async deleteProduct(@Req() req: LocalizedRequest, @Param('id') id: string): Promise<unknown> {
     assertUuid(id, 'id');
     return this.tx.run(req, (trx) => this.svc.deleteProduct(trx, req, id));

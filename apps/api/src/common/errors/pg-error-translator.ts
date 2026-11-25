@@ -140,7 +140,7 @@ function ownershipBlockerItems(detail: string | undefined): ErrorItem[] {
   });
 }
 
-const ILLEGAL_TRANSITION_RE = /Illegal (?:order|reservation) transition (\S+) -> (\S+)/;
+const ILLEGAL_TRANSITION_RE = /Illegal order transition (\S+) -> (\S+)/;
 
 /**
  * Translate a database refusal into the one deliberate exception. Returns
@@ -185,18 +185,6 @@ export function translatePgError(e: PgError): AdulisException | null {
       return new AdulisException('PAYOUT_LOCKED', { slots });
     }
 
-    // The buyer-cancellation cooldown (register D-26): the until-timestamp
-    // travels in DETAIL as typed slots, never prose.
-    case 'U0007': {
-      let slots: Record<string, unknown> | undefined;
-      try {
-        slots = e.detail ? (JSON.parse(e.detail) as Record<string, unknown>) : undefined;
-      } catch {
-        slots = undefined;
-      }
-      return new AdulisException('BUYER_COOLDOWN_ACTIVE', { slots });
-    }
-
     case 'U0003':
       return new AdulisException('CART_REVALIDATION_FAILED', {
         items: itemsFromDetail(e.detail),
@@ -209,33 +197,6 @@ export function translatePgError(e: PgError): AdulisException | null {
       if (m) {
         return new AdulisException('ILLEGAL_TRANSITION', {
           slots: { from_state: m[1], to_state: m[2] },
-        });
-      }
-      if (e.message.includes('not in a readyable state')) {
-        return new AdulisException('ORDER_NOT_READYABLE');
-      }
-      if (e.message.includes('scan predates its token')) {
-        return new AdulisException('SCAN_PREDATES_TOKEN');
-      }
-      if (e.message.includes('payment already decided')) {
-        return new AdulisException('PAYMENT_ALREADY_DECIDED');
-      }
-      if (e.message.includes('payout change already pending')) {
-        return new AdulisException('PAYOUT_CHANGE_PENDING');
-      }
-      if (e.message.includes('order is not payable')) {
-        return new AdulisException('ORDER_NOT_PAYABLE');
-      }
-      if (e.message.includes('no active payout details')) {
-        return new AdulisException('VALIDATION_FAILED', {
-          status: 409,
-          slots: { reason: 'NO_ACTIVE_PAYOUT' },
-        });
-      }
-      if (e.message.includes('not in a refundable state')) {
-        return new AdulisException('VALIDATION_FAILED', {
-          status: 409,
-          slots: { reason: 'LINE_NOT_REFUNDABLE' },
         });
       }
       // G1.6's refusals. The 422 is the one the ruling names: "the no-Admin
@@ -331,12 +292,9 @@ export function translatePgError(e: PgError): AdulisException | null {
       return null;
     }
 
-    // The duplicate-reservation exclusion (section 12.1); any other
-    // exclusion overlap is a conflicting configuration write.
+    // An exclusion overlap is a conflicting configuration write (the
+    // duplicate-Reservation exclusion went with the Reservation, 0063).
     case '23P01':
-      if (e.constraint === 'reservation_no_duplicate_active') {
-        return new AdulisException('DUPLICATE_RESERVATION');
-      }
       return new AdulisException('VALIDATION_FAILED', {
         status: 409,
         slots: e.constraint ? { constraint: e.constraint } : undefined,

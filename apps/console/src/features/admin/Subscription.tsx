@@ -7,13 +7,11 @@
  * SUBSCRIPTION OPTION B (B02-D01, 25 November 2026). This screen keeps the
  * architecture that is not a payment: GET /v1/billing/subscription's
  * server-resolved status, the BETA branch with its end date and the commercial
- * position stated in advance (PRD S16.10), and the plan comparison. It no
- * longer purchases. The purchase intent, the bank-transfer instructions and
- * "mark transferred" are removed from the screen, not hidden: the code that
- * called POST /v1/billing/purchase-intent and /v1/billing/mark-transferred is
- * gone from this component, so there is no control to reach and no request
- * this screen can make. Entitlements are resolved by the server; nothing here
- * can activate one.
+ * position stated in advance (PRD S16.10), and the plan comparison. It does
+ * not purchase: the purchase-intent and mark-transferred routes no longer
+ * exist (Reservation retirement, 2026-11-25) and the GET answers only
+ * { subscription }. Entitlements are resolved by the server; nothing here can
+ * activate one.
  *
  * The comparison table TRANSCRIBES ADU-PRD-01 S16.1 -- products 10/unlimited,
  * chatbot None/Top 10/All/All + custom flows, team on Business only. It states
@@ -23,7 +21,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { en } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
-import { DeferredNote } from '../../components/Deferred';
 import { ScreenState } from '../../components/ScreenState';
 import type { UiState } from '../../lib/states';
 import { stateFromProblem } from '../../lib/states';
@@ -146,11 +143,6 @@ export function Subscription() {
             </tbody>
           </table>
         </div>
-      </section>
-
-      <section aria-labelledby="purchase-heading" className="purchase">
-        <h2 id="purchase-heading">{en['console.admin.subscription.purchase_heading']}</h2>
-        <DeferredNote what="purchase" />
       </section>
     </section>
   );

@@ -17,13 +17,11 @@
  *
  * D-73 -- THE ANCHOR RIDES THE MESSAGE, not the thread. This composer sends
  * anchorless text (legal; at most one of product_id/order_id may ride, and a
- * seller reply needs neither). The PINNED ORDER CARD derives from the most
- * recent order_id any loaded message carries -- there is no conversation-
- * level order on the wire, deliberately (D-73's whole point), so the pin is
- * a display of what the thread itself said, and absent when it said nothing.
+ * seller reply needs neither). The pinned order card went with the order
+ * screens (Reservation retirement, 2026-11-25): it linked to nothing left.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { useParams } from 'react-router';
 import { en, type MessageKey } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
 import { ProblemBanner } from '../../components/Feedback';
@@ -150,9 +148,6 @@ export function Thread() {
 
   const fmt = market ? timeFormatter(market) : null;
   const when = (iso: string) => (fmt ? fmt.format(new Date(iso)) : iso);
-  // The pin: the most recent order any loaded message anchored (D-73 -- the
-  // thread has no order of its own; its messages do).
-  const pinnedOrder = [...messages].reverse().find((m) => m.order_id)?.order_id ?? null;
 
   return (
     <section aria-labelledby="thread-heading" data-screen="SC-21" className="thread">
@@ -167,15 +162,6 @@ export function Thread() {
             {en['console.common.refetch_failed']}
           </p>
         )
-      ) : null}
-
-      {pinnedOrder ? (
-        <div className="pinned-order callout">
-          <span>{en['console.inbox.thread.order_context']}</span>
-          <Link to={`/s/${sellerId}/orders/${pinnedOrder}`}>
-            {en['console.inbox.thread.open_order']}
-          </Link>
-        </div>
       ) : null}
 
       {olderCursor ? (

@@ -812,6 +812,12 @@ The dispatch guard is correct and insufficient. FCM delivers whenever the device
 
 ## 12. Endpoint catalogue
 
+**Retired by migration 0063 (founder pre-launch authorization, 2026-11-25).** The legacy order,
+Reservation, payment, refund, claim, handoff, courier-order, payout and subscription-purchase routes
+were removed from the API and their rows from this catalogue. Live Order creation is deferred while
+payment authority is unresolved; see docs/amendments/BATCH-02B-FOUNDER-DECISIONS-2026-11-25.md.
+
+
 > **v1.11 -- the path strings in this catalogue are GENERATED from `contracts/openapi.json`.** Three of v1.10's were wrong, and **correcting three hand-written strings would have scheduled the same finding for v1.12.**
 >
 > **The contract is CI-authored and gate-checked. It is the authority for what a path is called.** This catalogue keeps everything a contract cannot hold -- audience, the step-up marker, the notes, the reasoning -- **and takes the path strings from the build**, exactly as ADU-DB-01's appendices take their names from the fixtures.
@@ -903,26 +909,11 @@ Cart endpoints accept `X-Adulis-Device` without a session, per C6. Every line ca
 
 | Method | Path | |
 |---|---|---|
-| POST | `/v1/orders` **I** | Whole-cart revalidation in one transaction; 409 with complete `items[]` (S8.3) |
-| GET | `/v1/orders` | Cursor paged |
-| GET | `/v1/orders/{id}` | Authoritative order card; re-read on every view (A6) |
-| GET | `/v1/orders/{id}/payment-instructions` | **The C3 disclosure path.** S12.7. **A non-buyer receives 404, never 403** -- D-30 |
-| POST | `/v1/orders/{id}/payment-evidence` **I** | Upload via signed URL, then commit |
-| POST | `/v1/orders/{id}/reservations/{rid}/cancel` **I** | Per line (S9.4) |
-| POST | `/v1/orders/{id}/cancel` **I** | Convenience: cancels every remaining line |
-| POST | `/v1/orders/{id}/confirm-receipt` **I** | The tapped tier -- medium weight, no level (S11.3) |
-| POST | `/v1/orders/{id}/review` **I** | One per order (S12) |
-| POST | `/v1/orders/{id}/refunds/{rid}/acknowledge` **I** | Explicit buyer action, never inferred (S10.5) |
 
 **Claims** -- omitted from the v1.1 catalogue in error, though referenced in S10's rate limits and S13's function mapping.
 
 | Method | Path | |
 |---|---|---|
-| POST | `/v1/claims` **I** | B |
-| GET | `/v1/claims`  -  `/v1/claims/{id}` | B S |
-| POST | `/v1/claims/{id}/evidence` **I** | B S -- bank record. **A single transaction, not a statement** (X15) |
-| POST | `/v1/claims/{id}/evidence-export` **I** | B -- the buyer's own order, chats and payment records |
-| POST | `/v1/seller/claims/{id}/remedy` **I** | S -- `REFUND` or `FULFIL`, the seller's choice (X15) |
 
 **INVARIANT -- no endpoint returns another party's identity.** The evidence export carries the requesting buyer's own transaction and nothing about who the seller is. Seller identity -- verified legal name, ID type and verification date -- is disclosed only to law enforcement or lawful process, through an operator path that is not part of this contract (X15).
 
@@ -955,10 +946,6 @@ GET /v1/orders/{id}/payment-instructions
 
 | Method | Path | |
 |---|---|---|
-| POST | `/v1/handoffs/sync` **I** | Batch, per-item outcomes, never fails as a unit |
-| GET | `/v1/seller/orders/{id}/qr` **M** | The seller displays; the buyer scans (S11.1). **409 `ORDER_NOT_READYABLE` before `PAYMENT_CONFIRMED`** -- R20. **Cached by the app for offline display at a doorway** |
-| POST | `/v1/courier/orders/{id}/custody-accept` **I** | C -- Event A |
-| POST | `/v1/seller/orders/{id}/custody-transfer` **I** | S -- Event A, seller side |
 
 ```
 POST /v1/handoffs/sync
@@ -1127,23 +1114,8 @@ The bot's reply arrives as a message with `sender_kind: "BOT"` and a `resolution
 
 | Method | Path | |
 |---|---|---|
-| GET | `/v1/seller/orders` **M** | |
-| GET | `/v1/seller/orders/{id}` **M** | **New in v1.4.** The order-detail read. Needed by the console **and** by the Companion's Phase 1 order surface, which v1.3 specified without the endpoint that feeds it |
-| POST | `/v1/seller/orders/{id}/ready` **M I** | **New in v1.4.** Sets `ready_at` and notifies the assigned courier. **Idempotent by state, not only by key** -- a second call is a no-op, not a second notification. 409 `ORDER_NOT_READYABLE` before `PAYMENT_CONFIRMED` |
-| POST | `/v1/seller/orders/{id}/payment/confirm` **M I** | **"Confirm Payment Received"**, never "Accept Payment". The seller verifies in their own bank first (S10.1) |
-| POST | `/v1/seller/orders/{id}/payment/reject` **M I** | **"Payment Not Received".** W6; ratification row 8. First rejection opens a 12-hour retry window; the second ends the order |
-| GET | `/v1/seller/orders/{id}/payment-evidence` **M** | Logged access, no justification required (S10.3). **Streamed, `private, no-store`** (R18). **Never rendered in a notification preview**, never at a predictable URL |
-| POST | `/v1/seller/orders/{id}/reservations/{rid}/cancel` **M I** | Per line. Surfaced as **"Can't Fulfil"**. **There is no accept action -- reservations are never gated on the seller** |
-| POST | `/v1/seller/orders/{id}/refunds` **I** | Seller reports; buyer acknowledges separately |
-| POST | `/v1/seller/orders/{id}/reissue-instructions` **S I** | Single order only. No bulk endpoint exists (S8.5) |
-| POST | `/v1/seller/orders/{id}/courier-assignment` **I** | |
-| GET | `/v1/seller/payout` | Returns `account_last4` only |
-| POST | `/v1/seller/payout` **S I** | Enters `PENDING`; activates after the delay |
-| DELETE | `/v1/seller/payout/pending` | **No step-up** -- reverting is easier than changing |
-| GET | `/v1/seller/payout/history` | **New in v1.4.** Masked, append-only. S10.4 requires the change to be *"visible in the seller console and in the account history"* and v1.3 gave no way to read it |
 | GET  -  POST  -  DELETE | `/v1/seller/couriers` **I** | Invite by phone; the courier authenticates with their own OTP. Revoking ends assignment-scoped access immediately. **`POST` succeeds whether or not the number has an account** -- G1.8 |
 | GET | `/v1/seller/reviews` **M** | **New in v1.4.** Seller-scoped, with badges and item ratings. **Read-only -- there is no field a seller can write on a review** |
-| GET | `/v1/seller/claims` | **New in v1.4.** Seller-scoped. `GET /v1/claims` is buyer-shaped |
 
 **There is no bulk reissue endpoint**, and its absence is deliberate: S8.5 permits reissue on *a single named order* and never in bulk, and an endpoint accepting an array of order ids would be that rule broken at the wire while the database still believed it held.
 
@@ -1153,8 +1125,6 @@ The bot's reply arrives as a message with `sender_kind: "BOT"` and a `resolution
 |---|---|---|
 | GET  -  POST  -  DELETE | `/v1/seller/team` **S I** | Business tier; Owner/Admin only |
 | GET | `/v1/billing/subscription` | S or W |
-| POST | `/v1/billing/purchase-intent` **S I** | Console endpoint. The IAP restriction is gone with the seller app |
-| POST | `/v1/billing/mark-transferred` **I** | Console endpoint |
 | POST | `/v1/seller/closure` **I** | Enters `CLOSING`. Blocks new reservations; existing orders stay fully operable |
 | DELETE | `/v1/seller/closure` | Returns to `ACTIVE`. Reversible by design |
 | GET | `/v1/seller/deletion/blockers` | 200 with `items[]` (S16.9) |
@@ -1194,7 +1164,6 @@ Nothing depends on this today -- beta sellers pay nothing -- but v1.6's endpoint
 | GET | `/v1/seller/social-accounts` **S** | With `follower_count` and `captured_at` |
 | GET | `/v1/auth/sessions` **S C** | Remembered devices distinguishable from live sessions |
 | DELETE | `/v1/auth/devices/{id}/remembered` **S C** | **Forget a device without ending its session** |
-| GET | `/v1/seller/payout` **S** | Carries `payout_locked_until` and `reason` |
 | GET | `/v1/seller/analytics` **S** | Date window parameters |
 | GET | `/v1/seller/subscription` **S** | Carries the purchase-intent reference |
 | **GET** | **`/v1/seller/obligations` S** | **New -- S12.12b** |
@@ -1318,9 +1287,6 @@ Nothing depends on this today -- beta sellers pay nothing -- but v1.6's endpoint
 
 | Method | Path | |
 |---|---|---|
-| GET | `/v1/courier/orders` | **Currently assigned orders only** (S6.3) |
-| GET | `/v1/courier/orders/{id}` | Buyer name, phone and delivery information for that order only. **The QR is present only once custody has been accepted** -- R25 |
-| POST | `/v1/courier/orders/{id}/custody-accept` **I** | Event A |
 
 > **R20 and R25 are the same rule at two ends of the handoff.** No QR token exists before the payment is confirmed, and no courier sees one before they hold the goods.
 >

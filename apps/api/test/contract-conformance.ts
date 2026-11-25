@@ -30,10 +30,7 @@ import { loadContract, responseErrors } from './contract-check';
 
 export const LEGACY_COMMERCE_TAGS: ReadonlySet<string> = new Set([
   'Billing',
-  'Claims',
   'Couriers',
-  'Financial',
-  'Handoff',
   'Obligations',
   'Orders',
   'Reviews',

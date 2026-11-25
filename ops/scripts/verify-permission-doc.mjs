@@ -36,10 +36,13 @@ const SQL_FILE = path.join(root, 'docs/amendments/ADU-AUTH-01_v2_4_permission_se
 const DOC_FILE = path.join(root, 'docs/ADU-AUTH-01_Authentication_and_Authorization_v2_5.md');
 
 const ROLES = ['OWNER', 'ADMIN', 'SALES_SUPPORT', 'INVENTORY', 'ANALYST', 'CAMPAIGN_MANAGER'];
-const PER_ROLE = { OWNER: 42, ADMIN: 40, SALES_SUPPORT: 19, INVENTORY: 16, ANALYST: 10, CAMPAIGN_MANAGER: 12 };
+// Migration 0063 (founder pre-launch authorization, 2026-11-25) retired the thirteen codes of the
+// legacy order, payment, refund, claim, handoff and payout flows: 42 -> 29 codes, 139 -> 96 grants,
+// and two of the eight step-up codes (orders:reissue_instructions, payout:update) with them.
+const PER_ROLE = { OWNER: 29, ADMIN: 27, SALES_SUPPORT: 9, INVENTORY: 12, ANALYST: 8, CAMPAIGN_MANAGER: 11 };
 const STEP_UP = [
-  'seller.account:delete', 'seller.identity:manage', 'seller.orders:reissue_instructions',
-  'seller.ownership:transfer', 'seller.payout:update', 'seller.sessions:revoke_all',
+  'seller.account:delete', 'seller.identity:manage',
+  'seller.ownership:transfer', 'seller.sessions:revoke_all',
   'seller.staff:admin', 'seller.subscription:update',
 ];
 
@@ -98,27 +101,27 @@ const doc = parseDoc(docText);
 
 console.log('\nADU-AUTH-01 v2.4 - section 16.2 (table) against section 16.2a (SQL)\n');
 
-check('the ASCII table parsed 42 rows', doc.permissions.size === 42, `${doc.permissions.size}`);
-check('the generated SQL parsed 42 permissions', sql.permissions.size === 42, `${sql.permissions.size}`);
-check('the generated SQL parsed 139 grants', sql.grants.size === 139, `${sql.grants.size}`);
-check('the ASCII table parsed 139 grants', doc.grants.size === 139, `${doc.grants.size}`);
+check('the ASCII table parsed 29 rows', doc.permissions.size === 29, `${doc.permissions.size}`);
+check('the generated SQL parsed 29 permissions', sql.permissions.size === 29, `${sql.permissions.size}`);
+check('the generated SQL parsed 96 grants', sql.grants.size === 96, `${sql.grants.size}`);
+check('the ASCII table parsed 96 grants', doc.grants.size === 96, `${doc.grants.size}`);
 
 const codesOnlyInDoc = [...doc.permissions.keys()].filter((c) => !sql.permissions.has(c));
 const codesOnlyInSql = [...sql.permissions.keys()].filter((c) => !doc.permissions.has(c));
-check('the same 42 codes appear in both', !codesOnlyInDoc.length && !codesOnlyInSql.length,
+check('the same 29 codes appear in both', !codesOnlyInDoc.length && !codesOnlyInSql.length,
   codesOnlyInDoc.length || codesOnlyInSql.length
     ? `table-only ${JSON.stringify(codesOnlyInDoc)} sql-only ${JSON.stringify(codesOnlyInSql)}` : '');
 
 const onlyDoc = [...doc.grants].filter((g) => !sql.grants.has(g));
 const onlySql = [...sql.grants].filter((g) => !doc.grants.has(g));
 const fmt = (s) => s.map((g) => g.replace(' ', ' ')).sort().join(', ');
-check('all 252 cells agree, both directions', !onlyDoc.length && !onlySql.length,
+check('all 174 cells agree, both directions', !onlyDoc.length && !onlySql.length,
   onlyDoc.length || onlySql.length ? `\n        table-only: ${fmt(onlyDoc)}\n        sql-only:   ${fmt(onlySql)}` : '');
 
 const stepDoc = [...doc.permissions].filter(([, v]) => v.stepUp).map(([c]) => c).sort();
 const stepSql = [...sql.permissions].filter(([, v]) => v.stepUp).map(([c]) => c).sort();
-check('the same eight step-up codes in both', JSON.stringify(stepDoc) === JSON.stringify(stepSql));
-check('and they are the eight of section 16.3', JSON.stringify(stepSql) === JSON.stringify(STEP_UP));
+check('the same six step-up codes in both', JSON.stringify(stepDoc) === JSON.stringify(stepSql));
+check('and they are the six of section 16.3 (less the two retired by 0063)', JSON.stringify(stepSql) === JSON.stringify(STEP_UP));
 
 for (const role of ROLES) {
   const n = [...sql.grants].filter((g) => g.startsWith(`${role} `)).length;
@@ -127,8 +130,8 @@ for (const role of ROLES) {
 
 check('every step-up permission is CONSOLE-only',
   [...sql.permissions].every(([, v]) => !v.stepUp || (v.surfaces.length === 1 && v.surfaces[0] === 'CONSOLE')));
-check('twelve permissions are mobile-reachable',
-  [...sql.permissions].filter(([, v]) => v.surfaces.includes('MOBILE')).length === 12);
+check('six permissions are mobile-reachable (twelve less the six retired by 0063)',
+  [...sql.permissions].filter(([, v]) => v.surfaces.includes('MOBILE')).length === 6);
 
 const analyst = [...sql.grants].filter((g) => g.startsWith('ANALYST ')).map((g) => g.split(' ')[1]);
 check('ANALYST holds zero writes',
@@ -137,7 +140,7 @@ check('ANALYST holds zero writes',
 
 const owner = new Set([...sql.grants].filter((g) => g.startsWith('OWNER ')).map((g) => g.split(' ')[1]));
 const admin = new Set([...sql.grants].filter((g) => g.startsWith('ADMIN ')).map((g) => g.split(' ')[1]));
-check('OWNER holds all 42', owner.size === 42);
+check('OWNER holds all 29', owner.size === 29);
 check('ADMIN lacks exactly delete and ownership transfer',
   JSON.stringify([...owner].filter((c) => !admin.has(c)).sort())
     === JSON.stringify(['seller.account:delete', 'seller.ownership:transfer']));
@@ -149,4 +152,4 @@ if (failures.length) {
   console.error('      until the document is corrected.\n');
   process.exit(1);
 }
-console.log('PASS  the table and the SQL agree in all 252 cells, both directions.\n');
+console.log('PASS  the table and the SQL agree in all 174 cells, both directions.\n');

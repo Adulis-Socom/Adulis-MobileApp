@@ -19,7 +19,6 @@ export const ITEM_LABEL: Readonly<Record<string, string>> = {
   IDENTITY_VERIFIED: en['console.home.item.identity_verified'],
   COMPANY_DETAILS: en['console.home.item.company_details'],
   STORE_PROFILE: en['console.home.item.store_profile'],
-  PAYOUT_DETAILS: en['console.home.item.payout_details'],
   FULFILMENT_CONFIG: en['console.home.item.fulfilment_config'],
   AT_LEAST_ONE_PRODUCT: en['console.home.item.at_least_one_product'],
 };

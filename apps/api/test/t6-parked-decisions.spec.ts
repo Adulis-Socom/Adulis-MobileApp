@@ -58,7 +58,7 @@ const OWNER_CON_S = randomUUID();
 const OWNER_MOB_S = randomUUID();
 const STRANGER_MOB_S = randomUUID();
 const SELLER = randomUUID();
-const ORDER = randomUUID();
+const CONVERSATION = randomUUID();
 
 const P_OWNER = '+251919950001';
 const P_BUYER = '+251919950002';
@@ -85,8 +85,7 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
       [M],
     );
     await admin.query(
-      `INSERT INTO core.timing_config (id, market_id, reservation_window,
-         payment_confirmation_window, fulfilment_window, offline_sync_horizon,
+      `INSERT INTO core.timing_config (id, market_id, payment_confirmation_window, fulfilment_window, offline_sync_horizon,
          payout_activation_delay, recovery_cooling_period,
          deleted_number_cooling_period, refund_ack_window, media_retention,
          level_credit_grace, mobile_session_lifetime, console_session_lifetime,
@@ -95,7 +94,7 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
          new_device_payout_lock, same_seller_cancellation_threshold,
          same_seller_cooldown, cross_seller_cooldown_ladder,
          cancellation_counter_decay)
-       VALUES (gen_random_uuid(), $1, '48 hours','24 hours','72 hours','7 days',
+       VALUES (gen_random_uuid(), $1,'24 hours','72 hours','7 days',
          '24 hours','7 days','30 days','48 hours','90 days','24 hours',
          '30 days','12 hours','30 minutes','7 days','8 hours','5 minutes',5,
          '5 minutes','24 hours',3,'1 hour',
@@ -128,15 +127,12 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
        VALUES ($1,$2,$3,'INDIVIDUAL','Parked','t6-parked','ACTIVE')`,
       [SELLER, M, SELLER_OWNER],
     );
-    // A confirmed order belonging to BUYER, so it is both markable-ready
-    // (D-27) and probeable by a stranger (D-30).
+    // A conversation belonging to BUYER, so a stranger can probe it (D-30).
+    // It was an order until migration 0063 removed the buyer order reads.
     await admin.query(
-      `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id,
-         state, expires_at, clock_stopped_at, total_minor, total_currency,
-         display_currency)
-       VALUES ($1,$2,$3,$4,'PAYMENT_CONFIRMED', now() + interval '2 days',
-               now(), 50000,'ETB','ETB')`,
-      [ORDER, M, SELLER, BUYER],
+      `INSERT INTO chat.conversation (id, seller_id, buyer_account_id, market_id)
+       VALUES ($1,$2,$3,$4)`,
+      [CONVERSATION, SELLER, BUYER, M],
     );
 
     const moduleRef = await Test.createTestingModule({ imports: [T6AppModule] })
@@ -154,7 +150,8 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
     await admin.query(`DELETE FROM core.idempotency_record WHERE actor_id = ANY($1::uuid[])`, [
       [SELLER_OWNER, BUYER, STRANGER],
     ]);
-    await admin.query(`DELETE FROM core."order" WHERE seller_id = $1`, [SELLER]);
+    await admin.query(`DELETE FROM chat.message WHERE conversation_id = $1`, [CONVERSATION]);
+    await admin.query(`DELETE FROM chat.conversation WHERE id = $1`, [CONVERSATION]);
     await admin.query(`DELETE FROM core.seller_public_stats WHERE seller_id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.seller WHERE id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.step_up_challenge WHERE account_id = ANY($1::uuid[])`, [
@@ -182,71 +179,10 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
   //         reads a FOURTH.
   // ======================================================================
   describe('D-27 -- adulis.audience is the fourth transaction-local setting', () => {
-    it('the surface check inside fn_mark_order_ready actually runs, and it is not the endpoint doing it', async () => {
-      // ADU-CON-02 v3.0 S6.1 prints set_config for exactly three settings.
-      // ADU-DB-01 S12.6a's ratified fn_mark_order_ready body reads
-      // current_setting('adulis.audience'), so with three settings every
-      // mark-ready call was a 500: "unrecognised configuration parameter".
-      //
-      // Success here is the whole assertion. If the fourth set_config is
-      // ever removed as an unruled extra, this is a 500 -- and a 500 on a
-      // seller's happy path is what the C3 gate suite found the first time.
-      const ok = await http()
-        .post(`/v1/seller/orders/${ORDER}/ready`)
-        .set('Cookie', cookie(OWNER_CON_S))
-        .set('X-Adulis-Seller', SELLER)
-        .set('Origin', CONSOLE_ORIGIN)
-        .set('Idempotency-Key', randomUUID())
-        .send({})
-        .expect(200);
-      expect(ok.body.ready_at).toBeTruthy();
-
-      // AND THE SETTING IS LOAD-BEARING, proven by removing it. Called with
-      // no adulis.audience in scope, current_setting raises 42704
-      // "unrecognized configuration parameter" -- which the translator does
-      // not recognise, so it is a 500. That is precisely the C3 finding:
-      // every mark-ready call was a 500 on a seller's happy path.
-      const bare = admin;
-      await expect(
-        bare.query(`SELECT core.fn_mark_order_ready($1,$2,$3)`, [ORDER, SELLER_OWNER, SELLER]),
-      ).rejects.toMatchObject({ code: '42704' });
-
-      // With the fourth setting present, in the same shape the wrapper
-      // writes it, the same call succeeds.
-      const c = await admin.connect();
-      try {
-        await c.query('BEGIN');
-        await c.query(`SELECT set_config('adulis.audience','CONSOLE',true)`);
-        const r = await c.query<{ fn_mark_order_ready: Date }>(
-          `SELECT core.fn_mark_order_ready($1,$2,$3)`,
-          [ORDER, SELLER_OWNER, SELLER],
-        );
-        expect(r.rows[0]?.fn_mark_order_ready).toBeTruthy();
-        await c.query('ROLLBACK');
-      } finally {
-        c.release();
-      }
-
-      // AND IT CARRIES THE REAL VALUE, not a constant. seller.order_ready:update
-      // is {MOBILE, CONSOLE} -- seller lite marks orders ready from the
-      // phone -- so a MOBILE session must also succeed. If the wrapper ever
-      // wrote a fixed 'CONSOLE', or an empty string, this call would fail
-      // the ::core.session_audience cast (22P02) rather than pass.
-      const surfaces = await admin.query<{ surfaces: string[] }>(
-        `SELECT surfaces::text[] AS surfaces FROM core.permission
-          WHERE code = 'seller.order_ready:update'`,
-      );
-      expect(surfaces.rows[0]?.surfaces?.sort()).toEqual(['CONSOLE', 'MOBILE']);
-      const fromMobile = await http()
-        .post(`/v1/seller/orders/${ORDER}/ready`)
-        .set('Authorization', `Bearer ${sessionToken(OWNER_MOB_S)}`)
-        .set('X-Adulis-Seller', SELLER)
-        .set('Idempotency-Key', randomUUID())
-        .send({})
-        .expect(200);
-      expect(fromMobile.body.ready_at).toBe(ok.body.ready_at);
-    });
-
+    // The case that proved the fourth setting LOAD-BEARING called
+    // fn_mark_order_ready, its only reader, and went with that function in
+    // migration 0063. The wrapper still writes adulis.audience, and the
+    // property that matters for every setting it writes stays pinned here.
     it('all four settings are transaction-local, so a pooled connection carries nothing between requests', async () => {
       // The third argument to set_config is the entire RLS control, and it
       // is what makes the wrapper safe under PgBouncer transaction mode
@@ -273,24 +209,24 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
   // D-30 -- 12.5 says 403 for a non-buyer; S19 says a stranger must not
   //         learn the object exists.
   // ======================================================================
-  describe('D-30 -- a stranger probing an order gets 404, and no detail', () => {
-    it('the order exists, belongs to someone else, and is reported as not found', async () => {
-      // The order is real: the buyer can read it.
+  describe('D-30 -- a stranger probing a buyer-owned object gets 404, and no detail', () => {
+    it('the conversation exists, belongs to someone else, and is reported as not found', async () => {
+      // The conversation is real.
       const mine = await admin.query<{ n: number }>(
-        `SELECT count(*)::int AS n FROM core."order" WHERE id = $1`,
-        [ORDER],
+        `SELECT count(*)::int AS n FROM chat.conversation WHERE id = $1`,
+        [CONVERSATION],
       );
       expect(Number(mine.rows[0]?.n)).toBe(1);
 
       const probe = await http()
-        .get(`/v1/orders/${ORDER}`)
+        .get(`/v1/conversations/${CONVERSATION}/messages`)
         .set('Authorization', `Bearer ${sessionToken(STRANGER_MOB_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .expect(404);
 
       // ADU-AUTH-01 S19/S21: a scope failure is 404 AND CARRIES NO DETAIL.
-      // 403 would confirm the order exists, which is the whole objection --
-      // an id oracle over other people's orders, one probe at a time.
+      // 403 would confirm the object exists, which is the whole objection --
+      // an id oracle over other people's threads, one probe at a time.
       expect(probe.body.code).toBe('NOT_FOUND');
       expect(probe.body.items).toBeUndefined();
       expect(probe.body.slots).toBeUndefined();
@@ -299,7 +235,7 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
       // one the stranger may not see. That is the property, not the status
       // code: two responses that differ would rebuild the oracle.
       const fiction = await http()
-        .get(`/v1/orders/${randomUUID()}`)
+        .get(`/v1/conversations/${randomUUID()}/messages`)
         .set('Authorization', `Bearer ${sessionToken(STRANGER_MOB_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .expect(404);

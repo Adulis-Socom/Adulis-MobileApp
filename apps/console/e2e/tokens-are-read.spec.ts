@@ -100,8 +100,8 @@ test.describe('the console READS the tokens @safety', () => {
     // The dark project sets colorScheme; the project name says which is which.
     const mode = testInfo.project.name.startsWith('dark') ? 'dark' : 'light';
 
-    await page.goto(`/s/${SEEDED.sellerId}/orders`);
-    await expect(page.locator('[data-order]').first()).toBeVisible();
+    await page.goto(`/s/${SEEDED.sellerId}/products`);
+    await expect(page.locator('[data-product]').first()).toBeVisible();
 
     // ------------------------------------------------------------------
     // 1. THE CUSTOM PROPERTIES REACH THE DOCUMENT. If the stylesheet never

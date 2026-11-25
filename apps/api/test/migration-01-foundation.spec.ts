@@ -210,13 +210,10 @@ describe('migration 01 — foundation', () => {
     const byHand: Record<string, string[]> = {
       // R2 — two audiences, not three. SELLER_WEB renamed, COURIER_WEB removed.
       'core.session_audience': ['MOBILE', 'CONSOLE'],
-      // C2 — two state machines. REFUNDED exists only at reservation level.
+      // C2 — the order state machine (inert since 0063; the Reservation machine is gone).
       'core.order_state': [
         'CREATED', 'NOTIFIED', 'PAYMENT_SUBMITTED', 'PAYMENT_CONFIRMED', 'HANDED_OFF',
         'COMPLETED', 'CANCELLED_BY_BUYER', 'CANCELLED_BY_SELLER', 'EXPIRED_UNCLAIMED',
-      ],
-      'core.reservation_state': [
-        'ACTIVE', 'FULFILLED', 'CANCELLED_BY_BUYER', 'CANCELLED_BY_SELLER', 'REFUNDED', 'EXPIRED',
       ],
       // Section 16 seeds a grant for each of these six.
       'core.team_role': [
@@ -243,6 +240,20 @@ describe('migration 01 — foundation', () => {
         [schema, typname],
       );
       expect(rows[0]?.v).toEqual(values);
+    });
+
+    it('has no Reservation type or table after 0063 retired the model', async () => {
+      const rows = await q(
+        `SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+          WHERE n.nspname = 'core' AND t.typname = 'reservation_state'`,
+      );
+      expect(rows).toEqual([]);
+      const tables = await q<{ t: string | null }>(
+        `SELECT to_regclass('core.reservation')::text AS t
+         UNION ALL SELECT to_regclass('core.refund')::text
+         UNION ALL SELECT to_regclass('core.reservation_state_transition_legal')::text`,
+      );
+      expect(tables.map((r) => r.t)).toEqual([null, null, null]);
     });
 
     it('has no SELLER_WEB or COURIER_WEB anywhere — R2 is a rename, not an addition', async () => {

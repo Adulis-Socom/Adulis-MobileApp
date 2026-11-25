@@ -248,6 +248,10 @@
     {
       "name": "0062_catalogue_category_taxonomy.sql",
       "sha256": "4e2bc0bcc3a0e276d73d14300ff459695521799a0563f9a47ac051984f9072e2"
+    },
+    {
+      "name": "0063_retire_legacy_reservation_model.sql",
+      "sha256": "6c26e1cbd13421d1a406b28fcb59c4f73d888307a276b11e1facf0168e25ace2"
     }
   ]
 }
