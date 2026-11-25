@@ -1,6 +1,6 @@
 # Approved target vs executable legacy stack
 
-Read CURRENT_MVP_AUTHORITY.md and the controlled migration plan. Target Fastify, Drizzle, BullMQ/Valkey; legacy Express, Kysely, node-pg-migrate, Graphile Worker until authorized migration. Lists below describe legacy executable tooling unless noted. No migration authorized by this reference.
+CLEAN REBUILD (RB25-D01): the replacement lineage is built clean on the target stack in Stage B; everything listed below under 'legacy' is the ARCHIVED lineage and is not carried into the replacement. Read CURRENT_MVP_AUTHORITY.md and the controlled migration plan. Target Fastify, Drizzle, BullMQ/Valkey; legacy Express, Kysely, node-pg-migrate, Graphile Worker until authorized migration. Lists below describe legacy executable tooling unless noted. No migration authorized by this reference.
 
 ## Backend
 - TypeScript, strict mode

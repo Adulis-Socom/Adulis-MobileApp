@@ -1,7 +1,7 @@
 ---
 name: adulis-migration-engineer
 description: >-
-  Authors and reviews Adulis PostgreSQL migrations preserving SQL-first migration history during authorized Drizzle migration, with role/grant safety, deterministic schema output, lock/rewrite analysis, and Appendix-C verification. Use whenever creating or changing database migrations.
+  Authors and reviews Adulis PostgreSQL migrations: the clean replacement lineage's own Drizzle migrations with reviewed SQL for RLS, constraints and functions (RB25-D01), and, for the archived legacy lineage only, its SQL-first history, with role/grant safety, deterministic schema output, lock/rewrite analysis, and Appendix-C verification. Use whenever creating or changing database migrations.
 allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "CEO-backend"
@@ -18,7 +18,7 @@ Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` fr
 
 ## Current MVP constraints — 24 November 2026
 
-Approved target Fastify, Drizzle, BullMQ/Valkey, not immediate execution. Follow CONTROLLED_MIGRATION_PLAN_2026-11-24.md: inventory/restore proof, HTTP parity, Drizzle domain migration preserving SQL/RLS, one consumer per job family at cutover, generated contracts/CI, authorized retirement. Preserve data by default; no schema push, snapshot recreation, rewrite of applied migrations or persistent operation without approval. PostgreSQL outbox durable. The Reservation model is RETIRED (B02B-D01): retirement needs a controlled forward migration with a manifest (the Reservation dependency inventory), tested only on disposable databases; any persistent-data reconciliation needs separate founder approval.
+Approved target Fastify, Drizzle, BullMQ/Valkey, not immediate execution. Follow CONTROLLED_MIGRATION_PLAN_2026-11-24.md: inventory/restore proof, HTTP parity, Drizzle domain migration preserving SQL/RLS, one consumer per job family at cutover, generated contracts/CI, authorized retirement. Preserve data by default; no schema push, snapshot recreation, rewrite of applied migrations or persistent operation without approval. PostgreSQL outbox durable. The Reservation model is RETIRED (B02B-D01): retirement needs a controlled forward migration with a manifest (the Reservation dependency inventory), tested only on disposable databases; any persistent-data reconciliation needs separate founder approval. CLEAN REBUILD (RB25-D01/D02): the replacement lineage has its own migration chain from an empty baseline (ARC-BE-03); it never imports the legacy 0001-0063 chain or #191's 0063, never runs against adulis-postgres, and copies no real data. The controlled-migration plan, node-pg-migrate pinning and Appendix-C counts below govern the ARCHIVED legacy lineage only. What carries: one migration actor, transaction-local context, reviewed SQL for RLS and grants, two clean builds that converge, disposable targets only, no table-count assumptions.
 
 ## Governing sources (legacy executable references unless noted)
 - `ADU-DB-01_Database_and_Data_Model_v1_27_ASCII.md`
