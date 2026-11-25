@@ -15,9 +15,15 @@ for (const viewport of VIEWPORTS) {
     test(`axe: ${scene.name} (${viewport.label})`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await scene.setup(page);
+      const describe = (vs: { id: string; impact?: string | null; nodes: { target: unknown[] }[] }[]) => vs.map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`);
+      // Top of the page: everything except target-size, which counts a control under the STICKY bottom bar as overlapped
+      // although it is only where the page happens to be scrolled.
+      const top = await new AxeBuilder({ page }).withTags(TAGS).disableRules(['target-size']).analyze();
+      expect(describe(top.violations), `axe violations on ${scene.name} (top)`).toEqual([]);
+      // End of the page, where the bar sits after the content and covers nothing: the full rule set, target size included.
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
       const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
-      const found = results.violations.map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`);
-      expect(found, `axe violations on ${scene.name}`).toEqual([]);
+      expect(describe(results.violations), `axe violations on ${scene.name} (end of page)`).toEqual([]);
       // heading order is a best-practice rule outside the WCAG tag sets: a skipped level would otherwise pass
       const order = await new AxeBuilder({ page }).withRules(['heading-order']).analyze();
       expect(order.violations.map((v) => v.nodes.map((n) => n.target.join(' ')).join(' | ')), `heading order on ${scene.name}`).toEqual([]);
