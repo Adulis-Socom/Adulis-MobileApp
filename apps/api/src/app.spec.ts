@@ -39,6 +39,16 @@ class ProbeController {
   }
 }
 
+@Public()
+@Controller('mixed')
+class MixedController {
+  @Audiences('CONSOLE')
+  @Get('guarded')
+  guarded() {
+    return { ok: true };
+  }
+}
+
 function fakePool(query: () => Promise<unknown>): Pool {
   return { query, end: async () => undefined } as unknown as Pool;
 }
@@ -68,7 +78,7 @@ async function harness(
     logger,
     pool: opts.pool ?? fakePool(async () => ({ rows: [{ writable: true }] })),
     cache: new RebuildableCache(null, logger),
-    controllers: [ProbeController],
+    controllers: [ProbeController, MixedController],
     ...(opts.authenticator ? { authenticator: opts.authenticator } : {}),
   });
   await app.init();
@@ -129,6 +139,11 @@ describe('API platform (ARC-BE-02)', () => {
     expect((await h.inject({ method: 'GET', url: '/v1/probe/closed' })).statusCode).toBe(403);
     expect((await h.inject({ method: 'GET', url: '/v1/probe/console' })).statusCode).toBe(403);
     expect((await h.inject({ method: 'GET', url: '/v1/probe/mobile' })).statusCode).toBe(200);
+  });
+
+  it('a class-level @Public() never opens a method that declares audiences', async () => {
+    h = await harness();
+    expect((await h.inject({ method: 'GET', url: '/v1/mixed/guarded' })).statusCode).toBe(401);
   });
 
   it('enforces the exact origin allow-list and origin/audience agreement', async () => {

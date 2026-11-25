@@ -3,7 +3,7 @@ import { bigint, boolean, integer, jsonb, pgSchema, primaryKey, text, timestamp,
 /**
  * The replacement lineage's ONLY tables at foundation (ARC-BE-03/04): the eventing platform of EVT-01 S10-S13
  * and S22. No domain table exists until its own work order. The DDL, constraints, triggers and grants are the
- * reviewed SQL in db/migrations; this file is the typed access to it, and test/schema-conformance.int.ts
+ * reviewed SQL in db/migrations; this file is the typed access to it, and test/lineage.int.ts
  * proves the two agree column for column.
  */
 export const platform = pgSchema('platform');

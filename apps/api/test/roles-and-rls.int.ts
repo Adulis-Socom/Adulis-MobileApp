@@ -33,6 +33,7 @@ describe('roles and privileges (ARC-BE-03)', () => {
 
   it('the API appends facts and can do nothing else with them', async () => {
     expect(await sqlstate(db.api, `insert into platform.event_outbox (${EVENT_COLUMNS}) values (${eventValues(ID)})`)).toBeUndefined();
+    expect(await sqlstate(db.api, `insert into platform.event_outbox (${EVENT_COLUMNS}, dispatched_at) values (${eventValues(ID.replace('a1', 'b1'))}, now())`)).toBe('42501');
     expect(await sqlstate(db.api, 'select * from platform.event_outbox')).toBe('42501');
     expect(await sqlstate(db.api, `update platform.event_outbox set dispatched_at = now()`)).toBe('42501');
     expect(await sqlstate(db.api, 'delete from platform.event_outbox')).toBe('42501');

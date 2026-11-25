@@ -57,7 +57,9 @@ export class AccessGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest<FastifyRequest>();
     checkOrigin(req, this.origins);
     const targets = [ctx.getHandler(), ctx.getClass()];
-    if (this.reflector.getAllAndOverride<boolean>(PUBLIC, targets) === true) {
+    // A method that declares audiences is never made public by a class-level @Public() (fail closed).
+    const methodAudiences = this.reflector.get<Audience[] | undefined>(AUDIENCES, ctx.getHandler());
+    if (methodAudiences === undefined && this.reflector.getAllAndOverride<boolean>(PUBLIC, targets) === true) {
       req.principal = { kind: 'ANONYMOUS_PUBLIC' };
       return true;
     }

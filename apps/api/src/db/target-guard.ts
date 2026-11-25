@@ -16,9 +16,11 @@ export const DATABASE_NAME = /^adulis_rebuild(?:_[a-z0-9_]{1,40})?$/;
  * Markers the replacement can NEVER contain (so a future domain schema named `chat` or `core` is not refused):
  * node-pg-migrate's history, the Graphile Worker schema, and the retired Reservation table (RB25-D03).
  */
-export const LEGACY_MARKERS_SQL = `select (to_regclass('public.pgmigrations') is not null
+// Catalog lookups, not to_regclass(): the runtime roles have no USAGE on `public`, and to_regclass() on a schema
+// the caller cannot use raises 42501 instead of answering.
+export const LEGACY_MARKERS_SQL = `select (exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relname = 'pgmigrations')
   or exists (select 1 from pg_namespace where nspname = 'graphile_worker')
-  or to_regclass('core.reservation') is not null) as v`;
+  or exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'core' and c.relname = 'reservation')) as v`;
 /** Host ports of the repository default, another local project, and adulis-postgres. Refused on loopback. */
 const LEGACY_LOOPBACK_PORTS = new Set(['5432', '5433', '5434']);
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
@@ -59,7 +61,7 @@ export async function identityComment(db: Queryable): Promise<string | null> {
 export async function assertReplacementTarget(
   db: Queryable,
   url: string,
-  opts: { stage: Stage; journalHashes?: readonly string[] },
+  opts: { stage: Stage; journalHashes?: readonly string[]; expectedRole?: 'adulis_api' | 'adulis_worker' | 'adulis_migrator' },
 ): Promise<void> {
   const urlName = assertTargetUrl(url);
   const current = await one<string>(db, 'select current_database() as v');
@@ -72,7 +74,7 @@ export async function assertReplacementTarget(
 
   if (opts.stage === 'migrate') {
     const known = new Set(opts.journalHashes ?? refuse('migrate stage needs the local journal'));
-    const hasHistory = await one<boolean>(db, `select to_regclass('drizzle.__drizzle_migrations') is not null as v`);
+    const hasHistory = await one<boolean>(db, `select exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'drizzle' and c.relname = '__drizzle_migrations') as v`);
     if (hasHistory) {
       const applied = await db.query('select hash from drizzle.__drizzle_migrations order by id');
       for (const row of applied.rows as { hash: string }[]) if (!known.has(row.hash)) refuse('applied migration history is not this lineage');
@@ -84,5 +86,11 @@ export async function assertReplacementTarget(
       | { rolsuper: boolean; rolbypassrls: boolean }
       | undefined;
     if (!role || role.rolsuper || role.rolbypassrls) refuse('migrations, the API and the worker never run as a superuser or BYPASSRLS role');
+    // Each process runs as exactly its own role: never the owner, never a role that can SET ROLE to another.
+    if (opts.expectedRole !== undefined && (await one<string>(db, 'select current_user::text as v')) !== opts.expectedRole) {
+      refuse(`this process must connect as ${opts.expectedRole}`);
+    }
+    const memberships = await one<number>(db, 'select count(*)::int as v from pg_auth_members m join pg_roles r on r.oid = m.member where r.rolname = current_user');
+    if (memberships > 0) refuse('the connecting role is a member of another role');
   }
 }

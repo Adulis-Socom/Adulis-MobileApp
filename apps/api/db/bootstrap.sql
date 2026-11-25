@@ -10,13 +10,19 @@
 -- every run so a role that pre-existed with more power is reduced, not trusted. Passwords and the
 -- database-level grants are applied by bootstrap.ts with server-side quoting (format %I / %L).
 DO $$
-DECLARE r text;
+DECLARE r text; m text;
 BEGIN
   FOREACH r IN ARRAY ARRAY['adulis_migrator', 'adulis_api', 'adulis_worker'] LOOP
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
       EXECUTE format('CREATE ROLE %I LOGIN', r);
     END IF;
     EXECUTE format('ALTER ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT', r);
+    EXECUTE format('ALTER ROLE %I RESET ALL', r);
+  END LOOP;
+  -- A pre-existing role is reduced, not trusted: no membership in any other role (SET ROLE escalation).
+  FOR r, m IN SELECT g.rolname, u.rolname FROM pg_auth_members am JOIN pg_roles g ON g.oid = am.roleid JOIN pg_roles u ON u.oid = am.member
+              WHERE u.rolname IN ('adulis_migrator', 'adulis_api', 'adulis_worker') LOOP
+    EXECUTE format('REVOKE %I FROM %I', r, m);
   END LOOP;
 END
 $$;

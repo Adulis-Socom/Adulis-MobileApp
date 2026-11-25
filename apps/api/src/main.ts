@@ -17,7 +17,7 @@ async function main(): Promise<void> {
   try {
     const pool = createPool(env.DATABASE_URL, 'adulis-api', 10);
     pool.on('error', (err) => logger.error({ ...errorFields(err, env.NODE_ENV === 'production') }, 'idle database client error'));
-    await assertReplacementTarget(pool, env.DATABASE_URL, { stage: 'runtime' });
+    await assertReplacementTarget(pool, env.DATABASE_URL, { stage: 'runtime', expectedRole: 'adulis_api' });
     const cache = RebuildableCache.connect(env.CACHE_VALKEY_URL, logger);
     await cache.init();
     const app = await createApp({ env, logger, pool, cache });

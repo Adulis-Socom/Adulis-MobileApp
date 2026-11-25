@@ -1,6 +1,7 @@
 import { getTableConfig } from 'drizzle-orm/pg-core';
 import { bootstrap } from '../src/db/bootstrap';
-import { runMigrations } from '../src/db/migrate';
+import { readMigrationFiles } from 'drizzle-orm/migrator';
+import { MIGRATIONS_FOLDER, runMigrations } from '../src/db/migrate';
 import * as schema from '../src/db/schema';
 import { assertReplacementTarget, DATABASE_IDENTITY, TargetRefused } from '../src/db/target-guard';
 import { createEmptyDatabase, freshReplacementDatabase, PASSWORDS, schemaSnapshot, withClient } from './support';
@@ -96,9 +97,15 @@ describe('database target safety before any migration (ARC-BE-01/03)', () => {
     const db = await freshReplacementDatabase('superuser');
     await withClient(db.superuser, async (c) => {
       await expect(assertReplacementTarget(c, db.superuser, { stage: 'runtime' })).rejects.toThrow(/superuser/);
+      await expect(assertReplacementTarget(c, db.superuser, { stage: 'migrate', journalHashes: readMigrationFiles({ migrationsFolder: MIGRATIONS_FOLDER }).map((m) => m.hash) })).rejects.toThrow(/superuser/);
     });
     await withClient(db.api, async (c) => {
-      await expect(assertReplacementTarget(c, db.api, { stage: 'runtime' })).resolves.toBeUndefined();
+      await expect(assertReplacementTarget(c, db.api, { stage: 'runtime', expectedRole: 'adulis_api' })).resolves.toBeUndefined();
+      await expect(assertReplacementTarget(c, db.api, { stage: 'runtime', expectedRole: 'adulis_worker' })).rejects.toThrow(/adulis_worker/);
+    });
+    // The owner role is never a runtime identity.
+    await withClient(db.migrator, async (c) => {
+      await expect(assertReplacementTarget(c, db.migrator, { stage: 'runtime', expectedRole: 'adulis_api' })).rejects.toThrow(/adulis_api/);
     });
   });
 });

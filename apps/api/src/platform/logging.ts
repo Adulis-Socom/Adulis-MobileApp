@@ -9,10 +9,10 @@ import pino, { type Logger } from 'pino';
  */
 export const LOG_FIELDS: readonly string[] = [
   'msg', 'module', 'requestId', 'correlationId', 'method', 'route', 'statusCode', 'durationMs',
-  'errorCode', 'errorName', 'sqlstate', 'stack',
+  'errorCode', 'errorName', 'sqlstate', 'causeCode', 'stack',
   // worker and relay: compile-time names and counts only
   'consumer', 'eventType', 'eventVersion', 'jobId', 'attempt', 'outcome', 'count', 'queue',
-  'waiting', 'active', 'delayed', 'failed', 'undispatched', 'oldestUndispatchedSeconds', 'unresolvedDeadLetters',
+  'waiting', 'active', 'delayed', 'failed', 'undispatched', 'oldestUndispatchedSeconds', 'unresolvedDeadLetters', 'staleDeliveries',
 ];
 
 /** OBS-01 S11: never in broad telemetry. Removed even if a caller bypasses the allow-list. */
@@ -45,6 +45,8 @@ export function errorFields(err: unknown, production: boolean): Record<string, u
   return {
     errorName: err.name,
     ...(typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code) ? { sqlstate: code } : {}),
+    // Network/system codes (ECONNREFUSED, ETIMEDOUT): a cause, never personal data.
+    ...(typeof code === 'string' && /^E[A-Z_]{2,30}$/.test(code) ? { causeCode: code } : {}),
     ...(production ? {} : { stack: err.stack }),
   };
 }

@@ -16,8 +16,10 @@ const transform = {
   // ESM-only dependencies that Node 22 loads natively (require(esm)) but Jest's module runtime cannot.
   '^.+\\.js$': ['@swc/jest', { jsc: { parser: { syntax: 'ecmascript' }, target: 'es2023' }, module: { type: 'commonjs' } }],
 };
-// path-to-regexp@9 (via @fastify/middie) is ESM-only; every other dependency stays untransformed.
-const transformIgnorePatterns = ['/node_modules/(?!\\.pnpm/path-to-regexp@|path-to-regexp/)'];
+// ESM-only: path-to-regexp@9 (via @fastify/middie) and cookie@2 (via light-my-request). Every other dependency
+// stays untransformed; add a package here only when Jest reports it.
+const ESM_ONLY = '(?:path-to-regexp|cookie)';
+const transformIgnorePatterns = [`/node_modules/(?!\\.pnpm/${ESM_ONLY}@|${ESM_ONLY}/)`];
 
 module.exports = {
   projects: [

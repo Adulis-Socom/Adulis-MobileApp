@@ -19,6 +19,9 @@ export interface DbContext {
   readonly sellerId?: string;
 }
 
+/** The worker's context: trusted SYSTEM provenance, no account or Seller (EVT-01 S16). */
+export const SYSTEM_CONTEXT: DbContext = { actorRole: 'SYSTEM' };
+
 /**
  * Root CLAUDE.md, non-negotiable: every database access runs in a transaction whose FIRST statement sets the
  * three settings with set_config(..., true). The third argument makes them transaction-local; it is the entire

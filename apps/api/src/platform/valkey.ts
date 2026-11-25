@@ -48,17 +48,29 @@ export async function assertQueuePolicy(redis: Redis): Promise<void> {
 }
 
 export class RebuildableCache {
-  private enabled: boolean;
+  /** Off until a policy check passes; re-checked on every (re)connect, so a late connect is never unchecked. */
+  private enabled = false;
 
   constructor(
     private readonly redis: Redis | null,
     private readonly log: Logger,
   ) {
-    this.enabled = redis !== null;
+    redis?.on('ready', () => void this.checkPolicy());
+  }
+
+  private async checkPolicy(): Promise<void> {
+    if (!this.redis) return;
+    try {
+      const policy = await maxmemoryPolicy(this.redis);
+      this.enabled = policy !== 'noeviction';
+      if (!this.enabled) this.log.warn({ queue: 'cache' }, 'cache Valkey reports noeviction and may be the queue instance; cache disabled');
+    } catch {
+      this.enabled = false;
+    }
   }
 
   static connect(url: string, log: Logger): RebuildableCache {
-    return new RebuildableCache(quietErrors(new Redis(url, { enableOfflineQueue: false, maxRetriesPerRequest: 1, lazyConnect: true, connectTimeout: 2_000 }), log, 'cache'), log);
+    return new RebuildableCache(quietErrors(new Redis(url, { enableOfflineQueue: false, maxRetriesPerRequest: 1, lazyConnect: true, connectTimeout: 2_000, commandTimeout: 200 }), log, 'cache'), log);
   }
 
   get isEnabled(): boolean {
@@ -70,10 +82,7 @@ export class RebuildableCache {
     if (!this.redis) return;
     try {
       await this.redis.connect();
-      if ((await maxmemoryPolicy(this.redis)) === 'noeviction') {
-        this.enabled = false;
-        this.log.warn({ queue: 'cache' }, 'cache Valkey reports noeviction and may be the queue instance; cache disabled');
-      }
+      await this.checkPolicy();
     } catch {
       this.log.warn({ queue: 'cache' }, 'cache Valkey unavailable at startup; serving without cache');
     }

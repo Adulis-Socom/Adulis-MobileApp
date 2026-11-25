@@ -21,7 +21,7 @@ export async function runMigrations(url: string): Promise<void> {
   await client.connect();
   try {
     await client.query('select pg_advisory_lock(hashtext($1))', [MIGRATION_LOCK]);
-    await assertReplacementTarget(client, url, { stage: 'migrate', journalHashes });
+    await assertReplacementTarget(client, url, { stage: 'migrate', journalHashes, expectedRole: 'adulis_migrator' });
     await migrate(drizzle({ client }), { migrationsFolder: MIGRATIONS_FOLDER });
   } finally {
     await client.end(); // ends the session, releasing the advisory lock

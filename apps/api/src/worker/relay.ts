@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Queue } from 'bullmq';
 import type { Logger } from 'pino';
-import type { Db } from '../db/client';
+import { SYSTEM_CONTEXT, withRequestContext, type Db, type Tx } from '../db/client';
 import { eventDelivery, eventOutbox } from '../db/schema';
 import type { JobEnvelope } from '../events/envelope';
 import type { EventRegistry, StoredEvent } from '../events/registry';
@@ -38,6 +38,11 @@ export class OutboxRelay {
     private readonly log: Logger,
   ) {}
 
+  /** Every relay database access runs in a transaction that sets the SYSTEM context first (root CLAUDE.md). */
+  private sys<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+    return withRequestContext(this.db, SYSTEM_CONTEXT, fn);
+  }
+
   async runOnce(): Promise<{ claimed: number; dispatched: number }> {
     const claimed = await this.claim();
     let dispatched = 0;
@@ -46,7 +51,7 @@ export class OutboxRelay {
   }
 
   private async claim(): Promise<StoredEvent[]> {
-    return this.db.transaction(async (tx) => {
+    return this.sys(async (tx) => {
       const leased = await tx
         .update(eventOutbox)
         .set({ relayOwner: this.opts.owner, leaseExpiresAt: sql`now() + make_interval(secs => ${this.opts.leaseMs / 1000})` })
@@ -69,10 +74,12 @@ export class OutboxRelay {
   }
 
   private async publish(event: StoredEvent): Promise<boolean> {
-    const open = await this.db
+    const open = await this.sys((tx) =>
+      tx
       .select()
       .from(eventDelivery)
-      .where(and(eq(eventDelivery.eventId, event.eventId), inArray(eventDelivery.state, ['PENDING', 'ENQUEUE_UNKNOWN'])));
+      .where(and(eq(eventDelivery.eventId, event.eventId), inArray(eventDelivery.state, ['PENDING', 'ENQUEUE_UNKNOWN']))),
+    );
     let allQueued = true;
     for (const delivery of open) {
       const consumer = this.registry.consumer(delivery.consumer);
@@ -82,10 +89,12 @@ export class OutboxRelay {
         continue;
       }
       const pk = and(eq(eventDelivery.eventId, delivery.eventId), eq(eventDelivery.consumer, delivery.consumer));
-      await this.db
+      await this.sys((tx) =>
+        tx
         .update(eventDelivery)
         .set({ state: 'ENQUEUE_UNKNOWN', enqueueAttempts: sql`${eventDelivery.enqueueAttempts} + 1`, updatedAt: sql`now()` })
-        .where(and(pk, inArray(eventDelivery.state, ['PENDING', 'ENQUEUE_UNKNOWN'])));
+        .where(and(pk, inArray(eventDelivery.state, ['PENDING', 'ENQUEUE_UNKNOWN']))),
+      );
       const envelope: JobEnvelope = {
         logical_job_id: delivery.jobId,
         job_type: consumer.name,
@@ -108,21 +117,28 @@ export class OutboxRelay {
           backoff: { type: 'exponential', delay: 1_000 },
           removeOnComplete: { age: 86_400 },
           removeOnFail: { age: 7 * 86_400 },
+          stackTraceLimit: 0, // no stack (and so no error text) is kept in Valkey
         });
-        // Only advance from ENQUEUE_UNKNOWN: the consumer may already have finished and written SUCCEEDED.
-        await this.db.update(eventDelivery).set({ state: 'QUEUED', lastErrorCode: null, updatedAt: sql`now()` }).where(and(pk, eq(eventDelivery.state, 'ENQUEUE_UNKNOWN')));
       } catch (err) {
         allQueued = false;
-        await this.db.update(eventDelivery).set({ lastErrorCode: 'ENQUEUE_FAILED', updatedAt: sql`now()` }).where(pk);
         this.log.warn({ consumer: consumer.name, eventType: event.eventType, ...errorFields(err, true) }, 'enqueue failed; event stays durable for retry');
+        await this.sys((tx) => tx.update(eventDelivery).set({ lastErrorCode: 'ENQUEUE_FAILED', updatedAt: sql`now()` }).where(pk));
+        continue;
       }
+      // Accepted by BullMQ. Only advance from ENQUEUE_UNKNOWN: the consumer may already have written SUCCEEDED.
+      // If this write fails the pass fails, the delivery stays ENQUEUE_UNKNOWN, and the lease re-offers it.
+      await this.sys((tx) =>
+        tx.update(eventDelivery).set({ state: 'QUEUED', lastErrorCode: null, updatedAt: sql`now()` }).where(and(pk, eq(eventDelivery.state, 'ENQUEUE_UNKNOWN'))),
+      );
     }
     if (!allQueued) return false;
-    const done = await this.db
+    const done = await this.sys((tx) =>
+      tx
       .update(eventOutbox)
       .set({ dispatchedAt: sql`now()`, relayOwner: null, leaseExpiresAt: null })
       .where(and(eq(eventOutbox.eventId, event.eventId), eq(eventOutbox.relayOwner, this.opts.owner), sql`${eventOutbox.dispatchedAt} is null`))
-      .returning({ id: eventOutbox.eventId });
+      .returning({ id: eventOutbox.eventId }),
+    );
     return done.length === 1;
   }
 }

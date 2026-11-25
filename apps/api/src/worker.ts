@@ -39,20 +39,28 @@ export function repeat(task: () => Promise<void>, intervalMs: number): { stop():
 export async function startWorker(env: WorkerEnv, log: Logger): Promise<{ shutdown(): Promise<void> }> {
   const pool = createPool(env.DATABASE_URL, 'adulis-worker', env.WORKER_CONCURRENCY + 2);
   pool.on('error', (err) => log.error({ ...errorFields(err, true) }, 'idle database client error'));
-  await assertReplacementTarget(pool, env.DATABASE_URL, { stage: 'runtime' });
+  await assertReplacementTarget(pool, env.DATABASE_URL, { stage: 'runtime', expectedRole: 'adulis_worker' });
   const db = createDb(pool);
 
   const producer = queueProducerConnection(env.QUEUE_VALKEY_URL, log);
   await producer.connect();
   await assertQueuePolicy(producer);
   const queue = new Queue(EVENTS_QUEUE, { connection: producer });
+  // Without a listener an 'error' event would crash the process whenever Valkey drops; events stay durable anyway.
+  queue.on('error', (err) => log.warn({ queue: EVENTS_QUEUE, ...errorFields(err, true) }, 'queue connection error'));
   const registry = new EventRegistry(PRODUCTION_EVENTS, PRODUCTION_CONSUMERS);
   const runner = new EventConsumerRunner(db, registry, log);
-  const worker = new Worker(EVENTS_QUEUE, (job) => runner.process(job), {
-    connection: queueWorkerConnection(env.QUEUE_VALKEY_URL, log),
-    concurrency: env.WORKER_CONCURRENCY,
-  });
+  const workerConnection = queueWorkerConnection(env.QUEUE_VALKEY_URL, log);
+  const worker = new Worker(EVENTS_QUEUE, (job) => runner.process(job), { connection: workerConnection, concurrency: env.WORKER_CONCURRENCY });
   worker.on('error', (err) => log.error({ queue: EVENTS_QUEUE, ...errorFields(err, true) }, 'worker error'));
+  // A job can fail without process() running (stalled past BullMQ's limit): make sure it still leaves a dead letter.
+  worker.on('failed', (job) => {
+    if (!job) return;
+    void job.isFailed().then(
+      (final) => (final ? runner.recordFinalFailure(job) : undefined),
+      () => undefined,
+    );
+  });
 
   const relay = new OutboxRelay(db, queue, registry, { owner: `${hostname()}:${process.pid}`, batchSize: env.RELAY_BATCH_SIZE, leaseMs: env.RELAY_LEASE_MS }, log);
   const relayLoop = repeat(async () => {
@@ -66,7 +74,7 @@ export async function startWorker(env: WorkerEnv, log: Logger): Promise<{ shutdo
   const healthLoop = repeat(async () => {
     try {
       const h = await queueHealth(db, queue);
-      const level = h.unresolvedDeadLetters > 0 || h.oldestUndispatchedSeconds > 60 ? 'warn' : 'info';
+      const level = h.unresolvedDeadLetters > 0 || h.staleDeliveries > 0 || h.oldestUndispatchedSeconds > 60 ? 'warn' : 'info';
       log[level]({ queue: EVENTS_QUEUE, ...h }, 'queue health');
     } catch (err) {
       log.warn({ ...errorFields(err, true) }, 'queue health unavailable');
@@ -81,6 +89,7 @@ export async function startWorker(env: WorkerEnv, log: Logger): Promise<{ shutdo
       await worker.close(); // waits for active jobs; claims nothing new
       await queue.close();
       producer.disconnect();
+      workerConnection.disconnect();
       await pool.end();
     },
   };

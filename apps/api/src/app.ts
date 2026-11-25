@@ -9,7 +9,7 @@ import { HealthController, PG_POOL } from './health.controller';
 import { AccessGuard, AUTHENTICATOR, BROWSER_ORIGINS, NoSessionsAuthenticator, type Authenticator } from './platform/auth';
 import { makeGenReqId, REQUEST_ID_HEADER, requestIdsHook, type BrowserAudience } from './platform/http';
 import { NestPinoLogger } from './platform/logging';
-import { envelopeFor, IS_PRODUCTION, LOGGER, ProblemFilter, toAdulisException } from './platform/problem';
+import { IS_PRODUCTION, LOGGER, ProblemFilter } from './platform/problem';
 import { RebuildableCache } from './platform/valkey';
 
 /** Media never transits the API; requests are small (carried legacy limit). */
@@ -89,12 +89,8 @@ export async function createApp(deps: AppDeps): Promise<NestFastifyApplication> 
       'request completed',
     );
   });
-  // Errors raised by Fastify before a Nest handler runs (body limit, malformed JSON, content type) leave in the
-  // same envelope as everything else.
-  fastify.setErrorHandler(async (err, req, reply) => {
-    const ex = toAdulisException(err);
-    return reply.status(ex.status).header('content-type', 'application/problem+json').send(envelopeFor(ex, req.id));
-  });
+  // Fastify-level errors (body limit, malformed JSON, content type) reach the global ProblemFilter through Nest's
+  // own Fastify error handler, which Nest installs at init: app.spec.ts proves the envelope for both.
 
   // SIGTERM is owned by main.ts (drain, close, exit 0); Nest's own hook would re-raise the signal.
   return app;

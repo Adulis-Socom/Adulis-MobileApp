@@ -1,7 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import { UnrecoverableError } from 'bullmq';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Logger } from 'pino';
-import type { Db } from '../db/client';
+import { SYSTEM_CONTEXT, withRequestContext, type Db } from '../db/client';
 import { asyncDeadLetter, eventDelivery, eventOutbox, FAILURE_CLASSES, processedEvent } from '../db/schema';
 import { jobEnvelopeSchema } from '../events/envelope';
 import type { EventRegistry } from '../events/registry';
@@ -60,13 +61,13 @@ export class EventConsumerRunner {
     }
 
     try {
-      const outcome = await this.db.transaction(async (tx): Promise<Outcome> => {
+      const outcome = await withRequestContext(this.db, SYSTEM_CONTEXT, async (tx): Promise<Outcome> => {
+        // Existence first: the marker's foreign key would otherwise turn a missing event into endless retries.
+        const [event] = await tx.select().from(eventOutbox).where(eq(eventOutbox.eventId, eventId));
+        if (!event) throw new ConsumerError('PERMANENT_VALIDATION', 'event-missing');
+        if (event.eventType !== consumer.eventType || event.eventVersion !== consumer.eventVersion) throw new ConsumerError('PERMANENT_VALIDATION', 'event-mismatch');
         const marked = await tx.insert(processedEvent).values({ consumer: consumer.name, eventId }).onConflictDoNothing().returning({ eventId: processedEvent.eventId });
         if (marked.length === 0) return 'DUPLICATE';
-        const [event] = await tx.select().from(eventOutbox).where(eq(eventOutbox.eventId, eventId));
-        if (!event || event.eventType !== consumer.eventType || event.eventVersion !== consumer.eventVersion) {
-          throw new ConsumerError('PERMANENT_VALIDATION', 'event-mismatch');
-        }
         const result = await consumer.handle(tx, event);
         await tx
           .update(eventDelivery)
@@ -82,19 +83,35 @@ export class EventConsumerRunner {
       this.log.warn({ consumer: consumer.name, attempt: job.attemptsMade + 1, outcome: final ? 'dead-lettered' : 'retrying', ...errorFields(err, true) }, 'job failed');
       if (final) await this.deadLetter(job, env, err);
       if (permanent) throw new UnrecoverableError((err as ConsumerError).failureClass);
-      throw err;
+      // BullMQ keeps the thrown message in Valkey: rethrow a class name only, never the original text.
+      throw new Error(err instanceof Error ? err.name : 'Error');
     }
   }
 
-  private async deadLetter(job: JobLike, env: { logical_job_id: string; job_type: string; source_event_id?: string | undefined } | null, err: unknown): Promise<void> {
+  /**
+   * Fallback for failures that never reached process() (a job BullMQ failed after stalling, for example). Keeps an
+   * existing dead letter, because process() already wrote the precise class; only fills the gap when none exists.
+   */
+  async recordFinalFailure(job: JobLike): Promise<void> {
+    const parsed = jobEnvelopeSchema.safeParse(job.data);
+    await this.deadLetter(job, parsed.success ? parsed.data : null, new ConsumerError('TRANSIENT', 'failed-outside-processor'), 'keep');
+  }
+
+  private async deadLetter(
+    job: JobLike,
+    env: { logical_job_id: string; job_type: string; source_event_id?: string | undefined } | null,
+    err: unknown,
+    onConflict: 'update' | 'keep' = 'update',
+  ): Promise<void> {
     const failureClass: FailureClass = err instanceof ConsumerError ? err.failureClass : 'TRANSIENT';
     const name = err instanceof Error ? err.name : 'unknown';
     const fingerprint = (err instanceof ConsumerError ? err.fingerprint : name).slice(0, 200);
     const consumer = env?.job_type ?? 'unknown';
     // Never a payload, message body or error message: names and classes only (S22).
     const row = {
-      logicalJobId: (env?.logical_job_id ?? `invalid.${Date.now()}`).slice(0, 200),
-      sourceEventId: env?.source_event_id ?? null,
+      logicalJobId: (env?.logical_job_id ?? `invalid.${randomUUID()}`).slice(0, 200),
+      // A missing event cannot be referenced (foreign key); the fingerprint records why it is absent.
+      sourceEventId: err instanceof ConsumerError && err.fingerprint === 'event-missing' ? null : (env?.source_event_id ?? null),
       consumer,
       failureClass,
       failureFingerprint: fingerprint,
@@ -103,15 +120,18 @@ export class EventConsumerRunner {
       effectMayHaveHappened: err instanceof ConsumerError ? err.effectMayHaveHappened : false,
     };
     try {
-      await this.db.transaction(async (tx) => {
-        await tx
-          .insert(asyncDeadLetter)
-          .values(row)
-          .onConflictDoUpdate({
-            target: asyncDeadLetter.logicalJobId,
-            set: { failureClass, failureFingerprint: fingerprint, sanitizedSummary: row.sanitizedSummary, attemptCount: row.attemptCount, effectMayHaveHappened: row.effectMayHaveHappened, updatedAt: sql`now()` },
-          });
-        if (env?.source_event_id) {
+      await withRequestContext(this.db, SYSTEM_CONTEXT, async (tx) => {
+        const insert = tx.insert(asyncDeadLetter).values(row);
+        const written =
+          onConflict === 'keep'
+            ? await insert.onConflictDoNothing({ target: asyncDeadLetter.logicalJobId }).returning({ id: asyncDeadLetter.deadLetterId })
+            : await insert
+                .onConflictDoUpdate({
+                  target: asyncDeadLetter.logicalJobId,
+                  set: { failureClass, failureFingerprint: fingerprint, sanitizedSummary: row.sanitizedSummary, attemptCount: row.attemptCount, effectMayHaveHappened: row.effectMayHaveHappened, updatedAt: sql`now()` },
+                })
+                .returning({ id: asyncDeadLetter.deadLetterId });
+        if (written.length > 0 && row.sourceEventId) {
           await tx
             .update(eventDelivery)
             .set({ state: 'DEAD_LETTERED', updatedAt: sql`now()` })

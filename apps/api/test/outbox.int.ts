@@ -185,7 +185,9 @@ describe('transactional outbox, relay and idempotent consumers (ARC-BE-04)', () 
     await relay().runOnce();
     const runner = new EventConsumerRunner(workerDb, registry, log);
     failNext = 1;
-    await expect(runner.process(jobFor(id, 0))).rejects.toThrow('synthetic transient failure');
+    // The rethrown error carries a class name only: BullMQ would otherwise keep the original text in Valkey.
+    const thrown = await runner.process(jobFor(id, 0)).then(() => undefined, (e: unknown) => e as Error);
+    expect(thrown?.message).toBe('Error');
     expect(await effects(id)).toBe(0); // the failed attempt rolled back its effect and its marker
     expect(await count(`select count(*)::int as n from platform.async_dead_letter where source_event_id = '${id}'`)).toBe(0);
     expect(await runner.process(jobFor(id, 1))).toBe('SUCCEEDED');
@@ -219,6 +221,35 @@ describe('transactional outbox, relay and idempotent consumers (ARC-BE-04)', () 
     failPermanently = true;
     await expect(runner.process(jobFor(id2, 0))).rejects.toThrow('PERMANENT_VALIDATION');
     expect(await count(`select count(*)::int as n from platform.async_dead_letter where source_event_id = '${id2}' and failure_class = 'PERMANENT_VALIDATION'`)).toBe(1);
+  });
+
+  it('a job for an event that does not exist is a permanent, dead-lettered failure, not a retry storm', async () => {
+    const runner = new EventConsumerRunner(workerDb, registry, log);
+    const ghost = '00000000-0000-4000-8000-00000000dead';
+    await expect(runner.process(jobFor(ghost, 0))).rejects.toThrow('PERMANENT_VALIDATION');
+    expect(await count(`select count(*)::int as n from platform.async_dead_letter where logical_job_id = '${jobIdFor(recorder.name, ghost)}' and failure_fingerprint = 'event-missing'`)).toBe(1);
+  });
+
+  it('the fallback dead letter never overwrites the precise one written by process()', async () => {
+    const runner = new EventConsumerRunner(workerDb, registry, log);
+    const id = await append(12);
+    failPermanently = true;
+    await expect(runner.process(jobFor(id, 0))).rejects.toThrow('PERMANENT_VALIDATION');
+    await runner.recordFinalFailure(jobFor(id, 0));
+    expect(await count(`select count(*)::int as n from platform.async_dead_letter where source_event_id = '${id}' and failure_class = 'PERMANENT_VALIDATION'`)).toBe(1);
+  });
+
+  it('the consumer transaction carries the SYSTEM context', async () => {
+    let seen: string | undefined;
+    const probe: ConsumerDefinition = { ...recorder, name: 'test.context-probe', async handle(tx) {
+      seen = (await tx.execute<{ v: string }>(sql`select current_setting('adulis.actor_role', true) as v`)).rows[0]?.v;
+      return 'SUCCEEDED';
+    } };
+    const probeRegistry = new EventRegistry([SYNTHETIC], [probe]);
+    const id = await append(13);
+    const job = jobFor(id);
+    await new EventConsumerRunner(workerDb, probeRegistry, log).process({ ...job, data: { ...job.data, job_type: probe.name, logical_job_id: jobIdFor(probe.name, id) } });
+    expect(seen).toBe('SYSTEM');
   });
 
   it('a malformed or unknown-version job is refused, never coerced', async () => {

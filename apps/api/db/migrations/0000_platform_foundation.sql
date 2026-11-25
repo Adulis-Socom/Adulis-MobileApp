@@ -113,7 +113,11 @@ CREATE TABLE platform.async_dead_letter (
 --> statement-breakpoint
 -- Least privilege. The API appends facts; it never reads, changes or deletes them. The worker reads facts,
 -- moves only the relay columns, and owns delivery, processed markers and dead letters. Nobody deletes.
-GRANT INSERT ON platform.event_outbox TO adulis_api;
+-- Column-level: the API cannot insert a row pre-dispatched, pre-leased or back-dated.
+GRANT INSERT (event_id, event_type, event_version, scope, market_id, originating_market_id, aggregate_type, aggregate_id,
+  aggregate_revision, logical_effect_id, actor_type, ordinary_account_id, operator_account_id, anonymous_ref,
+  trusted_service_ref, seller_context_id, request_id, correlation_id, causation_id, policy_version, payload, occurred_at)
+  ON platform.event_outbox TO adulis_api;
 --> statement-breakpoint
 GRANT SELECT, UPDATE (dispatched_at, relay_owner, lease_expires_at) ON platform.event_outbox TO adulis_worker;
 --> statement-breakpoint
