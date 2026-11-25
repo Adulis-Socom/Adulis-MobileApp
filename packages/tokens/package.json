@@ -2,14 +2,13 @@
   "name": "@adulis/tokens",
   "version": "0.0.0",
   "private": true,
-  "description": "Design tokens -- values only, no components. Two colour modes under identical role names.",
+  "description": "Design tokens -- values only, no components. The CTO palette, light only (RB25-D05).",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "build": "echo \"@adulis/tokens: consumed as source\"",
-    "test": "echo \"@adulis/tokens: values only, no tests\"",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint src"
+    "test": "node ../../ops/scripts/verify-tokens.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

@@ -83,6 +83,16 @@ module.exports = {
       to: { path: '^apps/' },
     },
     {
+      name: 'no-retired-runtime',
+      comment:
+        'RB25-D01 / ARC-BE-06. The replacement never reaches the retired stack: no Express runtime, no ' +
+        'Kysely, no Graphile Worker, no node-pg-migrate. An import of one that is not installed is caught ' +
+        'by not-to-unresolvable instead; ops/rebuild/verify-retired-absence.mjs checks the manifests too.',
+      severity: 'error',
+      from: { path: '^(?:apps|packages)/' },
+      to: { path: 'node_modules/(?:express|@nestjs/platform-express|kysely|kysely-codegen|graphile-worker|node-pg-migrate)(?:/|$)' },
+    },
+    {
       name: 'no-circular',
       comment:
         'ADU-REPO-01 rule 4. packages/* may import each other, acyclically. ' +
