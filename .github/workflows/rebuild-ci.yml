@@ -132,9 +132,14 @@ jobs:
       - name: Configure the cache Valkey as an evicting cache
         run: docker exec ${{ job.services.valkey-cache.id }} valkey-cli CONFIG SET maxmemory-policy allkeys-lru
 
-      - name: Integration (clean init, determinism, roles, RLS, target safety, outbox, worker, queue/cache)
+      # No --forceExit (RB-B01-19): the suite must release every PostgreSQL, Valkey and BullMQ resource itself.
+      # A leaked handle keeps Jest alive, so `timeout` turns it into a fast failure instead of a 10-minute hang.
+      - name: Integration (clean init, determinism, roles, RLS, target safety, outbox, reconciliation, worker, queue/cache; clean exit)
         timeout-minutes: 10
-        run: pnpm test:integration
+        run: |
+          set -o pipefail
+          timeout 180 pnpm test:integration 2>&1 | tee apps/api/integration.log
+          if grep -q 'did not exit one second' apps/api/integration.log; then echo 'Jest did not exit cleanly'; exit 1; fi
 
       - name: Smoke - bootstrap, migrate, API and worker start, health, graceful shutdown
         env:

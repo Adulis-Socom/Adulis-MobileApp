@@ -8,12 +8,12 @@ context: fork
 metadata:
   owner: "CEO-backend"
   priority: "P0"
-  version: "1.2.0"
+  version: "1.2.1"
 ---
 
 # Adulis Backend Security Review
 
-REPLACEMENT FOUNDATION CHECKS (Batch 01B): a new route that is neither `@Public()` nor `@Audiences(...)`, or a `@Public()` business route, is a finding; so is any change that weakens `apps/api/src/db/target-guard.ts`, grants to PUBLIC, gives the API SELECT/UPDATE/DELETE on `platform.event_outbox`, adds a field to `LOG_FIELDS` that can carry personal data, logs an error message or payload, puts domain data in a BullMQ job (jobs carry `source_event_id` only), or lets the cache Valkey become a readiness input or source of truth.
+REPLACEMENT FOUNDATION CHECKS (Batch 01B): a new route that is neither `@Public()` nor `@Audiences(...)`, or a `@Public()` business route, is a finding; so is any change that weakens `apps/api/src/db/target-guard.ts`, grants to PUBLIC, gives the API SELECT/UPDATE/DELETE on `platform.event_outbox`, adds a field to `LOG_FIELDS` that can carry personal data, logs an error message or payload, puts domain data in a BullMQ job (event-derived jobs carry an EMPTY payload, RB25-D13), lets a consumer act on queue-supplied market/aggregate/actor metadata without checking it against the durable event and delivery (`deliveryMismatch` in `apps/api/src/worker/consumer.ts`), lets an unverified job write or overwrite a real delivery's dead letter, lets the reconciler (`reconcile.ts`) reopen a terminal delivery or recreate a live job, or lets the cache Valkey become a readiness input or source of truth.
 
 
 ## Shared source protocol
