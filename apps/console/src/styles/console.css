@@ -114,8 +114,9 @@ code {
 .skip-link {
   position: absolute;
   left: var(--adu-space-md);
-  top: -4rem;
+  top: var(--adu-space-md);
   z-index: 100;
+  max-width: calc(100vw - 2rem);
   padding: var(--adu-space-sm) var(--adu-space-md);
   background: var(--adu-color-primary);
   color: var(--adu-color-primary-text);
@@ -123,8 +124,14 @@ code {
   font-weight: var(--adu-font-weight-semibold);
 }
 
-.skip-link:focus {
-  top: var(--adu-space-md);
+/* Hidden the robust way (not by an offset a doubled text size can undo); revealed, bounded, while it has focus. */
+.skip-link:not(:focus) {
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* ---- demonstration strip (fixture builds only; the element is rendered by the fixture module) ------------------ */
