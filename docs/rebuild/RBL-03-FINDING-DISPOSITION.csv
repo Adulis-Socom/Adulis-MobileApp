@@ -1,0 +1,53 @@
+finding_id,severity,summary,rebuild_disposition,owner_work_order,acceptance_or_reason
+B-001,P0,Seller payment confirm/reject live in UI and API,ABSENCE,ARC-BE-06,"no payment route, permission, function or table in the replacement (RB25-D03); legacy: resolved in #191"
+B-002,P1,No Story authoring or Scene editor in the Console,REQUIREMENT,"SC-FE-05, SC-FE-05S, SC-BE-05, SC-BE-05S",built per SCN-01 and the Story contract
+B-003,P2,Seller switch keeps component state,REQUIREMENT,SC-FE-01 (RN-4),per-Seller remount + late-response guard; red/green test
+B-003a,P2,B-003 reproduced (B under A after history jump),REQUIREMENT,SC-FE-01 (RN-4),same
+B-004,P1,Authority notes treated the target stack as unruled,RESOLVED,GOV-02,RB25 addendum and scoped wording (this batch)
+B-005,P2,Subscription manual bank-transfer purchase flow,ABSENCE,ARC-BE-06 / SC-FE-10,Subscription B: status and plans only
+B-006,P2,Payout screen collects bank data,ABSENCE,ARC-BE-06,"Payout A: no feature, no readiness gate"
+B-007,P3,Ponytail/Impeccable/PR Review Toolkit missing; Superpowers enabled,RESOLVED,GOV-05,installed; Superpowers disabled
+B-008,P3,Pack paths one folder off,RESOLVED,-,closed
+B-009,P3,Unrelated buy12 worktree,OPEN-ENV,-,founder housekeeping; not touched
+B-010,P2,Tokens did not match the palette,RESOLVED,ARC-BE-05,CTO tokens merged (#187); reused (REUSE VERIFIED)
+B-011,P3,Fixture suite not in CI,RESOLVED,ARC-BE-05 (RN-1..RN-7),gate merged (#186); pattern carried
+B-012,P3,Retrying assertion hid a defect,RESOLVED,-,lesson carried into GOV-06 (single non-retrying reads)
+B-013,P3,Leftover s4/s5 worktrees,OPEN-ENV,-,founder housekeeping
+B-014,P3,console-e2e refuses without NODE_ENV,REQUIREMENT,ARC-BE-02 (RG-06),environment boundary carried into the new API
+B2-001,P0,32 financial/transactional API operations,ABSENCE,ARC-BE-06,legacy: resolved in #191; replacement: never built
+B2-002,P0,Deployment exposure UNKNOWN,OPEN-FOUNDER,ARC-BE-01 / REL-08,verify Render read-only; no deployment from the rebuild (LR-01)
+B2-003,P1,PAYOUT_DETAILS gated readiness,REQUIREMENT,SC-BE-03,test: readiness and publication never require payout data
+B2-004,P2,Publish blockers named payout,REQUIREMENT,SC-FE-04 / SC-BE-03,same test from the Console side
+B2-005,P2,Home hid deferred obligations,REQUIREMENT,SC-FE-03,"distinguish missing data, deferred and empty"
+B2-006,P2,Fixture suite CI enforcement,RESOLVED,ARC-BE-05,carried as RN gates
+B2-007,P2,Lapsed-clock seed row removed,OBSOLETE,-,retired countdown
+B2-008,P3,zz-beta-walk notes stale,OBSOLETE,-,legacy exploratory test
+B2-009,P3,PR Review Toolkit not run,REQUIREMENT,every PR (selective),process: targeted reviews on significant changes
+B2-010,P1,RAM below the floor,OPEN-ENV,all,LR-06; heavy tests in CI
+B2-011,P3,Tool denials,RESOLVED,-,closed
+B2-012,P2,Founder checkout loads stale skills,OPEN-FOUNDER,GOV-05,start sessions from the rebuild worktree or dev
+B2-013,P2,Dark textMuted on surfaceMuted 4.23:1,OPEN-FOUNDER,ARC-BE-05,no public dark theme (RB25-D05); fix only if dark is approved
+B2-014,P3,Legacy real-API suite 88 -> 79,OBSOLETE,-,legacy suite is evidence only
+B2-015,P2,Tokens PR red until #189,RESOLVED,-,merged
+B2-016,P2,Three layout overflow defects,REQUIREMENT,SC-FE-01 / SC-FE-12,320-1440px and 150% text cases rebuilt
+B2-017,P3,"Two CI failures (lint scope, strict locator)",RESOLVED,-,lesson: root eslint over e2e
+B2-018,P2,Courier invitations,REQUIREMENT,SC-FE-06 / SC-BE-06 / MOB-BE-05,"decided B02B-D02: invitations and relationships, no delivery"
+B2-019,P2,Fixture tests in CI,RESOLVED,-,resolved
+B2B-001,P2,#188 responsive suite fails on Linux,REQUIREMENT,SC-FE-01 / SC-FE-12,superseded by PL-002; cases rebuilt
+B2B-002,P1,Expiry sweep was the only release path for active reservations,REQUIREMENT,ARC-BE-03 / SC-BE-04,stock ledger rules with no reservation-bound release (R3-1)
+B2B-003,P1,Order create and cancel routes create holds,ABSENCE,ARC-BE-06,no Order/hold route in the replacement
+B2B-004,P2,Analytics computed from reservations,REQUIREMENT,SC-FE-10 / SC-BE-06,discovery metrics only; no reservation-derived metric
+B2B-005,P2,Seed created active reservations,REQUIREMENT,ARC-BE-03,"synthetic seeds only, no retired subject"
+B2B-006,P3,Transient TLS left PRs in the wrong state,RESOLVED,-,process lesson
+B2B-007,P3,Context7 OAuth; GitHub MCP header,OPEN-ENV,-,gh CLI used
+PL-001,P1,Legacy local DB holds commerce rows,OPEN-FOUNDER,RBL-02 options A/B/C,does not block the rebuild (separate target)
+PL-002,P2,#188 targets the removed Orders screen,REQUIREMENT,SC-FE-01 / SC-FE-12,isolation and responsive cases rebuilt
+PL-003,P2,Missing locale key deletion.blocker.subscription_past_due,REQUIREMENT,SC-BE-06 / SC-FE-11 (gated by OD-02),R3-5: no subscription-debt blocker unless an approved debt policy exists
+PL-004,P3,Unused locale keys of removed screens,REQUIREMENT,ARC-BE-05,locale purged; completeness gate
+PL-005,P3,qrcode-generator unused,ABSENCE,ARC-BE-06,no unused dependency in the active tree
+PL-006,P2,Inert legacy order-family tables,OBSOLETE,ARC-BE-06 (absence),none exist in the replacement; legacy-lineage drop is OD-09
+PL-007,P3,Console copy mentions orders/handoff/payments,REQUIREMENT,SC-FE-00 / SC-FE-01,copy rebuilt; no retired vocabulary
+PL-008,P3,Console top-level catch-all route,REQUIREMENT,SC-FE-01,routing decision reviewed in the clean shell
+PL-009,P3,db:codegen fails on Windows,REQUIREMENT,ARC-BE-03,replacement generators must run on Windows and Linux
+PL-010,P3,404 table cannot prove absence for id-carrying paths,REQUIREMENT,ARC-BE-06,absence tests probe id-carrying routes with real ids
+PL-011,P1,Console work orders not started,RESOLVED,SC-FE-00..SC-FE-12,superseded by the clean-rebuild plan
