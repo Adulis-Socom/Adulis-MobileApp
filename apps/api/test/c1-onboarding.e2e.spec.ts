@@ -184,7 +184,7 @@ describe('C1 — onboarding and verification', () => {
       `DELETE FROM core.step_up_challenge WHERE account_id='${OWNER}'`,
       `DELETE FROM core.otp_challenge WHERE id='${OTP}'`,
       `DELETE FROM core.notification WHERE recipient_account_id IN ('${OWNER}','${ANALYST}','${STRANGER}')`,
-      `DELETE FROM core.session WHERE account_id IN ('${OWNER}','${ANALYST}','${STRANGER}')`,
+      `DELETE FROM core.session WHERE account_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,
       `DELETE FROM core.device WHERE id='${DEVICE}'`,
       `DELETE FROM core.account WHERE market_id='${M}'`,
       `DELETE FROM core.identity_config WHERE market_id='${M}'`,

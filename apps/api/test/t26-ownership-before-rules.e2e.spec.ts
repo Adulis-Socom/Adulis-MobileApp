@@ -226,7 +226,7 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
 
     await admin.query(
       `INSERT INTO core.account (id, phone_e164, market_id, status) VALUES
-        ($1,'+251922260001',$6,'ACTIVE'), ($2,'+251922260002',$6,'ACTIVE'),
+        ($1,'+251922260001',$5,'ACTIVE'), ($2,'+251922260002',$5,'ACTIVE'),
         ($3,'+251922260003',$5,'ACTIVE'), ($4,'+251922260004',$5,'ACTIVE'),
         ($6,'+251922260006',$5,'ACTIVE')`,
       [A_OWNER, B_OWNER, BUYER_A, BUYER_B, M, B_TEAM_ACCOUNT],

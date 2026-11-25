@@ -55,22 +55,23 @@ const ROLES = [
 type Role = (typeof ROLES)[number];
 
 /** ADU-AUTH-01 v2.4 §16.2, "Per-role totals, as a checksum against the seed". */
+// Migration 0063 retired the thirteen codes of the legacy order, payment, refund, claim,
+// handoff and payout flows (founder pre-launch authorization, 2026-11-25): 42 -> 29 codes,
+// 139 -> 96 grants. The seed file carries the same totals and verify:permission-doc checks it.
 const PER_ROLE_TOTAL: Record<Role, number> = {
-  OWNER: 42,
-  ADMIN: 40,
-  SALES_SUPPORT: 19,
-  INVENTORY: 16,
-  ANALYST: 10,
-  CAMPAIGN_MANAGER: 12,
+  OWNER: 29,
+  ADMIN: 27,
+  SALES_SUPPORT: 9,
+  INVENTORY: 12,
+  ANALYST: 8,
+  CAMPAIGN_MANAGER: 11,
 };
 
 /** §16.3 — canonical, and the seed is verified against it rather than the reverse. */
 const STEP_UP_CODES = [
   'seller.account:delete',
   'seller.identity:manage',
-  'seller.orders:reissue_instructions',
   'seller.ownership:transfer',
-  'seller.payout:update',
   'seller.sessions:revoke_all',
   'seller.staff:admin',
   'seller.subscription:update',
@@ -215,9 +216,9 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
 
   // ==========================================================================
   describe('the seed matches the authority .sql', () => {
-    it('parsed 42 permissions and 139 grants from the document', () => {
-      expect(SEED.permissions).toHaveLength(42);
-      expect(SEED.grants.size).toBe(139);
+    it('parsed 29 permissions and 96 grants from the document', () => {
+      expect(SEED.permissions).toHaveLength(29);
+      expect(SEED.grants.size).toBe(96);
     });
 
     it('core.permission is exactly what the document says, row for row', async () => {
@@ -247,7 +248,7 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
       const missing = [...SEED.grants].filter((g) => !actual.has(g)).sort();
       const extra = [...actual].filter((g) => !SEED.grants.has(g)).sort();
       expect({ missing, extra }).toEqual({ missing: [], extra: [] });
-      expect(actual.size).toBe(139);
+      expect(actual.size).toBe(96);
     });
 
     it.each(ROLES)('%s holds its stated total', async (role) => {
@@ -260,7 +261,7 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
   });
 
   // ==========================================================================
-  describe('all 252 cells, through fn_has_permission (A1.5 step 5)', () => {
+  describe('all 174 cells, through fn_has_permission (A1.5 step 5)', () => {
     /**
      * The whole matrix in one test rather than 252, because the useful failure
      * message is the LIST of disagreeing cells — 252 separate assertions would
@@ -287,8 +288,8 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
       }
 
       expect(wrong).toEqual([]);
-      expect(passes).toBe(139);
-      expect(refusals).toBe(113);
+      expect(passes).toBe(96);
+      expect(refusals).toBe(78);
     }, 120_000);
 
     /**
@@ -299,8 +300,8 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
     it('refuses a role failure and a surface failure with the same SQLSTATE', async () => {
       // ANALYST does not hold products:write — a ROLE failure on CONSOLE.
       const roleFailure = await probe(ACCOUNT_FOR.ANALYST, 'seller.products:write', 'CONSOLE');
-      // OWNER holds payout:update, but it is CONSOLE-only — a SURFACE failure.
-      const surfaceFailure = await probe(ACCOUNT_FOR.OWNER, 'seller.payout:update', 'MOBILE');
+      // OWNER holds subscription:update, but it is CONSOLE-only — a SURFACE failure.
+      const surfaceFailure = await probe(ACCOUNT_FOR.OWNER, 'seller.subscription:update', 'MOBILE');
 
       expect(roleFailure.allowed).toBe(false);
       expect(surfaceFailure.allowed).toBe(false);
@@ -327,7 +328,7 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
      *  investigated."
      */
     it('raises a DIFFERENT code for a stranger than for a denied permission', async () => {
-      const stranger = await probe(STRANGER, 'seller.orders:read', 'CONSOLE');
+      const stranger = await probe(STRANGER, 'seller.products:read', 'CONSOLE');
       const denied = await probe(ACCOUNT_FOR.ANALYST, 'seller.products:write', 'CONSOLE');
 
       expect(stranger.allowed).toBe(false);
@@ -337,7 +338,7 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
     });
 
     it('refuses a stranger even for a permission every role holds', async () => {
-      const { allowed, sqlstate } = await probe(STRANGER, 'seller.orders:read', 'CONSOLE');
+      const { allowed, sqlstate } = await probe(STRANGER, 'seller.products:read', 'CONSOLE');
       expect({ allowed, sqlstate }).toEqual({ allowed: false, sqlstate: 'U0002' });
     });
   });
@@ -346,7 +347,7 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
   describe('the negatives that matter most (A1.5 step 6)', () => {
     const stepUp = SEED.permissions.filter((p) => p.requiresStepUp);
 
-    it('marks exactly the eight codes of §16.3', () => {
+    it('marks exactly the six codes of §16.3 (eight less the two retired by 0063)', () => {
       expect(stepUp.map((p) => p.code).sort()).toEqual(STEP_UP_CODES);
     });
 
@@ -367,7 +368,7 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
       expect(leaks).toEqual([]);
     }, 60_000);
 
-    it('still allows those same eight to OWNER on CONSOLE', async () => {
+    it('still allows those same six to OWNER on CONSOLE', async () => {
       for (const { code } of stepUp) {
         const { allowed } = await probe(ACCOUNT_FOR.OWNER, code, 'CONSOLE');
         expect({ code, allowed }).toEqual({ code, allowed: true });
@@ -390,17 +391,17 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
       expect(held).toEqual([]);
     }, 60_000);
 
-    it('gives ANALYST exactly ten permissions, all of them reads', async () => {
+    it('gives ANALYST exactly eight permissions, all of them reads', async () => {
       const { rows } = await client.query(
         `SELECT permission_code FROM core.role_permission WHERE role='ANALYST' ORDER BY 1`,
       );
-      expect(rows).toHaveLength(10);
+      expect(rows).toHaveLength(8);
       for (const r of rows) {
         expect(['read', 'export']).toContain(r.permission_code.split(':')[1]);
       }
     });
 
-    it('gives OWNER all 42 and ADMIN all but delete and ownership transfer', async () => {
+    it('gives OWNER all 29 and ADMIN all but delete and ownership transfer', async () => {
       const held = async (role: Role) =>
         (
           await client.query(
@@ -410,7 +411,7 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
         ).rows.map((r) => r.permission_code);
       const owner = new Set(await held('OWNER'));
       const admin = new Set(await held('ADMIN'));
-      expect(owner.size).toBe(42);
+      expect(owner.size).toBe(29);
       expect([...owner].filter((c) => !admin.has(c)).sort()).toEqual([
         'seller.account:delete',
         'seller.ownership:transfer',
@@ -446,7 +447,7 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
       ]);
     });
 
-    it('has exactly as many values as there are step-up permissions', async () => {
+    it('has as many values as there are step-up permissions, plus the two labels retired by 0063', async () => {
       const { rows } = await client.query(
         `SELECT (SELECT count(*)::int FROM pg_enum e
                    JOIN pg_type t ON t.oid=e.enumtypid
@@ -454,7 +455,9 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
                   WHERE n.nspname='core' AND t.typname='step_up_action') AS actions,
                 (SELECT count(*)::int FROM core.permission WHERE requires_step_up) AS perms`,
       );
-      expect(rows[0].actions).toBe(rows[0].perms);
+      // PAYOUT_CHANGE and REISSUE_INSTRUCTIONS outlive their permissions: PostgreSQL cannot
+      // drop an enum label, and nothing can raise a challenge for either since 0063.
+      expect(rows[0].actions).toBe(rows[0].perms + 2);
     });
 
     it('can record a challenge for both permissions that previously had none', async () => {
@@ -497,7 +500,7 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
      * ruling, and these are the tests it asked for.
      */
     it('takes a permission away the moment the member is suspended', async () => {
-      const code = 'seller.payout:update'; // an ADMIN power that moves money
+      const code = 'seller.subscription:update'; // an ADMIN power behind step-up (payout:update until 0063)
       const account = ACCOUNT_FOR.ADMIN;
 
       const before = await probe(account, code, 'CONSOLE');
@@ -550,7 +553,7 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
           ' WHERE seller_id = $1 AND account_id = $2',
         [SELLER, ACCOUNT_FOR.SALES_SUPPORT],
       );
-      const r = await probe(ACCOUNT_FOR.SALES_SUPPORT, 'seller.orders:read', 'CONSOLE');
+      const r = await probe(ACCOUNT_FOR.SALES_SUPPORT, 'seller.products:read', 'CONSOLE');
       await client.query('ROLLBACK TO SAVEPOINT a33a');
 
       expect(r).toEqual({ allowed: false, sqlstate: 'U0001' });
@@ -583,10 +586,10 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
           ' WHERE seller_id = $1 AND account_id = $2',
         [SELLER, ACCOUNT_FOR.ADMIN],
       );
-      const suspended = await probe(ACCOUNT_FOR.ADMIN, 'seller.payout:update', 'CONSOLE');
+      const suspended = await probe(ACCOUNT_FOR.ADMIN, 'seller.subscription:update', 'CONSOLE');
       await client.query('ROLLBACK TO SAVEPOINT a33c');
 
-      const stranger = await probe(STRANGER, 'seller.payout:update', 'CONSOLE');
+      const stranger = await probe(STRANGER, 'seller.subscription:update', 'CONSOLE');
 
       expect(suspended).toEqual({ allowed: false, sqlstate: 'U0001' });
       expect(stranger).toEqual({ allowed: false, sqlstate: 'U0002' });
@@ -612,10 +615,10 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
           ' VALUES (gen_random_uuid(), $1, $2, $3, now(), now() - $4::interval)',
         [SELLER, ACCOUNT_FOR.SALES_SUPPORT, 'ANALYST', '400 days'],
       );
-      const r = await probe(ACCOUNT_FOR.SALES_SUPPORT, 'seller.orders:respond', 'CONSOLE');
+      const r = await probe(ACCOUNT_FOR.SALES_SUPPORT, 'seller.messages:send', 'CONSOLE');
       await client.query('ROLLBACK TO SAVEPOINT a33d');
 
-      // SALES_SUPPORT holds orders:respond; the revoked ANALYST row does not.
+      // SALES_SUPPORT holds messages:send; the revoked ANALYST row does not.
       expect(r.allowed).toBe(true);
     });
 
@@ -653,7 +656,7 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
         [SELLER, ACCOUNT_FOR.OWNER],
       );
       expect(rows[0].n).toBe(0);
-      const owner = await probe(ACCOUNT_FOR.OWNER, 'seller.payout:update', 'CONSOLE');
+      const owner = await probe(ACCOUNT_FOR.OWNER, 'seller.subscription:update', 'CONSOLE');
       expect(owner.allowed).toBe(true);
     });
   });
