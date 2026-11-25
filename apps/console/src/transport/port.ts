@@ -1,3 +1,4 @@
+import type { ComponentType } from 'react';
 import type { OpId, OpInput, OpOutput } from '../contracts/gap-sc';
 
 /**
@@ -59,4 +60,10 @@ export function isTransportError(value: unknown): value is TransportError {
 /** Anything that is not already a TransportError is an unexpected failure: never shown as an empty result. */
 export function asTransportError(value: unknown): TransportError {
   return isTransportError(value) ? value : new TransportError('INTERNAL');
+}
+
+/** UI the fixture module contributes. Absent in a release build, which is how the app knows nothing is simulated. */
+export interface FixtureUi {
+  readonly Banner: ComponentType;
+  readonly SignInHelper: ComponentType<{ onPick: (phone: string) => void }>;
 }

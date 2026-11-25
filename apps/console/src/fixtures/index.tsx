@@ -1,7 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import type { OpId, OpInput, OpOutput } from '../contracts/gap-sc';
-import type { FixtureUi } from '../transport/select';
-import type { CallContext, Transport } from '../transport/port';
+import type { CallContext, FixtureUi, Transport } from '../transport/port';
 import { BANNER_SENTENCE, createWorld, DEMO_CODES, FIXTURE_MARKER, FIXTURE_VERSION, PERSONAS, type World } from './world';
 
 /**

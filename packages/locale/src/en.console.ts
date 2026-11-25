@@ -138,7 +138,7 @@ export const enConsole = {
   'sellers.lead': 'Choose the Seller you want to work on. Each Seller has its own address, so you can keep several open in different tabs.',
   'sellers.list_label': 'Your Sellers',
   'sellers.empty_title': 'You do not have a Seller yet',
-  'sellers.empty_body': 'Becoming a Seller takes a few minutes. You can finish the rest in any order, over several days.',
+  'sellers.empty_body': 'Becoming a Seller takes a few minutes. You can finish the rest in any sequence, over several days.',
   'sellers.become': 'Become a Seller',
   'sellers.roles': 'Your role: {roles}.',
   'seller.type.INDIVIDUAL': 'Individual Seller',

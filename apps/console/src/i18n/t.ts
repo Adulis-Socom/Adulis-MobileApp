@@ -19,13 +19,14 @@ export function formatInstant(iso: string, timeZone?: string): string {
   if (Number.isNaN(date.getTime())) return iso;
   return new Intl.DateTimeFormat('en', {
     dateStyle: 'medium',
-    timeStyle: 'short',
-    ...(timeZone ? { timeZone } : { timeZoneName: 'short' as const }),
+    // timeStyle cannot be combined with timeZoneName (a TypeError): the 'long' style carries the zone name itself.
+    timeStyle: timeZone ? 'short' : 'long',
+    ...(timeZone ? { timeZone } : {}),
   }).format(date);
 }
 
 export function formatClock(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat('en', { timeStyle: 'medium', timeZoneName: 'short' }).format(date);
+  return new Intl.DateTimeFormat('en', { timeStyle: 'long' }).format(date);
 }

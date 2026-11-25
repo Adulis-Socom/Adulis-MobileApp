@@ -3,6 +3,7 @@ import './styles/console.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { t } from './i18n/t';
 import { createRouter } from './router';
 import { SessionProvider } from './session/SessionProvider';
@@ -24,9 +25,11 @@ async function start() {
       <a className="skip-link" href="#main">
         {t('app.skip_to_main')}
       </a>
-      <SessionProvider selected={selected}>
-        <RouterProvider router={createRouter()} />
-      </SessionProvider>
+      <ErrorBoundary>
+        <SessionProvider selected={selected}>
+          <RouterProvider router={createRouter()} />
+        </SessionProvider>
+      </ErrorBoundary>
     </StrictMode>,
   );
 }
