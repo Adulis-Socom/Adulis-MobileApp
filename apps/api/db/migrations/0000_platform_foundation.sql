@@ -68,6 +68,21 @@ $$;
 CREATE TRIGGER event_outbox_immutable BEFORE UPDATE ON platform.event_outbox
   FOR EACH ROW EXECUTE FUNCTION platform.event_outbox_immutable();
 --> statement-breakpoint
+-- A fact is recorded now and undispatched, whoever inserts it: no row can be inserted pre-dispatched, pre-leased or
+-- back-dated. (A trigger, not column grants: the ORM names every column, with DEFAULT, in its INSERT.)
+CREATE FUNCTION platform.event_outbox_on_insert() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.recorded_at := now();
+  NEW.dispatched_at := NULL;
+  NEW.relay_owner := NULL;
+  NEW.lease_expires_at := NULL;
+  RETURN NEW;
+END
+$$;
+--> statement-breakpoint
+CREATE TRIGGER event_outbox_on_insert BEFORE INSERT ON platform.event_outbox
+  FOR EACH ROW EXECUTE FUNCTION platform.event_outbox_on_insert();
+--> statement-breakpoint
 CREATE TABLE platform.event_delivery (
   event_id uuid NOT NULL REFERENCES platform.event_outbox (event_id),
   consumer text NOT NULL CHECK (consumer ~ '^[a-z][a-z0-9_.-]{0,99}$'),
@@ -113,11 +128,7 @@ CREATE TABLE platform.async_dead_letter (
 --> statement-breakpoint
 -- Least privilege. The API appends facts; it never reads, changes or deletes them. The worker reads facts,
 -- moves only the relay columns, and owns delivery, processed markers and dead letters. Nobody deletes.
--- Column-level: the API cannot insert a row pre-dispatched, pre-leased or back-dated.
-GRANT INSERT (event_id, event_type, event_version, scope, market_id, originating_market_id, aggregate_type, aggregate_id,
-  aggregate_revision, logical_effect_id, actor_type, ordinary_account_id, operator_account_id, anonymous_ref,
-  trusted_service_ref, seller_context_id, request_id, correlation_id, causation_id, policy_version, payload, occurred_at)
-  ON platform.event_outbox TO adulis_api;
+GRANT INSERT ON platform.event_outbox TO adulis_api;
 --> statement-breakpoint
 GRANT SELECT, UPDATE (dispatched_at, relay_owner, lease_expires_at) ON platform.event_outbox TO adulis_worker;
 --> statement-breakpoint

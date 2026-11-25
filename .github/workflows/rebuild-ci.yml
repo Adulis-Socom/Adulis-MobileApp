@@ -133,6 +133,7 @@ jobs:
         run: docker exec ${{ job.services.valkey-cache.id }} valkey-cli CONFIG SET maxmemory-policy allkeys-lru
 
       - name: Integration (clean init, determinism, roles, RLS, target safety, outbox, worker, queue/cache)
+        timeout-minutes: 10
         run: pnpm test:integration
 
       - name: Smoke - bootstrap, migrate, API and worker start, health, graceful shutdown

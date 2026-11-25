@@ -151,8 +151,9 @@ describe('transactional outbox, relay and idempotent consumers (ARC-BE-04)', () 
     expect(r1.dispatched).toBe(0);
     expect(await delivery(id)).toMatchObject({ state: 'ENQUEUE_UNKNOWN', last_error_code: 'ENQUEUE_FAILED' });
     expect(await count(`select count(*)::int as n from platform.event_outbox where event_id = '${id}' and dispatched_at is null`)).toBe(1);
-    await deadQueue.close();
+    // Never await close() on a queue whose connection never opened: it can wait for a ready that never comes.
     dead.disconnect();
+    void deadQueue.close().catch(() => undefined);
     // The lease stops a second relay grabbing it early; after expiry a healthy relay finishes the job.
     expect((await relay(queue, 'relay-b').runOnce()).claimed).toBe(0);
     await withClient(tdb.worker, (c) => c.query(`update platform.event_outbox set lease_expires_at = now() - interval '1 second' where event_id = $1`, [id]));
@@ -263,8 +264,10 @@ describe('transactional outbox, relay and idempotent consumers (ARC-BE-04)', () 
 
   it('end to end through a real BullMQ worker, with graceful close', async () => {
     const runner = new EventConsumerRunner(workerDb, registry, log);
+    // BullMQ never closes a connection the caller passes in: the test owns and disconnects both.
     const connection = queueWorkerConnection(requireEnv('QUEUE_VALKEY_URL'), log);
-    const events = new QueueEvents(EVENTS_QUEUE, { connection: queueWorkerConnection(requireEnv('QUEUE_VALKEY_URL'), log) });
+    const eventsConnection = queueWorkerConnection(requireEnv('QUEUE_VALKEY_URL'), log);
+    const events = new QueueEvents(EVENTS_QUEUE, { connection: eventsConnection });
     await events.waitUntilReady();
     const worker = new Worker(EVENTS_QUEUE, (job: Job) => runner.process(job), { connection, concurrency: 1 });
     const id = await append(11);
@@ -278,6 +281,8 @@ describe('transactional outbox, relay and idempotent consumers (ARC-BE-04)', () 
     expect(health.unresolvedDeadLetters).toBeGreaterThanOrEqual(1); // from the dead-letter case above: visible, not hidden
     await worker.close();
     await events.close();
+    connection.disconnect();
+    eventsConnection.disconnect();
   });
 });
 

@@ -87,7 +87,7 @@ union all select 'idx ' || indexdef from pg_indexes where schemaname not in ('pg
 union all select 'trg ' || pg_get_triggerdef(oid) from pg_trigger where not tgisinternal
 union all select 'fn ' || p.oid::regprocedure || ' ' || md5(p.prosrc) || ' ' || coalesce(p.proacl::text, '') || ' secdef=' || p.prosecdef
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname not in ('pg_catalog', 'information_schema')
-union all select 'rel ' || c.oid::regclass || ' ' || c.relkind || ' ' || coalesce(c.relacl::text, '') || ' rls=' || c.relrowsecurity || '/' || c.relforcerowsecurity
+union all select 'rel ' || c.oid::regclass || ' ' || c.relkind::text || ' ' || coalesce(c.relacl::text, '') || ' rls=' || c.relrowsecurity || '/' || c.relforcerowsecurity
   from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname not in ('pg_catalog', 'information_schema', 'pg_toast')
 union all select 'colacl ' || attrelid::regclass || '.' || attname || ' ' || attacl::text from pg_attribute where attacl is not null
 union all select 'ns ' || nspname || ' ' || coalesce(nspacl::text, '') from pg_namespace where nspname not like 'pg\\_%' and nspname <> 'information_schema'
