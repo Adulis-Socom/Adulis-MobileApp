@@ -198,7 +198,7 @@ rather than kept as placeholders.
   remove it, and keep every SQL migration, function and RLS policy as written. The old K-3
   and K-8 "awaiting a founder ruling" wording is superseded by those decisions; the
   migration itself stays unauthorised.
-- **Clean rebuild lineage (25 November 2026, RB25-D01..D08,
+- **Clean rebuild lineage (25 November 2026, RB25-D01..D11,
   `docs/amendments/REBUILD-2026-11-25-CLEAN-LINEAGE.md`).** The founder directs a clean replacement, not
   an in-place migration. On the rebuild integration branch `rebuild/2026-11-25` the paragraph
   above describes the ARCHIVED legacy lineage only (dev 64d2e8c, migrations 0001-0062, draft #191's

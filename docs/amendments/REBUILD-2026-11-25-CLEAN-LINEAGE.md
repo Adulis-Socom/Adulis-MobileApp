@@ -4,7 +4,7 @@ Status: founder direction recorded for the pre-launch clean rebuild. Working aut
 legal or launch approval. It authorises NO code, database, deployment or merge by itself; each change needs
 its own work order from the clean-rebuild master plan
 (`Adulis_Clean_Rebuild_Master_Workorders_2026-11-25`, 106 work orders, held with the founder inputs, not in
-this repository). Identifiers below are new and unique (RB25-D01..RB25-D08). The 8 and 24 November records,
+this repository). Identifiers below are new and unique (RB25-D01..RB25-D11; D09..D11 added by the Batch 01B founder approval). The 8 and 24 November records,
 B02-D01..D05 and B02B-D01..D05 are not altered; where they speak about preserving or migrating the LEGACY
 stack, RB25-D01 says which lineage they now describe.
 
@@ -70,6 +70,27 @@ requirements (stock-ledger release rules, permission negatives, readiness withou
 cases are carried into SC-FE-01/SC-FE-12. No legacy work is marked accepted in the replacement.
 
 ### RB25-D08 -- What stays separately gated
-Public launch (its own founder go/no-go), payment authority, the exact subscription-debt and account-deletion
-policy, Staff Operator activation, public Amharic, and further Market activation. A domain detail the sources
+Public launch (its own founder go/no-go), payment authority, any subscription-debt or collection policy for a
+LATER paid phase (the initial MVP is settled by RB25-D11), Staff Operator activation, public Amharic, and further Market activation. A domain detail the sources
 leave unresolved is recorded as a specific decision and blocks only the affected work.
+
+### RB25-D09 -- ADU-CHATBOT-01 has owners (founder approval, Batch 01B)
+ADU-CHATBOT-01 is owned by SC-FE-08 (frontend) and SC-BE-06 (backend). Closes RB-005 / OD-06 / GAP-RB-02.
+Its acceptance stays the design's own: explicitly allowed scripted help only, no invented AI business adviser,
+no paid-status claims. Not implemented in Stage B.
+
+### RB25-D10 -- Mobile messaging is owned by MOB-FE-09 and MOB-BE-08 (founder approval, Batch 01B)
+MOB-FE-09 and MOB-BE-08 are expanded to include Mobile messaging (ADU-CHAT-01, MOB-02 and the prototype
+`messages` / `conversation` screens) and its acceptance: conversation access only by its participants and
+permitted Seller team scope, no cross-Seller or cross-account read, offline and retry behaviour without
+duplicate sends, and report entry per MOD-01. Closes RB-007 / OD-07 / GAP-RB-03. Not implemented in Stage B.
+
+### RB25-D11 -- The initial replacement MVP is debt-free (founder approval, Batch 01B)
+- Subscription architecture, status and entitlements remain (Subscription Option B).
+- Subscription purchases and payment collection remain deferred.
+- No new financial debt or collection obligation is generated.
+- Account deletion and closure never depend on an unavailable payment mechanism.
+- Legitimate historical accounting information is preserved separately from the deleted account.
+- Identity, ownership, authorization and privacy checks continue to apply to closure and deletion.
+Resolves OD-02 / RB-008 for the initial MVP; a later paid phase needs its own decision (RB25-D08). Not
+implemented in Stage B; SC-BE-06 / SC-FE-11 carry it.

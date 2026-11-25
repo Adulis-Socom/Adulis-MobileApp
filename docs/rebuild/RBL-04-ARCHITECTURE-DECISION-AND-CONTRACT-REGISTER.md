@@ -20,7 +20,7 @@ application service or a projection fed by its events; clients never compute aut
 |---|---|---|---|
 | API process | `apps/api` | HTTP (OpenAPI /v1), auth guards, problem shape, request correlation | ARC-BE-02 |
 | Worker process | `apps/api` (second entry point) | outbox relay, BullMQ consumers, scheduled jobs | ARC-BE-04 |
-| Domain modules (in `apps/api`) | one module per domain | Accounts/Auth/Sessions (AUTH-02); Seller onboarding, eligibility, readiness (ONB-01); Market and coverage (MKT-01); Catalogue and Inventory with the stock ledger (CATINV-01); Content/Scenes (SCN-01); Stories (Story contract); Media (MEDIA-01); Chat (CHAT-01); scripted help (CHATBOT-01, owner gap RB-005); Notifications (NOTIF-01); Collections and Search (SRC-01); Recommendation (REC-01); Trust (TRUST-01); Moderation and Operator cases (MOD-01, OPS-01); Privacy (PRV-01); Fulfilment settings and Courier relationships (FUL-01, relationships only); Cart and checkout review (ORDER-01 checkout preview only); Analytics (ANL-01, discovery only); Eventing (EVT-01) | each domain's backend order |
+| Domain modules (in `apps/api`) | one module per domain | Accounts/Auth/Sessions (AUTH-02); Seller onboarding, eligibility, readiness (ONB-01); Market and coverage (MKT-01); Catalogue and Inventory with the stock ledger (CATINV-01); Content/Scenes (SCN-01); Stories (Story contract); Media (MEDIA-01); Chat (CHAT-01); scripted help (CHATBOT-01, SC-BE-06 per RB25-D09); Notifications (NOTIF-01); Collections and Search (SRC-01); Recommendation (REC-01); Trust (TRUST-01); Moderation and Operator cases (MOD-01, OPS-01); Privacy (PRV-01); Fulfilment settings and Courier relationships (FUL-01, relationships only); Cart and checkout review (ORDER-01 checkout preview only); Analytics (ANL-01, discovery only); Eventing (EVT-01) | each domain's backend order |
 | NOT built (dormant) | - | Finance/payments, Orders, Handoff, Delivery, Claims, purchase-derived Reviews | P2-01..03 |
 | Seller Console | `apps/console` | Seller create/configure/manage surface (CONSOLE audience) | SC-FE-01 |
 | Mobile | `apps/mobile` | Buyer, Seller Companion, Courier modes in one app (MOBILE audience) | MOB-FE-01 |
@@ -67,7 +67,7 @@ Audiences never cross; surface derives from the validated session and route, nev
 | Products, Variants, stock ledger | live | read / urgent stock (Companion) | public read | moderation | BUILD |
 | Scenes and visibility | live | Scene-only For You, Explore | public read | moderation | BUILD |
 | Seller Stories (24 h, query-time expiry) | author | row and viewer | - | moderation | BUILD |
-| Messaging and allowed scripted help | live | live | app handoff | report cases | BUILD (CHATBOT owner RB-005) |
+| Messaging and allowed scripted help | live | live | app handoff | report cases | BUILD (CHATBOT-01: SC-FE-08/SC-BE-06, RB25-D09; Mobile: MOB-FE-09/MOB-BE-08, RB25-D10) |
 | Collections, follows, likes on Scenes, share | - | live | app handoff | - | BUILD |
 | Cart and checkout review (A) | - | live, no submit | - | - | BUILD |
 | Courier invitations and relationships | live | Courier availability/relationships | - | - | BUILD |
@@ -80,8 +80,8 @@ Audiences never cross; surface derives from the validated session and route, nev
 | GAP | Detail | Owner |
 |---|---|---|
 | GAP-RB-01 | Story events (`story.created`, `story.withdrawn`, `story.restricted`, expiry/invalidation) are proposed in the Story contract but absent from registry v1 | SC-BE-05S (register per EVT procedures) |
-| GAP-RB-02 | ADU-CHATBOT-01 has no owning work order | SC-FE-08 / SC-BE-06 proposed (RB-005) |
-| GAP-RB-03 | No dedicated Mobile messaging frontend order | MOB-FE-09 / MOB-BE-08 proposed (RB-007) |
+| GAP-RB-02 | ADU-CHATBOT-01 has no owning work order | RESOLVED: SC-FE-08 / SC-BE-06 (RB25-D09) |
+| GAP-RB-03 | No dedicated Mobile messaging frontend order | RESOLVED: MOB-FE-09 / MOB-BE-08 (RB25-D10) |
 | GAP-RB-04 | EVT-01's Nov 24 cross-system rules still name "the prototype Baseline light palette" as the interim theme | superseded by B02-D03 and RB25-D05 (CTO palette); source body left as is |
 | GAP-RB-05 | Exact Story limits (quota, file size, text length, retention) are deliberately unset in the Story contract | config values decided in SC-BE-05S, never hard-coded |
 | GAP-RB-06 | Every HTTP contract | defined with its backend order; until then, frontends use the typed fixture port naming the GAP |

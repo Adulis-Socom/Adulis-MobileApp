@@ -1,6 +1,6 @@
 # Clean rebuild governance (Batch 01A)
 
-Authority: `docs/amendments/REBUILD-2026-11-25-CLEAN-LINEAGE.md` (RB25-D01..D08). Execution plan: the founder's
+Authority: `docs/amendments/REBUILD-2026-11-25-CLEAN-LINEAGE.md` (RB25-D01..D11). Execution plan: the founder's
 clean-rebuild master plan (106 work orders; held with the founder inputs, indexed here). These files are
 governance and preparation only; Batch 01A writes no feature code and starts no Stage B work.
 
