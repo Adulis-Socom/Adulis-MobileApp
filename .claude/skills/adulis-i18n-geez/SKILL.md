@@ -6,10 +6,12 @@ allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "COO-CTO-frontend"
   priority: "P0"
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Adulis I18N + Ge'ez
+
+REPLACEMENT FOUNDATION (Batch 01B): `packages/locale` is a clean English-first catalogue; `am` entries are `{ status: 'PENDING' }` or `{ status: 'REVIEWED', text }` (machine-translated placeholders are not carried); `PUBLIC_LOCALES` is `['en']` until every entry is REVIEWED; `format(key, slots)` types slots from the English string; `test/catalogue.test.mjs` holds the mobile import boundary and slot agreement. Legacy screen copy is not imported; each surface adds verified keys.
 
 
 ## Shared source protocol

@@ -36,7 +36,7 @@ purchase).
 demand payment through an unavailable mechanism (no settle-payment blocker; payment cannot occur), and valid
 retention and security checks are never bypassed. **Gated: the master plan requires the exact
 subscription-debt and deletion policy to be settled BEFORE closure/deletion is implemented (SC-FE-11
-acceptance; "Remaining decisions"). Closure and deletion implementation therefore waits for OD-02**; no debt
+acceptance; "Remaining decisions"). Closure and deletion implementation therefore waited for OD-02**, now resolved for the initial MVP by RB25-D11 (debt-free); no debt
 blocker and no deletion rule is invented meanwhile. Owner: SC-BE-06, SC-FE-11.
 
 ## Targeted test plan (to be implemented in the named orders; nothing is implemented in Batch 01A)

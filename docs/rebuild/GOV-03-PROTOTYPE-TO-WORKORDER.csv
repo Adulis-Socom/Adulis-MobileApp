@@ -5,7 +5,7 @@ src/sections/SellerConsole.tsx,products,SC-FE-04,BUILD,catalogue
 src/sections/SellerConsole.tsx,content,SC-FE-05,BUILD,"Content nav: Scenes (and Stories entry, SC-FE-05S)"
 src/sections/SellerConsole.tsx,scenes,SC-FE-05,BUILD,Scene list/editor
 src/sections/SellerConsole.tsx,inbox,SC-FE-08,BUILD,messages
-src/sections/SellerConsole.tsx,automation,SC-FE-08,BUILD,explicitly allowed scripted help; CHATBOT-01 owner gap RB-005
+src/sections/SellerConsole.tsx,automation,SC-FE-08,BUILD,explicitly allowed scripted help; CHATBOT-01 owned per RB25-D09
 src/sections/SellerConsole.tsx,insights,SC-FE-10,BUILD,discovery metrics only; no revenue/GMV
 src/sections/SellerConsole.tsx,reputation,SC-FE-09,BUILD,truthful trust facts
 src/sections/SellerConsole.tsx,trust,SC-FE-09,BUILD,trust facts
@@ -38,8 +38,8 @@ src/sections/MobileBuyer.tsx,products,MOB-FE-02,BUILD,
 src/sections/MobileBuyer.tsx,sellers,MOB-FE-02,BUILD,Search sellers
 src/sections/MobileBuyer.tsx,product,MOB-FE-02,BUILD,product detail (Collections/report entry MOB-FE-03)
 src/sections/MobileBuyer.tsx,saved,MOB-FE-03,BUILD,Product and Scene Collections
-src/sections/MobileBuyer.tsx,messages,MOB-FE-09,BUILD,"messaging with context: no dedicated Mobile FE order; GAP RB-007, proposed owner MOB-FE-09/MOB-BE-08"
-src/sections/MobileBuyer.tsx,conversation,MOB-FE-09,BUILD,see messages (RB-007)
+src/sections/MobileBuyer.tsx,messages,MOB-FE-09,BUILD,messaging with context: MOB-FE-09/MOB-BE-08 per RB25-D10
+src/sections/MobileBuyer.tsx,conversation,MOB-FE-09,BUILD,see messages (RB25-D10)
 src/sections/MobileBuyer.tsx,checkout-coordinator,MOB-FE-05,BUILD,Checkout review A only; submit disabled
 src/sections/MobileBuyer.tsx,payment-transition,MOB-FE-06,SIMULATION ONLY,payment-return fixture in internal demo; live P2-02
 src/sections/MobileBuyer.tsx,orders,MOB-FE-06,SIMULATION ONLY,paid-Order fixtures in internal demo; live P2-02

@@ -41,7 +41,7 @@ plant() {
   PLANTED+=("$file")
 
   local out
-  out="$(pnpm exec depcruise apps packages --config .dependency-cruiser.cjs 2>&1)"
+  out="$(pnpm exec depcruise apps/api packages --config .dependency-cruiser.cjs 2>&1)"
   local code=$?
 
   rm -f "$file"
@@ -61,62 +61,41 @@ echo "ADU-REPO-01 §4 - do the dependency rules actually fire?"
 echo
 
 # --- Rule 2, the one that gets broken helpfully ----------------------------
-plant "apps/console/src/__depcruise_probe_$$.ts" \
-"import { boot } from '../../api/src/main';
-export const x = boot;" \
-  "no-app-to-app" \
-  "rule 2: console -> api by relative path"
+plant "apps/api/src/__depcruise_probe_$$.ts" "import { router } from '../../console/src/router';
+export const x = router;"   "no-app-to-app"   "rule 2: api -> archived console by relative path"
 
-# The type-only form is what a console developer actually reaches for, and it is
-# invisible without tsPreCompilationDeps. This probe is why that option is not
-# a preference.
-plant "apps/console/src/__depcruise_probe_$$.ts" \
-"import type { DatabaseModule } from '../../api/src/common/db/database.module';
-export type X = DatabaseModule;" \
-  "no-app-to-app" \
-  "rule 2: TYPE-ONLY console -> api (tsPreCompilationDeps)"
+plant "apps/api/src/__depcruise_probe_$$.ts" "import type { router } from '../../console/src/router';
+export type X = typeof router;"   "no-app-to-app"   "rule 2: TYPE-ONLY api -> console (tsPreCompilationDeps)"
 
-# The package-name spelling. Undeclared, so it resolves to nothing and must be
-# caught by not-to-unresolvable rather than slipping through silently.
-plant "apps/console/src/__depcruise_probe_$$.ts" \
-"import { boot } from '@adulis/api';
-export const x = boot;" \
-  "not-to-unresolvable" \
-  "rule 2: undeclared '@adulis/api' import"
+plant "apps/api/src/__depcruise_probe_$$.ts" "import { boot } from '@adulis/console';
+export const x = boot;"   "not-to-unresolvable"   "rule 2: undeclared '@adulis/console' import"
 
-# Reaching into another app's built output, which the dist/ exclusion would
-# otherwise hide completely. THE TARGET IS PLANTED TOO: on a fresh clone - and
-# in CI, where this step runs before any build - apps/api/dist does not exist,
-# the import cannot RESOLVE, and not-to-unresolvable catches it instead of
-# no-import-into-dist. The probe then fails asserting the rule NAME while the
-# boundary itself holds: a green rule proven by the wrong mechanism. Planting
-# a one-line target makes the probe independent of build order everywhere.
-# (This is why main went red on 27 Aug 2026: same probe, same missing dist.)
-mkdir -p apps/api/dist
+mkdir -p packages/tokens/dist
 printf 'export const boot = 1;
-' > "apps/api/dist/__depcruise_probe_target_$$.js"
-PLANTED+=("apps/api/dist/__depcruise_probe_target_$$.js")
-plant "apps/console/src/__depcruise_probe_$$.ts" \
-"import { boot } from '../../api/dist/__depcruise_probe_target_$$.js';
-export const x = boot;" \
-  "no-import-into-dist" \
-  "rule 2: console -> api/dist (the exclusion blind spot)"
+' > "packages/tokens/dist/__depcruise_probe_target_$$.js"
+PLANTED+=("packages/tokens/dist/__depcruise_probe_target_$$.js")
+plant "apps/api/src/__depcruise_probe_$$.ts" "import { boot } from '../../../packages/tokens/dist/__depcruise_probe_target_$$.js';
+export const x = boot;"   "no-import-into-dist"   "reaching into a workspace package's dist"
 
-# --- Rule 3 ----------------------------------------------------------------
+# The retired runtime is not installed, so its import is caught as unresolvable; the no-retired-runtime
+# rule covers the case where someone installs it (and verify-retired-absence.mjs fails on the manifest).
+plant "apps/api/src/__depcruise_probe_$$.ts" "import { Kysely } from 'kysely';
+export const x = Kysely;"   "not-to-unresolvable"   "retired runtime import (kysely)"
+
 plant "packages/locale/src/__depcruise_probe_$$.ts" \
-"import { boot } from '../../../apps/api/src/main';
-export const x = boot;" \
+"import { createApp } from '../../../apps/api/src/app';
+export const x = createApp;" \
   "no-package-to-app" \
   "rule 3: package -> app"
 
 echo
 echo "  --- and the clean tree must pass ---"
-if pnpm exec depcruise apps packages --config .dependency-cruiser.cjs > /dev/null 2>&1; then
+if pnpm exec depcruise apps/api packages --config .dependency-cruiser.cjs > /dev/null 2>&1; then
   printf '  PASS  %-46s no violations\n' "clean tree"
   pass=$((pass + 1))
 else
   printf '  FAIL  %-46s the real tree already violates a rule\n' "clean tree"
-  pnpm exec depcruise apps packages --config .dependency-cruiser.cjs 2>&1 | sed 's/^/          /' | head -20
+  pnpm exec depcruise apps/api packages --config .dependency-cruiser.cjs 2>&1 | sed 's/^/          /' | head -20
   fail=$((fail + 1))
 fi
 

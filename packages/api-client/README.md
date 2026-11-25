@@ -1,6 +1,6 @@
 # `@adulis/api-client` — the seam
 
-Generated from `contracts/openapi.json`. **Never hand-author a type here.**
+Generated from `contracts/openapi.json`, which the REPLACEMENT API generates (ARC-BE-05). **Never hand-author a type here.** At foundation the contract holds only `/livez` and `/healthz`; the sections below describing a schema-less legacy contract and `pnpm mock:api` are historical (archive tag `recovery/legacy-dev-20261125`).
 
 ## Status: generated, exported, mostly schema-less
 

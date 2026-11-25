@@ -6,7 +6,7 @@ allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "CEO-backend"
   priority: "P0"
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Adulis Migration Engineer
@@ -27,7 +27,8 @@ Approved target Fastify, Drizzle, BullMQ/Valkey, not immediate execution. Follow
 
 ## Current migration posture
 - PostgreSQL 17.
-- Hand-authored SQL migrations through the repository's node-pg-migrate workflow.
+- REPLACEMENT lineage (Batch 01B, the active one on the rebuild branch): reviewed SQL in `apps/api/db/migrations/NNNN_name.sql`, listed in `apps/api/db/migrations/meta/_journal.json`, applied by `pnpm db:migrate` (Drizzle migrator, advisory lock, target guard first) as `adulis_migrator`. Statements separated by `--> statement-breakpoint`. `apps/api/src/db/schema.ts` mirrors the SQL and `test/lineage.int.ts` fails on drift.
+- ARCHIVED legacy lineage only: hand-authored SQL through node-pg-migrate.
 - The migration role is not a runtime role.
 - Generated ORM DDL is not authoritative.
 - Apply migrations twice to empty databases and diff schema dumps for determinism.
@@ -43,7 +44,8 @@ Approved target Fastify, Drizzle, BullMQ/Valkey, not immediate execution. Follow
 7. Make the migration deterministic and rerunnable only through the migration framework, not ad-hoc shell SQL.
 8. Update tests and relevant Appendix-C checks.
 9. Highlight migrations affecting stock/state machines for manual line-by-line review.
-10. Pin the new file in the same change with `pnpm db:migration-pin` and commit `ops/migrations.manifest.json`; apply it only with `pnpm db:migrate` (it runs the migration-file guard). Never start `node-pg-migrate` directly.
+10. Replacement lineage: add the journal entry in the same change; grant only what `adulis_api`/`adulis_worker` need (never to PUBLIC, never DELETE on facts); run `pnpm --filter @adulis/api test:integration` (clean init, two-database determinism, roles, target safety) and `pnpm verify:retired`, locally only within the RAM policy, otherwise in Rebuild CI. Never point anything at adulis-postgres; never weaken `src/db/target-guard.ts` to make a database accept.
+11. ARCHIVED legacy lineage only: pin the new file in the same change with `pnpm db:migration-pin` and commit `ops/migrations.manifest.json`; apply it only with `pnpm db:migrate` (it runs the migration-file guard). Never start `node-pg-migrate` directly.
 
 ## Hard blocks
 - A migration depending on unreissued contracts without explicit interim authorization.

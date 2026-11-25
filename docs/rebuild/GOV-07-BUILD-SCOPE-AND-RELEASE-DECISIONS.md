@@ -39,8 +39,8 @@ Storefront report entry points show an honest unavailable state (MOB-BE-07).
 
 ## 5. Go/no-go and open decisions
 Go/no-go owner: **the founder** (REL-08), on evidence from REL-01..REL-07. Open decisions (each blocks only its
-affected work): OD-01 payment authority and provider (P2-01); OD-02 exact subscription-debt and deletion
-policy; OD-03 Staff Operator activation; OD-04 public Amharic; OD-05 further Market activation; OD-06 owner of
-ADU-CHATBOT-01 (RB-005); OD-07 dedicated Mobile messaging order (RB-007); OD-08 disposition of the legacy
+affected work): OD-01 payment authority and provider (P2-01); OD-02 subscription-debt and deletion policy
+(RESOLVED for the initial MVP by RB25-D11: debt-free); OD-03 Staff Operator activation; OD-04 public Amharic; OD-05 further Market activation; OD-06 owner of
+ADU-CHATBOT-01 (RESOLVED, RB25-D09); OD-07 Mobile messaging order (RESOLVED, RB25-D10); OD-08 disposition of the legacy
 local database (PL-001); OD-09 whether the inert legacy tables are ever dropped in the legacy lineage (PL-006,
 irrelevant to the replacement).

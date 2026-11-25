@@ -198,7 +198,7 @@ rather than kept as placeholders.
   remove it, and keep every SQL migration, function and RLS policy as written. The old K-3
   and K-8 "awaiting a founder ruling" wording is superseded by those decisions; the
   migration itself stays unauthorised.
-- **Clean rebuild lineage (25 November 2026, RB25-D01..D08,
+- **Clean rebuild lineage (25 November 2026, RB25-D01..D11,
   `docs/amendments/REBUILD-2026-11-25-CLEAN-LINEAGE.md`).** The founder directs a clean replacement, not
   an in-place migration. On the rebuild integration branch `rebuild/2026-11-25` the paragraph
   above describes the ARCHIVED legacy lineage only (dev 64d2e8c, migrations 0001-0062, draft #191's
@@ -212,7 +212,10 @@ rather than kept as placeholders.
   (node-pg-migrate pinning, `pnpm db:migrate`, Appendix C) and its fixed table and enum counts, and
   the `db:migrate`/seed steps in `apps/console/CLAUDE.md`, describe the archived lineage only until
   each file is rewritten with its replacement app (ARC-BE-02, SC-FE-01); the replacement asserts no
-  table counts (ARC-BE-03).
+  table counts (ARC-BE-03). Since Batch 01B the rebuild branch's ACTIVE workspace is `apps/api` and
+  `packages/*` only (`pnpm-workspace.yaml`); `apps/api/CLAUDE.md` is rewritten for the replacement; the
+  legacy gates, `ops/scripts/gates.mjs`, the Prism mock (`pnpm mock:api`) and `.github/workflows/ci.yml` are
+  archived; replacement verification is `.github/workflows/rebuild-ci.yml` (see `docs/rebuild/README.md`).
 
 ## Collision surfaces (§6)
 

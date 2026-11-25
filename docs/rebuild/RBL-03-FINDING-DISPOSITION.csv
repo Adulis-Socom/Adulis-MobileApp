@@ -42,7 +42,7 @@ B2B-006,P3,Transient TLS left PRs in the wrong state,RESOLVED,-,process lesson
 B2B-007,P3,Context7 OAuth; GitHub MCP header,OPEN-ENV,-,gh CLI used
 PL-001,P1,Legacy local DB holds commerce rows,OPEN-FOUNDER,RBL-02 options A/B/C,does not block the rebuild (separate target)
 PL-002,P2,#188 targets the removed Orders screen,REQUIREMENT,SC-FE-01 / SC-FE-12,isolation and responsive cases rebuilt
-PL-003,P2,Missing locale key deletion.blocker.subscription_past_due,REQUIREMENT,SC-BE-06 / SC-FE-11 (gated by OD-02),R3-5: no subscription-debt blocker unless an approved debt policy exists
+PL-003,P2,Missing locale key deletion.blocker.subscription_past_due,REQUIREMENT,SC-BE-06 / SC-FE-11 (debt-free per RB25-D11),R3-5: no subscription-debt blocker unless an approved debt policy exists
 PL-004,P3,Unused locale keys of removed screens,REQUIREMENT,ARC-BE-05,locale purged; completeness gate
 PL-005,P3,qrcode-generator unused,ABSENCE,ARC-BE-06,no unused dependency in the active tree
 PL-006,P2,Inert legacy order-family tables,OBSOLETE,ARC-BE-06 (absence),none exist in the replacement; legacy-lineage drop is OD-09

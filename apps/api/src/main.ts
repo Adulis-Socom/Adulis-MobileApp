@@ -1,31 +1,47 @@
 import 'reflect-metadata';
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { configureApp } from './configure-app';
-import { createLogger } from './common/logging';
-import { assertNodeEnv } from './common/env';
+import { createApp } from './app';
+import { apiEnvSchema, loadEnv } from './config/env';
+import { createPool } from './db/client';
+import { assertReplacementTarget, TargetRefused } from './db/target-guard';
+import { createLogger, errorFields } from './platform/logging';
+import { RebuildableCache } from './platform/valkey';
 
 /**
- * Process 1 of 2 — the HTTP API (ADU-CON-02 v3.0 section 1).
- *
- * TIER 3 — the section 5 pipeline is live. The express-level stages
- * (request id, body limit, CORS + Origin, locale) are wired by
- * configureApp — one wiring, shared with every e2e test; the Nest-level
- * stages (authenticate, seller context, handler transaction, error
- * mapper) are app.module.ts's.
+ * The API process entry (ARC-BE-02). Refuses to start on invalid configuration, a database that is not the
+ * replacement lineage, or a superuser/BYPASSRLS role. SIGTERM: stop accepting, drain in-flight requests,
+ * close PostgreSQL and Valkey, exit; a hard deadline stops a hung drain (DEPLOY-01 S28).
  */
-async function bootstrap(): Promise<void> {
-  // FIRST, before the logger, the container and every adapter: a process that
-  // cannot say which environment it is in must not start (ADU-RUL-03 S1.2).
-  const env = assertNodeEnv();
-  const log = createLogger();
-  const app = await NestFactory.create(AppModule, { logger: false });
-
-  await configureApp(app, process.env['CONSOLE_ORIGIN'] ?? '');
-
-  const port = Number(process.env['PORT'] ?? 3000);
-  await app.listen(port);
-  log.info({ msg: `api listening in ${env}`, route: '/healthz', statusCode: 200 });
+async function main(): Promise<void> {
+  const env = loadEnv(apiEnvSchema);
+  const logger = createLogger({ service: 'adulis-api', level: env.LOG_LEVEL, release: env.RELEASE });
+  try {
+    const pool = createPool(env.DATABASE_URL, 'adulis-api', 10);
+    pool.on('error', (err) => logger.error({ ...errorFields(err, env.NODE_ENV === 'production') }, 'idle database client error'));
+    await assertReplacementTarget(pool, env.DATABASE_URL, { stage: 'runtime', expectedRole: 'adulis_api' });
+    const cache = RebuildableCache.connect(env.CACHE_VALKEY_URL, logger);
+    await cache.init();
+    const app = await createApp({ env, logger, pool, cache });
+    const stop = (): void => {
+      setTimeout(() => process.exit(1), env.SHUTDOWN_GRACE_MS).unref(); // a hung drain still ends
+      app.close().then(
+        () => process.exit(0), // stopped accepting, drained in-flight requests, closed PostgreSQL and Valkey
+        (err: unknown) => {
+          logger.error({ ...errorFields(err, env.NODE_ENV === 'production') }, 'shutdown failed');
+          process.exit(1);
+        },
+      );
+    };
+    process.once('SIGTERM', stop);
+    process.once('SIGINT', stop);
+    await app.listen({ host: env.HOST, port: env.PORT });
+    logger.info({ module: 'main' }, 'api listening');
+  } catch (err) {
+    logger.fatal({ ...errorFields(err, env.NODE_ENV === 'production') }, err instanceof TargetRefused ? err.message : 'api cannot start');
+    process.exit(1);
+  }
 }
 
-void bootstrap();
+main().catch((err: unknown) => {
+  process.stderr.write(`api cannot start: ${err instanceof Error ? err.message : 'unknown'}\n`);
+  process.exit(1);
+});
