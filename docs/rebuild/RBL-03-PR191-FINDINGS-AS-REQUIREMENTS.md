@@ -32,12 +32,12 @@ subscription to a past-due state from non-payment. Tests: no route, job or state
 status values are the approved non-financial ones. Owner: SC-BE-06 (API), SC-FE-10 (UI), ARC-BE-06 (absence of
 purchase).
 
-**R3-5 Deletion and closure without impossible blockers (PL-003).** Seller closure and account deletion follow
-the approved non-financial and privacy rules (PRV-01, retention honoured). There is no settle-payment blocker
-(payment cannot occur) and no subscription-debt blocker (no debt can exist). **If the founder later approves a
-debt or deletion policy (OD-02), the affected blocker is built then; until that decision, it is not implemented
-and the behaviour that needs it stays gated.** Valid retention requirements are never bypassed. Owner: SC-BE-06,
-SC-FE-11.
+**R3-5 Deletion and closure without impossible blockers (PL-003).** Decided now: closure and deletion never
+demand payment through an unavailable mechanism (no settle-payment blocker; payment cannot occur), and valid
+retention and security checks are never bypassed. **Gated: the master plan requires the exact
+subscription-debt and deletion policy to be settled BEFORE closure/deletion is implemented (SC-FE-11
+acceptance; "Remaining decisions"). Closure and deletion implementation therefore waits for OD-02**; no debt
+blocker and no deletion rule is invented meanwhile. Owner: SC-BE-06, SC-FE-11.
 
 ## Targeted test plan (to be implemented in the named orders; nothing is implemented in Batch 01A)
 | Test | Kind | Order |
@@ -46,5 +46,5 @@ SC-FE-11.
 | T3-2 privileges: every role x table/column/function grant matches the catalogue; retired codes absent and refused | database + API | ARC-BE-03, SC-BE-02, ARC-BE-06 |
 | T3-3 Market: activation with no commerce timing succeeds; no NO_TIMING_CONFIG-style gate on non-financial writes | API | SC-BE-03 |
 | T3-4 subscription: no debt-creating route, job or transition; purchase absent | API + absence | SC-BE-06, ARC-BE-06 |
-| T3-5 deletion/closure: no settle-payment or debt blocker; retention rules applied; OD-02 gate documented | API | SC-BE-06 |
+| T3-5 deletion/closure (after OD-02): no payment demanded through an unavailable mechanism; the approved debt/deletion policy and retention rules applied | API | SC-BE-06 |
 | T3-6 absence: id-carrying retired routes probed with real ids (PL-010) | API | ARC-BE-06 |

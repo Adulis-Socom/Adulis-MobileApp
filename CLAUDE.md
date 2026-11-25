@@ -207,7 +207,12 @@ rather than kept as placeholders.
   copies no real data, and contains no Express, Kysely, Graphile Worker or node-pg-migrate runtime,
   no Reservation, legacy Order, payment, handoff or payout model, and no paid-commerce placeholder
   table. The mechanics in this section (transaction-local `set_config`, the generated-file rule, the
-  load-bearing absences, no secrets) carry into the replacement unchanged.
+  load-bearing absences, no secrets) carry into the replacement unchanged. The same applies to
+  every workstream CLAUDE.md on the rebuild branch: the migration discipline in `apps/api/CLAUDE.md`
+  (node-pg-migrate pinning, `pnpm db:migrate`, Appendix C) and its fixed table and enum counts, and
+  the `db:migrate`/seed steps in `apps/console/CLAUDE.md`, describe the archived lineage only until
+  each file is rewritten with its replacement app (ARC-BE-02, SC-FE-01); the replacement asserts no
+  table counts (ARC-BE-03).
 
 ## Collision surfaces (§6)
 

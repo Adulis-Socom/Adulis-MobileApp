@@ -34,7 +34,7 @@ Approved target Fastify, Drizzle, BullMQ/Valkey, not immediate execution. Follow
 - Integration tests use a real PostgreSQL service; constraints/triggers/RLS are not mockable.
 
 ## Procedure
-1. Locate existing migration conventions and numbering; do not invent a parallel system.
+1. Locate existing migration conventions and numbering; do not invent a parallel system. (Legacy lineage only: in the clean replacement lineage the conventions are the ones ARC-BE-03 establishes, RB25-D01.)
 2. Read the exact DB section/manifest entry being implemented.
 3. Verify current manifest and governing contract; stop on unreissued changes.
 4. Analyze: lock strength, table rewrite, backfill, index build, constraint validation, rollback, grants, RLS, function ownership, search_path, triggers.

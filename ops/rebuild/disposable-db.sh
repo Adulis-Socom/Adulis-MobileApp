@@ -22,13 +22,14 @@ USER_='rebuild_bootstrap'
 PASS='rebuild-local-only'
 IMAGE='pgvector/pgvector:pg17'
 IDENTITY="adulis clean-rebuild disposable target, lineage ${LINEAGE}; never the legacy adulis-postgres"
-LEGACY_PORTS=' 5434 5433 '
+LEGACY_PORTS=' 5432 5433 5434 '   # 5432: the repository default and legacy adulis; 5434: adulis-postgres; 5433: another project
 
 die() { echo "disposable-db: $*" >&2; exit 2; }
 psql_t() { docker exec "$NAME" psql -U "$USER_" -d "$DB" -At -v ON_ERROR_STOP=1 -c "$1"; }
 label() { docker inspect -f "{{ index .Config.Labels \"$1\" }}" "$NAME" 2>/dev/null || true; }
 
 guard() {
+  case "$PORT" in ''|*[!0-9]*) die "port '$PORT' is not numeric; refusing" ;; esac
   case "$LEGACY_PORTS" in *" $PORT "*) die "port $PORT belongs to an existing non-rebuild database; refusing" ;; esac
   [ "$NAME" != 'adulis-postgres' ] || die 'refusing to touch the legacy container'
   if docker inspect "$NAME" >/dev/null 2>&1; then
@@ -69,7 +70,11 @@ case "${1:-}" in
     ;;
   env)
     guard
-    echo "DATABASE_URL=postgres://${USER_}:${PASS}@127.0.0.1:${PORT}/${DB}"
+    # The URL comes from the container's ACTUAL binding, never from the override alone.
+    docker inspect "$NAME" >/dev/null 2>&1 || die "container $NAME does not exist; run 'up' first"
+    BOUND="$(docker port "$NAME" 5432/tcp | head -1)"
+    [ -n "$BOUND" ] || die "container $NAME is not running; run 'start' first"
+    echo "DATABASE_URL=postgres://${USER_}:${PASS}@${BOUND}/${DB}"
     ;;
   stop) guard; docker stop "$NAME" >/dev/null && echo "disposable-db: stopped (data kept)" ;;
   start) guard; docker start "$NAME" >/dev/null && echo "disposable-db: started" ;;

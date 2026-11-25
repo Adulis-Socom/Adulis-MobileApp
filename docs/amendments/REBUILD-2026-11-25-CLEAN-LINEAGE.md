@@ -10,7 +10,8 @@ stack, RB25-D01 says which lineage they now describe.
 
 Order of authority: the latest explicit founder decision (this addendum, B02B, B02) > the November 24
 register and amendments and supplemental contracts > the November 8 designs for unchanged details >
-compatible prototype UX > archived code and contracts as evidence only.
+compatible prototype UX > archived code and contracts as evidence only. This addendum changes EXECUTION and
+LINEAGE; it does not supersede the approved product rules.
 
 ## Decisions
 
