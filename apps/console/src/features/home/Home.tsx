@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { BriefAlert, BriefArea, BriefObligation, DestinationKey, HomeBrief } from '../../contracts/gap-sc';
 import { Badge } from '../../components/Badge';
@@ -26,19 +27,21 @@ const AREA_TARGET: Record<string, { dest: DestinationKey | null; path: string }>
 
 function Alerts({ alerts, timezone }: { alerts: readonly BriefAlert[]; timezone: string | undefined }) {
   return (
-    <section className="panel" aria-labelledby="alerts-h">
+    <section className="section" aria-labelledby="alerts-h">
       <h2 id="alerts-h">{t('home.alerts_title')}</h2>
       {alerts.length === 0 ? (
-        <p>{t('home.alerts_empty')}</p>
+        <p className="empty">{t('home.alerts_empty')}</p>
       ) : (
-        <ul className="plain-list">
+        <ul className="ledger">
           {alerts.map((a) => (
-            <li key={`${a.code}-${a.occurred_at}`} className="row">
-              <Badge tone={a.severity === 'WARN' ? 'warn' : 'info'}>{label('alert.severity', a.severity)}</Badge>
-              <span>{codeText('alert', a.code) ?? t('alert.unknown', { code: a.code })}</span>
-              <time className="hint" dateTime={a.occurred_at}>
-                {formatInstant(a.occurred_at, timezone)}
-              </time>
+            <li key={`${a.code}-${a.occurred_at}`} className="ledger-row">
+              <div className="ledger-main">
+                <span className="ledger-title">{codeText('alert', a.code) ?? t('alert.unknown', { code: a.code })}</span>
+                <Badge tone={a.severity === 'WARN' ? 'warn' : 'info'}>{label('alert.severity', a.severity)}</Badge>
+                <time className="ledger-meta" dateTime={a.occurred_at}>
+                  {formatInstant(a.occurred_at, timezone)}
+                </time>
+              </div>
             </li>
           ))}
         </ul>
@@ -49,22 +52,24 @@ function Alerts({ alerts, timezone }: { alerts: readonly BriefAlert[]; timezone:
 
 function Obligations({ items, timezone }: { items: readonly BriefObligation[]; timezone: string | undefined }) {
   return (
-    <section className="panel" aria-labelledby="obligations-h">
+    <section className="section" aria-labelledby="obligations-h">
       <h2 id="obligations-h">{t('home.obligations_title')}</h2>
       {items.length === 0 ? (
-        <p>{t('home.obligations_empty')}</p>
+        <p className="empty">{t('home.obligations_empty')}</p>
       ) : (
-        <ul className="plain-list">
+        <ul className="ledger">
           {items.map((o) => (
-            <li key={`${o.code}-${o.due_at ?? ''}`} className="row">
-              <span>{codeText('obligation', o.code) ?? t('obligation.unknown', { code: o.code })}</span>
-              {o.due_at ? (
-                <time className="hint" dateTime={o.due_at}>
-                  {t('home.due', { time: formatInstant(o.due_at, timezone) })}
-                </time>
-              ) : (
-                <span className="hint">{t('home.no_due')}</span>
-              )}
+            <li key={`${o.code}-${o.due_at ?? ''}`} className="ledger-row">
+              <div className="ledger-main">
+                <span className="ledger-title">{codeText('obligation', o.code) ?? t('obligation.unknown', { code: o.code })}</span>
+                {o.due_at ? (
+                  <time className="ledger-meta" dateTime={o.due_at}>
+                    {t('home.due', { time: formatInstant(o.due_at, timezone) })}
+                  </time>
+                ) : (
+                  <span className="ledger-meta">{t('home.no_due')}</span>
+                )}
+              </div>
             </li>
           ))}
         </ul>
@@ -88,11 +93,12 @@ function AreaRow({ area }: { area: BriefArea }) {
         </Badge>
         {area.state === 'NO_ENTITLEMENT' ? <span className="ledger-meta">{t('nav.entitlement_reason')}</span> : null}
       </span>
-      {area.state !== 'NO_ENTITLEMENT' && target && reach !== 'HIDDEN' ? <Icon name="arrow" /> : null}
+      {area.state === 'AVAILABLE' && target && reach !== 'HIDDEN' ? <Icon name="arrow" /> : null}
     </>
   );
-  // No entitlement, or no destination to open: shown, not a link.
-  if (area.state === 'NO_ENTITLEMENT' || !target || reach === 'HIDDEN') return <li className="ledger-row">{body}</li>;
+  // Only an area that exists is a link. One that arrives later, lacks entitlement or has no destination is a row that
+  // says so: a chevron would promise somewhere to go.
+  if (area.state !== 'AVAILABLE' || !target || reach === 'HIDDEN') return <li className="ledger-row">{body}</li>;
   return (
     <li>
       <Link className="ledger-link" to={sellerPath(sellerId, target.path)}>
@@ -104,10 +110,10 @@ function AreaRow({ area }: { area: BriefArea }) {
 
 function Areas({ areas }: { areas: readonly BriefArea[] }) {
   return (
-    <section className="panel" aria-labelledby="areas-h">
+    <section className="section" aria-labelledby="areas-h">
       <h2 id="areas-h">{t('home.areas_title')}</h2>
       {areas.length === 0 ? (
-        <p>{t('home.areas_empty')}</p>
+        <p className="empty">{t('home.areas_empty')}</p>
       ) : (
         <ul className="ledger">
           {areas.map((a) => (
@@ -119,13 +125,14 @@ function Areas({ areas }: { areas: readonly BriefArea[] }) {
   );
 }
 
-function Brief({ brief, timezone }: { brief: HomeBrief; timezone: string | undefined }) {
+function Brief({ brief, timezone, honest }: { brief: HomeBrief; timezone: string | undefined; honest: ReactNode }) {
   return (
     <>
       {brief.mode === 'READINESS_HUB' ? <ReadinessHub /> : null}
       <Alerts alerts={brief.alerts} timezone={timezone} />
       <Obligations items={brief.obligations} timezone={timezone} />
       <Areas areas={brief.areas} />
+      {honest}
     </>
   );
 }
@@ -141,18 +148,28 @@ function HomeContent() {
   const market = useSellerQuery('market.context.get', {});
   const seller = membership.seller;
   const timezone = market.state.status === 'ready' ? market.state.data.timezone : undefined;
+  const meta = [
+    market.state.status === 'ready' ? t('home.market', { country: market.state.data.country, timezone: market.state.data.timezone }) : null,
+    seller.status === 'DRAFT' ? t('home.draft_note') : null,
+    seller.publication === 'UNPUBLISHED' ? t('home.unpublished_note') : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  // Before publication the readiness list is what the person came for, so the "nothing is connected" statement follows it.
+  const hubFirst = brief.state.status === 'ready' && brief.state.data.mode === 'READINESS_HUB';
+  const honest = (
+    <StatePanel kind="info" title={t('home.honest_title')}>
+      <p>{t('home.honest_body')}</p>
+    </StatePanel>
+  );
   return (
     <>
       <PageTitle title={seller.display_name}>{seller.display_name}</PageTitle>
       <div className="stack">
         <p className="lead">{t('home.roles', { roles: membership.roles.map((r) => label('role', r)).join(', ') })}</p>
-        {market.state.status === 'ready' ? <p className="hint">{t('home.market', { country: market.state.data.country, timezone: market.state.data.timezone })}</p> : null}
-        {seller.status === 'DRAFT' ? <p className="hint">{t('home.draft_note')}</p> : null}
-        {seller.publication === 'UNPUBLISHED' ? <p className="hint">{t('home.unpublished_note')}</p> : null}
+        {meta ? <p className="hint">{meta}</p> : null}
       </div>
-      <StatePanel kind="info" title={t('home.honest_title')}>
-        <p>{t('home.honest_body')}</p>
-      </StatePanel>
+      {brief.state.status !== 'loading' && !hubFirst ? honest : null}
       {brief.state.status === 'loading' ? <Skeleton rows={6} /> : null}
       {brief.state.status === 'error' ? (
         <StatePanel
@@ -171,7 +188,7 @@ function HomeContent() {
       {brief.state.status === 'ready' ? (
         <>
           {brief.state.data.role_view !== 'OWNER_ADMIN' ? <p className="hint">{t('home.limited_note')}</p> : null}
-          <Brief brief={brief.state.data} timezone={timezone} />
+          <Brief brief={brief.state.data} timezone={timezone} honest={hubFirst ? honest : null} />
         </>
       ) : null}
     </>

@@ -57,12 +57,22 @@ function Row({ item, limeHere }: { item: ReadinessItem; limeHere: boolean }) {
           </span>
         ))}
         {status === 'blocked' ? <span className="ledger-meta">{t('readiness.no_permission_note')}</span> : null}
-        {action?.kind === 'link' && !action.built ? <span className="ledger-meta">{t('readiness.action_deferred')}</span> : null}
+        {action?.kind === 'link' && !action.built ? (
+          <span id={`later-${item.code}`} className="ledger-meta">
+            {t('readiness.action_deferred')}
+          </span>
+        ) : null}
       </div>
-      {action?.kind === 'link' ? (
-        <Link className={limeHere && action.built ? 'btn btn-highlight' : 'btn btn-quiet'} to={action.to}>
+      {action?.kind === 'link' && action.built ? (
+        <Link className={limeHere ? 'btn btn-highlight' : 'btn btn-quiet'} to={action.to}>
           {action.label}
         </Link>
+      ) : null}
+      {action?.kind === 'link' && !action.built ? (
+        // Not built yet: shown so the requirement is understood, disabled so nothing promises a destination that is not there.
+        <button type="button" className="btn btn-quiet" aria-disabled="true" aria-describedby={`later-${item.code}`}>
+          {action.label}
+        </button>
       ) : null}
       {action?.kind === 'disabled' ? (
         <>

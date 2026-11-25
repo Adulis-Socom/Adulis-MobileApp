@@ -32,9 +32,10 @@ test.describe('SC-FE-03: the daily operating Home', () => {
 
   test('area rows lead to honest destinations the role may open, and nothing else', async ({ page }) => {
     await atSellerHome(page, PHONE.owner, SELLER.alem.name);
-    await area(page, 'Products').getByRole('link').click();
-    await expect(page.getByText('Products and Inventory arrives in a later release')).toBeVisible();
-    await goInApp(page, `/s/${SELLER.alem.id}`);
+    // an area that only arrives later is a row that says so: no link, no chevron promising a destination
+    await expect(area(page, 'Products').getByRole('link')).toHaveCount(0);
+    await expect(area(page, 'Products').locator('svg.icon').first()).toBeVisible(); // only the status badge icon
+    await expect(area(page, 'Products').locator('.ledger-link')).toHaveCount(0);
     await area(page, 'Notification centre').getByRole('link').click();
     await expect(page.getByRole('heading', { level: 1, name: 'Notifications' })).toBeVisible();
   });

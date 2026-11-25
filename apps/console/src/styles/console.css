@@ -231,9 +231,6 @@ code {
 
 .topbar {
   grid-area: top;
-  position: sticky;
-  top: var(--strip-h, 0px);
-  z-index: 20;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -246,6 +243,7 @@ code {
 
 .topbar-seller {
   display: flex;
+  flex: 1 1 8rem;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--adu-space-xs) var(--adu-space-smd);
@@ -393,6 +391,13 @@ code {
 }
 
 @media (min-width: 1024px) {
+  /* chrome stays pinned only where there is room for it: on a phone it would take half the screen */
+  .topbar {
+    position: sticky;
+    top: var(--strip-h, 0px);
+    z-index: 20;
+  }
+
   .shell {
     grid-template-columns: 15rem minmax(0, 1fr);
     grid-template-rows: auto 1fr;
@@ -788,6 +793,34 @@ legend {
 @keyframes pulse {
   50% {
     opacity: 0.45;
+  }
+}
+
+/* a state or notice that sits inside a panel is part of it, not a second box */
+.panel .state,
+.panel .notice {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.section {
+  display: grid;
+  gap: var(--adu-space-smd);
+}
+
+.empty {
+  color: var(--adu-color-text-secondary);
+}
+
+.fixture-strip-more {
+  display: none;
+}
+
+@media (min-width: 40rem) {
+  .fixture-strip-more {
+    display: inline;
   }
 }
 

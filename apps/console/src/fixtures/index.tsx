@@ -50,7 +50,8 @@ function Banner() {
   }, []);
   return (
     <aside ref={ref} className="fixture-strip" aria-label="Demonstration notice">
-      <strong>{BANNER_SENTENCE}</strong> Sign-in, stores and every figure on screen are synthetic, and nothing is sent to a server.
+      <strong>{BANNER_SENTENCE}</strong>{' '}
+      <span className="fixture-strip-more">Sign-in, stores and every figure on screen are synthetic, and nothing is sent to a server.</span>
     </aside>
   );
 }

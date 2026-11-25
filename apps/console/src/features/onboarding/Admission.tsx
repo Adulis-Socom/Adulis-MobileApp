@@ -177,7 +177,7 @@ export function Admission() {
               {manage && (open || challenge) ? (
                 <section className="panel" aria-labelledby="method-h">
                   <h2 id="method-h">{t('admission.method_title')}</h2>
-                  <p className="hint">{t('admission.loginkit_off')}</p>
+                  <p>{t('admission.loginkit_off')}</p>
                   <p className="notice">{t('admission.anti_phishing')}</p>
                   {open ? (
                     <>

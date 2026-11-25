@@ -139,10 +139,11 @@ test.describe('SC-FE-02: the Publication Readiness Hub (independent items, serve
     expect(await limeCount(page)).toBe(1);
     await expect(row(page, 'Admission to Adulis').getByRole('link', { name: 'Connect a social account' })).toHaveClass(/btn-highlight/);
     await expect(row(page, 'Store profile')).toContainText('This step arrives in a later release.');
-    await expect(row(page, 'Store profile').getByRole('link', { name: 'Set up the store profile' })).toHaveClass(/btn-quiet/);
-    await row(page, 'Store profile').getByRole('link').click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Store settings' })).toBeVisible();
-    await expect(page.getByText('Store settings arrives in a later release')).toBeVisible();
+    // a step that is not built is a disabled control with its reason beside it, not a link to a dead page
+    const store = row(page, 'Store profile').getByRole('button', { name: 'Set up the store profile' });
+    await expect(store).toHaveAttribute('aria-disabled', 'true');
+    await expect(store).toHaveAccessibleDescription('This step arrives in a later release.');
+    await expect(row(page, 'Store profile').getByRole('link')).toHaveCount(0);
   });
 
   test('partially complete readiness reflects only what the server marked done', async ({ page }) => {
@@ -169,7 +170,7 @@ test.describe('SC-FE-02: the Publication Readiness Hub (independent items, serve
     await page.getByRole('link', { name: SELLER.eden.name }).click();
     await expect(hub(page)).toContainText('2 of 7 requirements are met.');
     await expect(row(page, 'Company details')).toContainText('Company details are incomplete.');
-    await expect(row(page, 'Company details').getByRole('link', { name: 'Add company details' })).toBeVisible();
+    await expect(row(page, 'Company details').getByRole('button', { name: 'Add company details' })).toHaveAttribute('aria-disabled', 'true');
     await expect(row(page, 'Admission to Adulis')).toContainText('Waiting for an Adulis review.');
     await expect(page.getByText('Eden Foods PLC').first()).toBeVisible();
   });
