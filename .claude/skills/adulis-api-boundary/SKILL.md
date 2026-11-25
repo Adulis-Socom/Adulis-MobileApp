@@ -19,7 +19,7 @@ Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` fr
 
 ## Current MVP constraints — 24 November 2026
 
-Separate target design from executable OpenAPI. Missing live contracts are CONTRACT_GAP. Authorized frontend-only work may use typed, versioned, development-only fixtures, without live fallback, release inclusion or financial side effects. Test tenant/market/audience isolation and Story visibility. No new live payment contract.
+Separate target design from executable OpenAPI. Missing live contracts are CONTRACT_GAP. Authorized frontend-only work may use typed, versioned, development-only fixtures, without live fallback, release inclusion or financial side effects. Test tenant/market/audience isolation and Story visibility. No new live payment contract. The Reservation model is RETIRED (B02B-D01): a retired Reservation operation answers with a fail-closed error and the contract changes only through the CI generation workflow; no compatibility route may re-enable it.
 
 ## Governing sources (legacy executable references unless noted)
 - `ADU-API-01_API_Contract_v1_11_ASCII.md` — primary wire contract.

@@ -18,7 +18,7 @@ Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` fr
 
 ## Current MVP constraints — 24 November 2026
 
-Live requests use generated contract types; isolated typed fixture ports are permitted for approved missing contracts. Never cast around a missing wire contract or pass fixture IDs to live APIs. Clear tenant/session data on context switch and ignore late responses. Checkout is review only, never live order submission.
+Live requests use generated contract types; isolated typed fixture ports are permitted for approved missing contracts. Never cast around a missing wire contract or pass fixture IDs to live APIs. Clear tenant/session data on context switch and ignore late responses. Checkout is review only, never live order submission. The Reservation model is RETIRED (B02B-D01): call no /reservations/ path and hand-author no Reservation DTO; historical Reservation fields are read-only presentation at most.
 
 ## Governing sources (legacy executable references unless noted)
 - `ADU-API-01_API_Contract_v1_11_ASCII.md` — primary.

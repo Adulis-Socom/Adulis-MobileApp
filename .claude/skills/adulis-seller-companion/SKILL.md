@@ -18,7 +18,7 @@ Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` fr
 
 ## Current MVP constraints — 24 November 2026
 
-Console is current workstream; resume Companion only in Mobile tier. Real messaging/notifications and authorized nonfinancial capabilities follow current MOB/AUTH; order/preparation/QR/handoff/courier journeys internal simulations until payment decision. No Story authoring, billing, payout or payment actions. Mode eligibility backend-owned; no reauthentication solely on switch.
+Console is current workstream; resume Companion only in Mobile tier. Real messaging/notifications and authorized nonfinancial capabilities follow current MOB/AUTH; order/preparation/QR/handoff/courier journeys internal simulations until payment decision. No Story authoring, billing, payout or payment actions. Mode eligibility backend-owned; no reauthentication solely on switch. The Reservation model is RETIRED (B02B-D01): Can't Fulfil implemented as Reservation cancellation is not an active action and must not be built or restored.
 
 ## Governing sources (legacy executable references unless noted)
 - **Current system design (founder decision WO-001B):** `ADU-MOB-02_v4.3.md` (S232 is its reconciliation) and `ADU-AUTH-02_v3.3.md`, in `docs/system-designs/2026-11-08/Sources/Markdown/`. They outrank the repository documents below for design intent (`DOCUMENT_AUTHORITY.md`).
@@ -33,7 +33,7 @@ Console is current workstream; resume Companion only in Mobile tier. Real messag
 After Console tier: notifications, messaging and backend-asserted mode switching. Order/preparation/handoff journeys are internal simulations until payment authority is approved. Apply current domain permissions and named work orders.
 
 ## Hard invariants
-- There is no `Accept Reservation` action. Reservation never waits for seller acceptance.
+- There is no `Accept Reservation` action, and the Reservation model is retired (B02B-D01). Reservation never waits for seller acceptance.
 - No Seller payment action under any label.
 - Companion is additive; Buyer Mode loses no capability.
 - No payout changes, reissued payment instructions, team changes, subscription purchase, seller deletion, session revocation, identity/verification changes, ownership changes, or account-control phone changes are reachable from mobile.

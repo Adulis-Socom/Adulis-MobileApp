@@ -18,7 +18,7 @@ Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` fr
 
 ## Current MVP constraints — 24 November 2026
 
-Distinguish live, preview, internal simulation, deferred. Checkout review says no order placed/no money collected. No fake PAID, handoff, review or trust in public release. Story/Scene visibility server-authoritative; countdown is presentation only. Clear prior tenant/session state; reject late responses. Unknown outcome is not success. Subscription purchase and Payout use an honest deferred or unavailable state (B02-D01/D02), never a live-looking control that is merely disabled or hidden by CSS.
+Distinguish live, preview, internal simulation, deferred. Checkout review says no order placed/no money collected. No fake PAID, handoff, review or trust in public release. Story/Scene visibility server-authoritative; countdown is presentation only. Clear prior tenant/session state; reject late responses. Unknown outcome is not success. Subscription purchase and Payout use an honest deferred or unavailable state (B02-D01/D02), never a live-looking control that is merely disabled or hidden by CSS. The Reservation model is RETIRED (B02B-D01): render Reservation states only as read-only history; no Reservation countdown, cancel or Can't Fulfil action, and no Reservation-derived "nothing needs you" empty state while historical obligations are merely unavailable.
 
 ## Governing sources (legacy executable references unless noted)
 - `ADU-API-01_API_Contract_v1_11_ASCII.md`

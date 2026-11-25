@@ -141,13 +141,20 @@ Front-end types are generated into `packages/api-client`; never hand-author a du
 
 **Eleven absences are invariants.** Never add: `original_key` on media · a generated
 chatbot reply-text column · `has_chatbot` or any stored entitlement boolean · a score
-column on the feed · an Accept-Reservation action or state · a bulk reissue path ·
+column on the feed · a restored legacy Reservation (below) · a bulk reissue path ·
 operator impersonation · an image column on identity verification · a free-text column
 on `seller_public_stats` · an FK from `nlu` into `core`/`chat` · a seller-writable column
 on `review`.
 
 An agent "completing" the schema by adding one silently removes the guarantee. Appendix C
 is how that gets caught.
+
+**The legacy Reservation model is retired** (founder pre-launch authorization, 25 November 2026;
+`docs/amendments/BATCH-02B-FOUNDER-DECISIONS-2026-11-25.md` B02B-D01). No active Reservation
+entity, creation, acceptance, cancellation, stock hold, expiry, associated API or product behavior
+may be introduced or restored. Historical migration references are not active architectural
+authority. Adulis has not launched, so obsolete unreleased compatibility contracts may be removed
+rather than kept as placeholders.
 
 ## Non-negotiable mechanics
 
