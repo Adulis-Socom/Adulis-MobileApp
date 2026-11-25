@@ -212,7 +212,10 @@ rather than kept as placeholders.
   (node-pg-migrate pinning, `pnpm db:migrate`, Appendix C) and its fixed table and enum counts, and
   the `db:migrate`/seed steps in `apps/console/CLAUDE.md`, describe the archived lineage only until
   each file is rewritten with its replacement app (ARC-BE-02, SC-FE-01); the replacement asserts no
-  table counts (ARC-BE-03).
+  table counts (ARC-BE-03). Since Batch 01B the rebuild branch's ACTIVE workspace is `apps/api` and
+  `packages/*` only (`pnpm-workspace.yaml`); `apps/api/CLAUDE.md` is rewritten for the replacement; the
+  legacy gates, `ops/scripts/gates.mjs`, the Prism mock (`pnpm mock:api`) and `.github/workflows/ci.yml` are
+  archived; replacement verification is `.github/workflows/rebuild-ci.yml` (see `docs/rebuild/README.md`).
 
 ## Collision surfaces (§6)
 
