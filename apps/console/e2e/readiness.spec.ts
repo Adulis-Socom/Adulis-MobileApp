@@ -5,12 +5,8 @@
  * Through T9 that clause was met by driving a browser once, by hand, and
  * reading the DOM. This is the same assertion, made on every run.
  */
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 import { SEEDED } from './helpers/session';
-
-const BUYER_STATE = path.join(path.dirname(fileURLToPath(import.meta.url)), '.auth', 'buyer-state.json');
 
 test.describe('SC-01 -- the readiness hub', () => {
   test('renders every item the server returned, and resumes across a reload', async ({ page }) => {
@@ -57,6 +53,8 @@ test.describe('SC-01 -- the readiness hub', () => {
         code: row.getAttribute('data-item'),
         href: row.querySelector('a.readiness-action')?.getAttribute('href') ?? null,
         unrouted: row.querySelector('.readiness-action.unrouted') !== null,
+        // B02-D02: the payout item is shown as deferred text, never as a link.
+        deferred: row.querySelector('.readiness-action[data-deferred]') !== null,
       })),
     );
     expect(targets.length).toBeGreaterThan(0);
@@ -80,7 +78,10 @@ test.describe('SC-01 -- the readiness hub', () => {
      * here and their routes are exercised only by this table being checked
      * at review, not by this navigation loop.)
      */
-    const unrouted = targets.filter((t) => t.unrouted || !t.href);
+    // The ONLY row allowed to carry no link is the deferred payout item (B02-D02); the server
+    // still lists it (a backend contract gap), the console asks for nothing.
+    expect(targets.filter((t) => t.deferred).map((t) => t.code)).toEqual(['PAYOUT_DETAILS']);
+    const unrouted = targets.filter((t) => !t.deferred && (t.unrouted || !t.href));
     expect(
       unrouted.map((t) => t.code),
       'every unsatisfied readiness row must carry a routed resolving link -- ' +
@@ -92,7 +93,7 @@ test.describe('SC-01 -- the readiness hub', () => {
     // work, does nothing visible, and teaches that the readiness list is
     // decorative. Following each one is the only way to know; reading the
     // route table is what missed it.
-    for (const t of targets) {
+    for (const t of targets.filter((x) => !x.deferred)) {
       await page.goto(t.href as string);
 
       // THE URL IS THE ASSERTION, and the first version of this test got that
@@ -130,70 +131,29 @@ test.describe('SC-01 -- what needs you (T16 Phase 3)', () => {
    * after this file asserts an empty claims list (insights-inbox, which
    * does, runs alphabetically BEFORE this file).
    */
-  test('three kinds, nearest deadline first, consequences from the server', async ({
-    browser,
+  test('obligations of deferred workflows are served but not shown (D24-01; supersedes the three-kinds ordering test)', async ({
     page,
-    baseURL,
   }) => {
-    // The buyer files the claim through the buyer wire, for real.
-    const buyerCtx = await browser.newContext({ storageState: BUYER_STATE });
-    try {
-      const filed = await buyerCtx.request.post('http://localhost:3000/v1/claims', {
-        headers: {
-          'Idempotency-Key': crypto.randomUUID(),
-          'X-Adulis-Client': 'web/0.0.0',
-          Origin: baseURL ?? '',
-        },
-        data: { order_id: '5eed0000-0000-4000-8000-000000000014', trigger: 'GOODS_NOT_RECEIVED' },
-      });
-      expect(filed.status()).toBe(201);
-    } finally {
-      await buyerCtx.close();
-    }
-
+    /*
+     * SUPERSEDES "three kinds, nearest deadline first, consequences from the server". That test
+     * filed a real buyer claim and asserted the order of payment, claim and unready-order
+     * obligations and a link into the claim. Payment confirmation, claims and handoff are removed
+     * from the MVP console, so the Seller cannot act on any of them; drawing their deadlines would
+     * invite a miss nothing here can prevent. The server STILL returns them (a backend gap, not
+     * touched here): this proves the console receives them and shows none. The original is in git
+     * history. Residue: the old test's real claim is no longer filed.
+     */
+    const served = page.waitForResponse(
+      (r) => r.url().includes('/v1/seller/obligations') && r.request().method() === 'GET',
+    );
     await page.goto(`/s/${SEEDED.sellerId}`);
-    const rows = page.locator('[data-obligation]');
-    await expect(rows.first()).toBeVisible();
-
-    // The region sits ABOVE the readiness list (S3.1: a seller opening Home
-    // to find out what needs them should not scroll past anything).
-    const order = await page
-      .locator('[data-obligation], [data-item]')
-      .evaluateAll((els) => els.map((el) => (el.hasAttribute('data-obligation') ? 'OB' : 'RD')));
-    expect(order.indexOf('RD')).toBeGreaterThan(order.lastIndexOf('OB'));
-
-    // NEAREST DEADLINE FIRST, three kinds, the claim strictly interleaved --
-    // rendered AS SERVED (the console sorts nothing, groups nothing).
-    const kinds = await rows.evaluateAll((els) => els.map((el) => el.getAttribute('data-obligation')));
-    expect(kinds).toEqual([
-      'PAYMENT_AWAITING_CONFIRMATION', // the lapsed order -- OVERDUE, first
-      'PAYMENT_AWAITING_CONFIRMATION', // the fresh submission
-      'CLAIM_AWAITING_SELLER', // the buyer's claim, +2 days
-      'ORDER_NOT_READY', // the paid unready order, +90h
-    ]);
-
-    // The overdue entry renders the standing truth, not a countdown.
-    await expect(rows.first().locator('.deadline-value')).toHaveText('Overdue');
-
-    // The consequence is the SERVER's sentence, rendered verbatim -- never
-    // composed by the client.
-    await expect(
-      rows.nth(1).getByText(
-        'Confirm or reject before the deadline, or a claim opens against you automatically and the missed window is shown on your public store page.',
-      ),
-    ).toBeVisible();
-    await expect(
-      rows.nth(2).getByText('After the deadline the claim can be decided without your side of it.'),
-    ).toBeVisible();
-    await expect(
-      rows.nth(3).getByText(
-        'The buyer has already paid and is waiting. An order left unready invites a goods-not-received claim.',
-      ),
-    ).toBeVisible();
-
-    // Tapping opens the object: the claim row links to the claim.
-    await rows.nth(2).locator('a').click();
-    await expect(page).toHaveURL(/\/claims\/[0-9a-f-]+$/);
+    const kinds = (((await (await served).json()) as { data: Array<{ kind: string }> }).data ?? []).map((o) => o.kind);
+    expect(kinds, 'the seed must still produce deferred-kind obligations, or this proves nothing').toEqual(
+      expect.arrayContaining(['PAYMENT_AWAITING_CONFIRMATION', 'ORDER_NOT_READY']),
+    );
+    await expect(page.locator('[data-item]').first()).toBeVisible();
+    await expect(page.locator('[data-obligation]')).toHaveCount(0);
+    await expect(page.locator('[data-obligations]')).toHaveCount(0);
   });
 
   test('life 2: obligations above the summary; empty reads as a good state; NO picker (R23)', async ({

@@ -112,32 +112,26 @@ test.describe('the store chooser -- D-97 closed', () => {
     await expect(page).toHaveURL(/\/s\/5eed0000-0000-4000-8000-0000000000ff$/);
   });
 
-  test('a seller reaches COURIER WORK from inside their store (T20 S3)', async ({ page }) => {
+  test('courier delivery is deferred: the switcher offers no courier link and /courier is an honest state (D24-01)', async ({
+    page,
+  }) => {
     /*
-     * T19 parked this: a courier who also owns exactly one store was
-     * redirected into it and had to SIGN OUT to see their deliveries. The
-     * ruling makes the entry point a LINE IN THE SWITCHER MENU -- a link, not
-     * a mode. ADU-MOB-01 makes buyer/seller a real mode with its own session
-     * semantics; this is one person with two unrelated relationships to
-     * Adulis, and a link is the honest shape.
+     * SUPERSEDES "a seller reaches COURIER WORK from inside their store (T20 S3)". That test followed
+     * the switcher's courier link into SC-C1. Live courier delivery depends on a confirmed payment
+     * and handoff, both deferred, so the link and the screen are removed from the MVP console. The
+     * original expectation is in git history.
      */
-    // Start where D-245's parked case starts: at "/", REDIRECTED -- the
-    // account that could never see the chooser is the one this ruling is for.
     await page.goto('/');
     await expect(page).toHaveURL(new RegExp(`/s/${SEEDED.sellerId}$`));
     await page.locator('[data-switcher-toggle]').click();
-    await page
-      .locator('[data-switcher-menu]')
-      .getByRole('link', { name: /courier deliveries/i })
-      .click();
-    await expect(page).toHaveURL(/\/courier$/);
-    // Not a blank page: SC-C1 itself renders -- for a non-courier that is the
-    // empty state that explains itself. Its root is a data-screen div, not a
-    // <main>: the courier tree deliberately carries none of the seller shell.
-    await expect(page.locator('[data-screen="SC-C1"]')).toBeVisible();
-    // ...and the empty state EXPLAINS ITSELF -- the half a bare visibility
-    // check would not prove (both pass lenses converged on this line).
-    await expect(page.getByText('No assigned orders')).toBeVisible();
+    await expect(page.locator('[data-switcher-menu]')).toBeVisible();
+    await expect(page.locator('[data-switcher-menu]').getByRole('link', { name: /courier deliveries/i })).toHaveCount(0);
+    await expect(page.locator('.switcher-courier')).toHaveCount(0);
+
+    await page.goto('/courier');
+    await expect(page.locator('[data-deferred-screen="courier"]')).toBeVisible();
+    await expect(page.locator('[data-screen="SC-C1"]')).toHaveCount(0);
+    await expect(page.getByText('Courier delivery is not part of this release.')).toBeVisible();
   });
 
   test('a FAILED store list is never mistaken for "you have one store" (T19 P1)', async ({
@@ -168,37 +162,15 @@ test.describe('the store chooser -- D-97 closed', () => {
     await expect(page.locator('[data-item]').first()).toBeVisible();
   });
 
-  test('the courier entry point is on SIGN-IN, ahead of any seller routing (T19 P1)', async ({
-    browser,
-  }) => {
-    /*
-     * THE OTHER HALF, and it moved rather than being restored where it was.
-     * A courier is not seller staff: they hold their own account, they see
-     * only assigned orders, and they have no store to be redirected into.
-     * Routing them through a store chooser was wrong before #80 made it
-     * visible.
-     *
-     * ANONYMOUS CONTEXT, deliberately. This suite shares one signed-in
-     * storageState, and signing out REVOKES that session row server-side --
-     * it would 401 every spec that runs afterwards. A courier arriving at
-     * sign-in is unauthenticated anyway, so this is also the truer starting
-     * state. The signed-in path (sign out, then click through) is proved by
-     * zz-beta-walk, whose account is its own and which runs last.
-     */
+  test('sign-in no longer carries a courier entry point (D24-01; supersedes T19 P1)', async ({ browser }) => {
+    // ANONYMOUS CONTEXT, as before: signing out would revoke the suite's shared session.
     const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     try {
       const page = await ctx.newPage();
       await page.goto('/sign-in');
-
-      // /courier is behind RequireSession, so following this while signed out
-      // bounces back here -- correctly, and with `from` armed, so the courier
-      // lands on their deliveries after verifying. The round trip is
-      // invisible, which reads as a dead link on the screen a courier meets
-      // first, so the screen says what will happen.
-      await page.getByRole('link', { name: /deliveries assigned to you/i }).click();
-      await expect(page).toHaveURL(/\/sign-in/);
-      await expect(page.locator('[data-courier-resume]')).toBeVisible();
-      await expect(page.getByText(/straight to your deliveries/i)).toBeVisible();
+      await expect(page.getByRole('button').first()).toBeVisible();
+      await expect(page.getByRole('link', { name: /deliveries assigned to you/i })).toHaveCount(0);
+      await expect(page.locator('a[href="/courier"]')).toHaveCount(0);
     } finally {
       await ctx.close();
     }
