@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { goInApp, noHorizontalOverflow, PHONE, scaleText, SELLER, signedInChooser } from './helpers';
+import { expectTextScale, goInApp, noHorizontalOverflow, PHONE, scaleText, SELLER, signedInChooser } from './helpers';
 
 const WIDTHS = [320, 360, 390, 768, 1024, 1440] as const;
 const SCALES = [100, 150, 200] as const;
@@ -16,6 +16,7 @@ for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto('/sign-in');
       await expect(page.getByRole('heading', { level: 1, name: 'Sign in to your Seller Console' })).toBeVisible();
+      await expectTextScale(page, scale);
       await noHorizontalOverflow(page);
 
       await signedInChooser(page, PHONE.owner);
@@ -56,6 +57,8 @@ test('touch targets are at least 44px at phone width', async ({ page }) => {
 test('long translated-length text wraps instead of overflowing (no fixed heights on text)', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   await scaleText(page, 150);
+  await page.goto('/sign-in');
+  await expectTextScale(page, 150);
   await signedInChooser(page, PHONE.states);
   await page.getByRole('link', { name: SELLER.eden.name }).click();
   await expect(page.getByRole('heading', { level: 2, name: 'Publication readiness' })).toBeVisible();

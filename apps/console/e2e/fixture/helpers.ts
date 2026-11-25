@@ -85,8 +85,19 @@ export async function limeCount(page: Page): Promise<number> {
 /** Apply a text-scale factor before any script of the page runs (150 or 200), approximating a user text-size setting. */
 export async function scaleText(page: Page, percent: number): Promise<void> {
   await page.addInitScript((pct) => {
-    const style = document.createElement('style');
-    style.textContent = `html { font-size: ${pct}% !important; }`;
-    (document.head ?? document.documentElement).appendChild(style);
+    // An init script runs before <html> exists, so the style can only be attached once the document is there.
+    const attach = () => {
+      const style = document.createElement('style');
+      style.textContent = `html { font-size: ${pct}% !important; }`;
+      document.documentElement.appendChild(style);
+    };
+    if (document.documentElement) attach();
+    else document.addEventListener('readystatechange', attach, { once: true });
   }, percent);
+}
+
+/** Prove the scale really applied: a helper that silently did nothing would make every scaled test a 100% test. */
+export async function expectTextScale(page: Page, percent: number): Promise<void> {
+  const px = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize));
+  expect(px, `root font size at ${percent}%`).toBeCloseTo((16 * percent) / 100, 1);
 }

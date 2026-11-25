@@ -29,19 +29,21 @@ for (const size of SIZES) {
 }
 
 test('shot: 200% text at phone width, readiness hub', async ({ page }) => {
-  const { atSellerHome, PHONE, scaleText, SELLER } = await import('./helpers');
+  const { atSellerHome, expectTextScale, PHONE, scaleText, SELLER } = await import('./helpers');
   await scaleText(page, 200);
   await page.setViewportSize({ width: 390, height: 800 });
   await atSellerHome(page, PHONE.owner, SELLER.biruk.name);
+  await expectTextScale(page, 200);
   await settle(page);
   await page.screenshot({ path: 'screenshots/readiness-incomplete.phone-390-text200.png', fullPage: true });
 });
 
 test('shot: 320px at 150% text, operating Home', async ({ page }) => {
-  const { atSellerHome, PHONE, scaleText, SELLER } = await import('./helpers');
+  const { atSellerHome, expectTextScale, PHONE, scaleText, SELLER } = await import('./helpers');
   await scaleText(page, 150);
   await page.setViewportSize({ width: 320, height: 700 });
   await atSellerHome(page, PHONE.owner, SELLER.alem.name);
+  await expectTextScale(page, 150);
   await settle(page);
   await page.screenshot({ path: 'screenshots/dashboard-operational.phone-320-text150.png', fullPage: true });
 });
