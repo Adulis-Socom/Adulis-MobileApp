@@ -6,10 +6,12 @@ allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "COO-CTO-frontend"
   priority: "P0"
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Adulis Design System
+
+REPLACEMENT FOUNDATION (Batch 01B): `packages/tokens` is the CTO palette, LIGHT ONLY; the dark mode and the legacy blue accent are removed; action roles are primary, secondary and highlight (lime, dark text, one standout action per screen); `info` sits on the neutral ramp pending an approved hue (RB-B01-07). `pnpm verify:tokens` enforces TS/CSS parity, exact CTO values, retired-theme absence and 36 contrast pairs.
 
 
 ## Shared source protocol
