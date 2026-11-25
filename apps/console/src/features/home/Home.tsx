@@ -6,7 +6,7 @@ import { Icon } from '../../components/Icon';
 import { PageTitle } from '../../components/PageTitle';
 import { Skeleton } from '../../components/Skeleton';
 import { StatePanel } from '../../components/StatePanel';
-import { codeText, formatInstant, t } from '../../i18n/t';
+import { codeText, formatInstant, label, t } from '../../i18n/t';
 import { destinationAccess, sellerPath, type Access } from '../../seller/access';
 import { useSeller } from '../../seller/context';
 import { useSellerQuery } from '../../seller/useSellerQuery';
@@ -34,7 +34,7 @@ function Alerts({ alerts, timezone }: { alerts: readonly BriefAlert[]; timezone:
         <ul className="plain-list">
           {alerts.map((a) => (
             <li key={`${a.code}-${a.occurred_at}`} className="row">
-              <Badge tone={a.severity === 'WARN' ? 'warn' : 'info'}>{t(`alert.severity.${a.severity}`)}</Badge>
+              <Badge tone={a.severity === 'WARN' ? 'warn' : 'info'}>{label('alert.severity', a.severity)}</Badge>
               <span>{codeText('alert', a.code) ?? t('alert.unknown', { code: a.code })}</span>
               <time className="hint" dateTime={a.occurred_at}>
                 {formatInstant(a.occurred_at, timezone)}
@@ -78,7 +78,7 @@ function AreaRow({ area }: { area: BriefArea }) {
   const label = codeText('home.area', area.key) ?? t('home.area.unknown', { code: area.key });
   const target = AREA_TARGET[area.key];
   const reach: Access = target ? (target.dest === null ? 'GRANTED' : destinationAccess(access, target.dest)) : 'HIDDEN';
-  const stateText = t(`home.area_state.${area.state}`);
+  const stateText = label('home.area_state', area.state);
   const body = (
     <>
       <span className="ledger-main">
@@ -145,7 +145,7 @@ function HomeContent() {
     <>
       <PageTitle title={seller.display_name}>{seller.display_name}</PageTitle>
       <div className="stack">
-        <p className="lead">{t('home.roles', { roles: membership.roles.map((r) => t(`role.${r}`)).join(', ') })}</p>
+        <p className="lead">{t('home.roles', { roles: membership.roles.map((r) => label('role', r)).join(', ') })}</p>
         {market.state.status === 'ready' ? <p className="hint">{t('home.market', { country: market.state.data.country, timezone: market.state.data.timezone })}</p> : null}
         {seller.status === 'DRAFT' ? <p className="hint">{t('home.draft_note')}</p> : null}
         {seller.publication === 'UNPUBLISHED' ? <p className="hint">{t('home.unpublished_note')}</p> : null}

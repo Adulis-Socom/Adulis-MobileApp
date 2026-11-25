@@ -12,6 +12,7 @@ export const PHONE = {
   campaign: '+251900000015',
   multirole: '+251900000016',
   invBiruk: '+251900000017',
+  mixed: '+251900000018',
 } as const;
 export const CODE = '246810';
 
@@ -20,6 +21,7 @@ export const SELLER = {
   biruk: { id: 'fx_seller_biruk', name: 'Biruk Shoes' },
   chaltu: { id: 'fx_seller_chaltu', name: 'Chaltu Crafts' },
   kidist: { id: 'fx_seller_kidist', name: 'Kidist Cosmetics' },
+  lemlem: { id: 'fx_seller_lemlem', name: 'Lemlem Linen' },
   dawit: { id: 'fx_seller_dawit', name: 'Dawit Leather' },
   eden: { id: 'fx_seller_eden', name: 'Eden Foods PLC' },
   fana: { id: 'fx_seller_fana', name: 'Fana Fashion' },
@@ -59,7 +61,8 @@ export async function openSeller(page: Page, name: string): Promise<void> {
 export async function atSellerHome(page: Page, phone: string, name: string): Promise<void> {
   await signedInChooser(page, phone);
   await openSeller(page, name);
-  await expect(page.getByRole('heading', { level: 2, name: 'Alerts' }).or(page.getByRole('heading', { level: 2, name: 'Publication readiness' }))).toBeVisible();
+  // A draft Seller shows BOTH the readiness hub and the alerts, so wait for the first of them, not for exactly one.
+  await expect(page.getByRole('heading', { level: 2, name: 'Alerts' }).or(page.getByRole('heading', { level: 2, name: 'Publication readiness' })).first()).toBeVisible();
 }
 
 /** Navigate inside the running app (client-side), as Back, Forward or a link would. Full reloads drop the in-memory fixture session by design. */

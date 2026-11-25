@@ -18,6 +18,9 @@ for (const viewport of VIEWPORTS) {
       const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
       const found = results.violations.map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`);
       expect(found, `axe violations on ${scene.name}`).toEqual([]);
+      // heading order is a best-practice rule outside the WCAG tag sets: a skipped level would otherwise pass
+      const order = await new AxeBuilder({ page }).withRules(['heading-order']).analyze();
+      expect(order.violations.map((v) => v.nodes.map((n) => n.target.join(' ')).join(' | ')), `heading order on ${scene.name}`).toEqual([]);
       await noHorizontalOverflow(page);
       if (!scene.dialog) {
         await expect(page.getByRole('heading', { level: 1 }), 'exactly one h1').toHaveCount(1);
@@ -30,6 +33,8 @@ for (const viewport of VIEWPORTS) {
 test.describe('keyboard, focus and announcements', () => {
   test('sign-in is fully operable by keyboard, in a logical order, with a visible focus ring', async ({ page }) => {
     await page.goto('/sign-in');
+    // the session check finishes before the form exists: tabbing earlier would be tabbing through a loading skeleton
+    await expect(page.getByLabel('Mobile phone number')).toBeVisible();
     await page.keyboard.press('Tab');
     const skip = page.getByRole('link', { name: 'Skip to main content' });
     await expect(skip).toBeFocused();
@@ -73,10 +78,11 @@ test.describe('keyboard, focus and announcements', () => {
     await expect(dialog.getByRole('button', { name: 'Sign out' })).toBeVisible();
     const behindTookFocus = await page.evaluate(() => {
       const behind = document.querySelector<HTMLElement>('.sidebar a');
-      behind?.focus();
-      return document.activeElement === behind;
+      if (!behind) return 'no-target';
+      behind.focus();
+      return document.activeElement === behind ? 'took-focus' : 'inert';
     });
-    expect(behindTookFocus, 'a control behind the modal took focus').toBe(false);
+    expect(behindTookFocus, 'a control behind the modal must exist and must not take focus').toBe('inert');
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
     await expect(opener).toBeFocused();

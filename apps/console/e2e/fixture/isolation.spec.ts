@@ -9,6 +9,8 @@ test.describe('SC-FE-01: Seller isolation', () => {
     await page.getByRole('link', { name: SELLER.alem.name }).click();
     await expect(page.getByRole('heading', { level: 1, name: SELLER.alem.name })).toBeVisible();
     await expect(page.getByRole('status').filter({ hasText: 'Loading' }).first()).toBeAttached();
+    // Alem's Home request is really in flight when we leave
+    await expect.poll(() => page.evaluate(() => window.__ADULIS_FIXTURE__?.callLog().filter((c) => c.sellerId === 'fx_seller_alem' && c.op === 'seller.home.get').length)).toBeGreaterThan(0);
     await goInApp(page, `/s/${SELLER.biruk.id}`);
     await expect(page.getByRole('heading', { level: 1, name: SELLER.biruk.name })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'Publication readiness' })).toBeVisible();
@@ -20,6 +22,9 @@ test.describe('SC-FE-01: Seller isolation', () => {
     await expect(main).not.toContainText('Your admission is due to be checked again');
     await expect(page.getByRole('banner')).toContainText(SELLER.biruk.name);
     await expect(page.getByRole('banner')).not.toContainText(SELLER.alem.name);
+    // and Biruk's own screen is still whole: a late answer must not have replaced it with an error or a blank
+    await expect(page.getByRole('heading', { level: 1, name: SELLER.biruk.name })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Publication readiness' })).toContainText('2 of 6 requirements are met.');
   });
 
   test('form state is isolated: text typed under one Seller is gone under another, and does not come back', async ({ page }) => {

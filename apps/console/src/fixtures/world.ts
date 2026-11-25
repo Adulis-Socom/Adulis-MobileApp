@@ -78,6 +78,7 @@ export const PERSONAS: readonly { id: string; phone: string; label: string }[] =
   { id: 'fx_acct_campaign', phone: '+251900000015', label: 'Campaign Manager at Alem Textiles' },
   { id: 'fx_acct_multirole', phone: '+251900000016', label: 'Inventory and Sales Support at Alem Textiles' },
   { id: 'fx_acct_inv_biruk', phone: '+251900000017', label: 'Inventory at Biruk Shoes (draft store)' },
+  { id: 'fx_acct_mixed', phone: '+251900000018', label: 'Owner of Lemlem Linen and Inventory at Alem Textiles' },
   { id: 'fx_acct_new', phone: '+251900000003', label: 'New account (no stores yet; any other number behaves the same)' },
 ];
 
@@ -150,6 +151,7 @@ function initialSellers(): Record<string, SellerRecord> {
       store: true, fulfilment: true, product: true, companyDetails: true,
       alerts: { ...NONE, OWNER_ADMIN: [{ code: 'SELLER_RESTRICTED', severity: 'WARN', occurred_at: at(120) }] },
     }),
+    seller('fx_seller_lemlem', 'Lemlem Linen', 'DRAFT', 'NEVER_PUBLISHED'),
     seller('fx_seller_hana', 'Hana Home Goods', 'DRAFT', 'NEVER_PUBLISHED', { readinessFails: true }),
     seller('fx_seller_iman', 'Iman Jewellery', 'ACTIVE', 'UNPUBLISHED', {
       eligibility: { ...SATISFIED, social_accounts: verifiedTikTok('@iman.jewellery') },
@@ -175,6 +177,7 @@ function initialPersonas(): Persona[] {
     base('fx_acct_analyst', 'Anan (demonstration)', [team('fx_seller_alem', ['ANALYST'])]),
     base('fx_acct_campaign', 'Cala (demonstration)', [team('fx_seller_alem', ['CAMPAIGN_MANAGER'])]),
     base('fx_acct_multirole', 'Mulu (demonstration)', [team('fx_seller_alem', ['INVENTORY', 'SALES_SUPPORT'])]),
+    base('fx_acct_mixed', 'Mimi (demonstration)', [own('fx_seller_lemlem'), team('fx_seller_alem', ['INVENTORY'])]),
     base('fx_acct_inv_biruk', 'Ibsa (demonstration)', [team('fx_seller_biruk', ['INVENTORY'])]),
   ];
 }
@@ -221,6 +224,10 @@ export interface World {
     revokeDestination(sellerId: string, key: DestinationKey): void;
     revokeCapability(sellerId: string, capability: string): void;
     revokeSession(): void;
+    /** Make the next `times` calls of `op` fail with `code` (an outcome the Console must not guess its way past). */
+    failNext(op: string, code: TransportError['code'], times?: number): void;
+    /** Remove the signed-in account's relationship with a Seller, as if it left the team mid-session. */
+    revokeMembership(sellerId: string): void;
     callLog(): readonly { op: string; sellerId: string | null }[];
   };
 }
@@ -233,6 +240,7 @@ export function createWorld(options: WorldOptions): World {
   const revokedDest = new Map<string, Set<DestinationKey>>();
   const revokedCaps = new Map<string, Set<string>>();
   const log: { op: string; sellerId: string | null }[] = [];
+  const failures = new Map<string, { code: TransportError['code']; times: number }>();
   let session: string | null = null;
   let pendingNew: string | null = null;
   let sessionRevoked = false;
@@ -483,7 +491,8 @@ export function createWorld(options: WorldOptions): World {
       return briefOf(m, s, accessFor(m, s));
     },
     'notifications.list': (_i, ctx) => {
-      const { s } = membership(persona(), sellerIdOf(ctx));
+      const { m, s } = membership(persona(), sellerIdOf(ctx));
+      if (!accessFor(m, s).capabilities.includes('notifications.view')) throw new TransportError('PERMISSION_DENIED');
       return { seller_id: s.summary.id, unread_count: s.notifications.filter((n) => !n.read).length, items: s.notifications };
     },
     'market.onboarding.get': () => {
@@ -506,6 +515,11 @@ export function createWorld(options: WorldOptions): World {
       if (PROHIBITED.test(op) || !Object.hasOwn(handlers, op)) throw new TransportError('REFUSED', { detail: BLOCKED_CODE });
       log.push({ op, sellerId: ctx.sellerId ?? null });
       await delay(ctx.sellerId ?? null);
+      const planned = failures.get(op);
+      if (planned && planned.times > 0) {
+        planned.times -= 1;
+        throw new TransportError(planned.code);
+      }
       if (sessionRevoked && !op.startsWith('auth.')) {
         session = null;
         throw new TransportError('AUTHENTICATION_REQUIRED');
@@ -521,6 +535,13 @@ export function createWorld(options: WorldOptions): World {
       },
       revokeSession() {
         sessionRevoked = true;
+      },
+      failNext(op, code, times = 1) {
+        failures.set(op, { code, times });
+      },
+      revokeMembership(sellerId) {
+        const who = personas.find((p) => p.id === session);
+        if (who) who.memberships = who.memberships.filter((m) => m.sellerId !== sellerId);
       },
       callLog: () => log,
     },

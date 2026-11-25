@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
+import { CrashPanel } from './components/ErrorBoundary';
 import { AuthLayout, RequireSession } from './features/auth/Gate';
 import { Declarations } from './features/auth/Declarations';
 import { Recovery } from './features/auth/Recovery';
@@ -21,7 +22,7 @@ import type { DestinationKey } from './contracts/gap-sc';
  */
 const deferred = (path: string, dest: DestinationKey): RouteObject => ({ path, element: <Deferred dest={dest} /> });
 
-export const routes: RouteObject[] = [
+const children: RouteObject[] = [
   { path: '/', element: <Navigate to="/sellers" replace /> },
   {
     element: <AuthLayout />,
@@ -59,6 +60,9 @@ export const routes: RouteObject[] = [
   },
   { path: '*', element: <NotFound /> },
 ];
+
+/** A route that throws while rendering lands on the same crash panel as the app boundary, never React Router's default screen. */
+export const routes: RouteObject[] = [{ errorElement: <CrashPanel />, children }];
 
 export function createRouter() {
   return createBrowserRouter(routes);

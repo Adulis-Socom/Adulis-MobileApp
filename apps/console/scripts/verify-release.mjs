@@ -19,6 +19,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MARKERS = {
   'module marker': 'ADULIS_FIXTURE_MODULE_MARKER_7f3a',
   'synthetic id': 'fx_seller_alem',
+  'synthetic market id': 'fx_market_ethiopia',
+  'synthetic account id': 'fx_acct_owner',
   'banner sentence': 'Demonstration data. Nothing here is real.',
   'refusal code': 'FIXTURE_BLOCKED',
   'demonstration code': '246810',
@@ -70,6 +72,10 @@ for (const needle of FORBIDDEN_IN_RELEASE) {
   if (release.toLowerCase().includes(needle.toLowerCase())) bad(`RN-6 release build contains "${needle}"`);
   else ok(`RN-6 release build has no "${needle}"`);
 }
+
+const anyFixtureId = /fx_(seller|acct|market|otp)_[a-z0-9]/.exec(release);
+if (anyFixtureId) bad(`RN-1 release build contains a fixture-style id (${anyFixtureId[0]})`);
+else ok('RN-1 release build has no fixture-style id of any kind');
 
 const index = readFileSync(path.join(root, 'dist-release-scan', 'index.html'), 'utf8');
 if (/<script(?![^>]*\ssrc=)[^>]*>/i.test(index)) bad('the release index.html contains an inline script (CSP is script-src self)');

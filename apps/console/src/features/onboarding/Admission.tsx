@@ -7,7 +7,7 @@ import { PageTitle } from '../../components/PageTitle';
 import { Problem } from '../../components/Problem';
 import { Skeleton } from '../../components/Skeleton';
 import { StatePanel } from '../../components/StatePanel';
-import { codeText, formatClock, t } from '../../i18n/t';
+import { codeText, formatClock, label, t } from '../../i18n/t';
 import { can, sellerPath } from '../../seller/access';
 import { useSeller } from '../../seller/context';
 import { runScoped } from '../../seller/scoped';
@@ -43,6 +43,14 @@ function StatusPanel({ e }: { e: Eligibility }) {
     return (
       <StatePanel kind="neutral" title={t('admission.pending_title')}>
         <p>{e.workflow_state === 'WAITING_FOR_PROVIDER' ? t('admission.pending_provider') : t('admission.pending_dm')}</p>
+      </StatePanel>
+    );
+  }
+  if (e.outcome !== 'NOT_SATISFIED') {
+    // An outcome this version does not know is shown as unknown, never as a refusal.
+    return (
+      <StatePanel kind="neutral" title={t('admission.pending_title')}>
+        <p>{t('reason.unknown', { code: String(e.outcome) })}</p>
       </StatePanel>
     );
   }
@@ -154,9 +162,9 @@ export function Admission() {
                   <ul className="plain-list">
                     {e.social_accounts.map((a) => (
                       <li key={`${a.platform}-${a.handle}`} className="row">
-                        <span>{t('admission.account_row', { platform: t(`platform.${a.platform}`), handle: a.handle })}</span>
+                        <span>{t('admission.account_row', { platform: label('platform', a.platform), handle: a.handle })}</span>
                         <Badge tone={a.control === 'VERIFIED' ? 'success' : a.control === 'PENDING' ? 'neutral' : 'warn'} icon={a.control === 'PENDING' ? 'clock' : undefined}>
-                          {t(`admission.control.${a.control}`)}
+                          {label('admission.control', a.control)}
                         </Badge>
                       </li>
                     ))}
@@ -201,7 +209,7 @@ export function Admission() {
                       <h3>{t('admission.challenge_title')}</h3>
                       <p>{t('admission.challenge_body', { sentTo: challenge.code_sent_to })}</p>
                       <p>
-                        <strong>{t('admission.official', { platform: t(`platform.${challenge.platform}`), handle: challenge.official_account_handle })}</strong>
+                        <strong>{t('admission.official', { platform: label('platform', challenge.platform), handle: challenge.official_account_handle })}</strong>
                       </p>
                       <p className="hint">{t('admission.challenge_expires', { time: formatClock(challenge.expires_at) })}</p>
                     </div>

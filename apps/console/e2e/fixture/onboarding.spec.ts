@@ -107,7 +107,7 @@ test.describe('SC-FE-02: becoming a Seller (ONB-01)', () => {
     await signedInChooser(page, PHONE.states);
     await page.getByRole('link', { name: SELLER.dawit.name }).click();
     await goInApp(page, `/s/${SELLER.dawit.id}/admission`);
-    await expect(page.getByRole('heading', { name: 'Admitted' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Admitted', exact: true })).toBeVisible();
     await goInApp(page, `/s/${SELLER.fana.id}/admission`);
     await expect(page.getByRole('heading', { name: 'Not admitted under the current policy' })).toBeVisible();
     await expect(page.getByText('The account does not yet show an established business presence.')).toBeVisible();
@@ -116,6 +116,8 @@ test.describe('SC-FE-02: becoming a Seller (ONB-01)', () => {
     await expect(page.getByRole('heading', { name: 'Waiting for review' }).first()).toBeVisible();
     await page.getByRole('button', { name: 'Check my status again' }).click();
     await expect(page.getByRole('heading', { name: 'Waiting for review' }).first()).toBeVisible();
+    // the button really asked the server: the heading alone was already on screen
+    await expect.poll(() => page.evaluate(() => window.__ADULIS_FIXTURE__?.callLog().filter((c) => c.op === 'seller.eligibility.recheck').length)).toBe(1);
   });
 
   test('a team member without the permission sees admission read-only', async ({ page }) => {

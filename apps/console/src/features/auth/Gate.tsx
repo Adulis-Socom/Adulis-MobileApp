@@ -16,6 +16,27 @@ function Unavailable() {
   );
 }
 
+function ContextError() {
+  const session = useSession();
+  return (
+    <PlainFrame>
+      <StatePanel
+        page
+        kind="danger"
+        alert
+        title={t('state.transport_error_title')}
+        actions={
+          <button type="button" className="btn btn-primary" onClick={() => void session.refresh()}>
+            {t('state.retry')}
+          </button>
+        }
+      >
+        <p>{t('state.transport_error_body')}</p>
+      </StatePanel>
+    </PlainFrame>
+  );
+}
+
 function Loading() {
   return (
     <PlainFrame>
@@ -84,6 +105,7 @@ function AuthGate() {
   const { state } = session;
   if (state.status === 'LOADING') return <Loading />;
   if (state.status === 'UNAVAILABLE') return <Unavailable />;
+  if (state.status === 'ERROR') return <ContextError />;
   if (state.status === 'READY') return <Navigate to={flow.returnTo ?? safeReturnPath((location.state as { from?: unknown } | null)?.from) ?? '/sellers'} replace />;
   return (
     <PlainFrame>

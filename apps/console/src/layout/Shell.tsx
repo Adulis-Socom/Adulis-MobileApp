@@ -5,7 +5,7 @@ import { Icon } from '../components/Icon';
 import { SellerBadges } from '../components/SellerBadges';
 import { StatePanel } from '../components/StatePanel';
 import { codeText, t } from '../i18n/t';
-import { navFor, sellerPath, type NavItem } from '../seller/access';
+import { can, navFor, sellerPath, type NavItem } from '../seller/access';
 import { useSeller } from '../seller/context';
 import { useSellerQuery } from '../seller/useSellerQuery';
 import { useSession } from '../session/SessionProvider';
@@ -56,7 +56,7 @@ function Bell({ sellerId }: { sellerId: string }) {
 }
 
 function TopBar() {
-  const { sellerId, membership } = useSeller();
+  const { sellerId, membership, access } = useSeller();
   const session = useSession();
   const [open, setOpen] = useState<'switch' | 'help' | 'account' | null>(null);
   const [signOutFailed, setSignOutFailed] = useState(false);
@@ -77,7 +77,7 @@ function TopBar() {
             <span className="icon-btn-label">{t('topbar.switch')}</span>
           </button>
         ) : null}
-        <Bell sellerId={sellerId} />
+        {can(access, 'notifications.view') ? <Bell sellerId={sellerId} /> : null}
         <button type="button" className="icon-btn" onClick={() => setOpen('help')}>
           <Icon name="help" />
           <span className="icon-btn-label">{t('topbar.help')}</span>

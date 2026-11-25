@@ -3,7 +3,7 @@ import { Icon } from '../../components/Icon';
 import { PageTitle } from '../../components/PageTitle';
 import { SellerBadges } from '../../components/SellerBadges';
 import { StatePanel } from '../../components/StatePanel';
-import { t } from '../../i18n/t';
+import { label, t } from '../../i18n/t';
 import { PlainFrame } from '../../layout/PlainFrame';
 import { sellerPath } from '../../seller/access';
 import { useSession } from '../../session/SessionProvider';
@@ -36,9 +36,9 @@ export function Chooser() {
                 <Link className="ledger-link" to={sellerPath(m.seller.id)}>
                   <span className="ledger-main">
                     <span className="ledger-title">{m.seller.display_name}</span>
-                    <span className="ledger-meta">{t(`seller.type.${m.seller.seller_type}`)}</span>
+                    <span className="ledger-meta">{label('seller.type', m.seller.seller_type)}</span>
                     <SellerBadges seller={m.seller} />
-                    <span className="ledger-meta">{t('sellers.roles', { roles: m.roles.map((r) => t(`role.${r}`)).join(', ') })}</span>
+                    <span className="ledger-meta">{t('sellers.roles', { roles: m.roles.map((r) => label('role', r)).join(', ') })}</span>
                   </span>
                   <Icon name="arrow" />
                 </Link>

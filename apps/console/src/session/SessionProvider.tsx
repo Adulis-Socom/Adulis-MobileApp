@@ -26,7 +26,7 @@ export interface SessionApi {
   readonly state: SessionState;
   readonly selected: Selected;
   /** Re-ask the server (after sign-in, after creating a Seller, or to retry). */
-  readonly refresh: () => Promise<void>;
+  readonly refresh: () => Promise<SessionState['status']>;
   /** Ends the session on the server; resolves false when the server could not be told (the person stays signed in). */
   readonly signOut: () => Promise<boolean>;
   /** A request found the session gone: drop everything that belonged to it. */
@@ -47,17 +47,17 @@ export function SessionProvider({ selected, children }: { selected: Selected; ch
   // resurrect the session it belonged to.
   const generation = useRef(0);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<SessionState['status']> => {
     const mine = ++generation.current;
     try {
       const context = await selected.transport.send('account.context.get', {});
       if (mine === generation.current) setState({ status: 'READY', context });
+      return 'READY';
     } catch (error) {
-      if (mine !== generation.current) return;
       const code = asTransportError(error).code;
-      if (code === 'AUTHENTICATION_REQUIRED') setState({ status: 'SIGNED_OUT', justSignedOut: false });
-      else if (code === 'UNAVAILABLE') setState({ status: 'UNAVAILABLE' });
-      else setState({ status: 'ERROR' });
+      const next: SessionState = code === 'AUTHENTICATION_REQUIRED' ? { status: 'SIGNED_OUT', justSignedOut: false } : code === 'UNAVAILABLE' ? { status: 'UNAVAILABLE' } : { status: 'ERROR' };
+      if (mine === generation.current) setState(next);
+      return next.status;
     }
   }, [selected.transport]);
 
@@ -68,9 +68,10 @@ export function SessionProvider({ selected, children }: { selected: Selected; ch
   const signOut = useCallback(async () => {
     try {
       await selected.transport.send('auth.session.end', {});
-    } catch {
-      // Not signed out as far as the server knows: say so rather than showing a signed-out screen over a live session.
-      return false;
+    } catch (error) {
+      // A session the server already ended IS signed out. Any other failure leaves the person signed in, and says so,
+      // rather than showing a signed-out screen over a live session.
+      if (asTransportError(error).code !== 'AUTHENTICATION_REQUIRED') return false;
     }
     generation.current += 1;
     setState({ status: 'SIGNED_OUT', justSignedOut: true });

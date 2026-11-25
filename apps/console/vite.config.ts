@@ -18,7 +18,8 @@ export default defineConfig(({ command, mode }) => {
     define: { __FIXTURES__: JSON.stringify(requested && allowed) },
     // Never the workspace root: the root carries NODE_ENV=development settings and would ship React's dev build.
     envDir: import.meta.dirname,
-    build: { sourcemap: false, target: 'es2023' },
+    // A fixture-control build lands in its own directory unless told otherwise: never in `dist`, which is the release output.
+    build: { sourcemap: false, target: 'es2023', ...(mode === 'fixture-control' ? { outDir: 'dist-fixture' } : {}) },
     test: { environment: 'node', include: ['src/**/*.test.ts'] },
   };
 });

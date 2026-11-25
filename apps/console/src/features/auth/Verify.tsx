@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import type { OtpStatus } from '../../contracts/gap-sc';
 import { ErrorSummary, Field, type FieldError } from '../../components/Form';
@@ -44,13 +44,20 @@ export function Verify() {
   );
   const challengeId = challenge?.challenge_id;
   const setChallenge = flow.setChallenge;
+  const currentId = useRef(challengeId);
+  currentId.current = challengeId;
 
   const refetch = useCallback(() => {
     if (!challengeId) return;
     transport
       .send('auth.otp.status', { challenge_id: challengeId })
-      .then(setStatus)
-      .catch((error: unknown) => setProblem(asTransportError(error)));
+      .then((next) => {
+        if (currentId.current === challengeId) setStatus(next);
+      })
+      .catch((error: unknown) => {
+        // A reply about a code that has since been replaced says nothing about the current one.
+        if (currentId.current === challengeId) setProblem(asTransportError(error));
+      });
   }, [transport, challengeId]);
   useDeadlineRefetch(status, refetch);
 
@@ -128,7 +135,7 @@ export function Verify() {
             />
           )}
         </Field>
-        {expired ? null : <p className="hint">{t('auth.verify.expires', { time: formatClock(status.expires_at) })}</p>}
+        {expired ? <p className="field-error" role="status">{t('error.otp.expired')}</p> : <p className="hint">{t('auth.verify.expires', { time: formatClock(status.expires_at) })}</p>}
         <Problem error={problem} />
         <div className="actions">
           <button type="submit" className="btn btn-highlight" aria-disabled={busy !== null}>

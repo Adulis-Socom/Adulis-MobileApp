@@ -28,7 +28,9 @@ test.describe('fixture boundary (development build only)', () => {
     await expect(strip).toBeVisible();
     await goInApp(page, `/s/${SELLER.alem.id}/products`);
     await expect(strip).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 300 });
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    expect(await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight), 'the page must be scrollable for this to prove anything').toBe(true);
     await expect(strip).toBeInViewport();
     await goInApp(page, '/nowhere');
     await expect(strip).toBeVisible();
@@ -39,9 +41,11 @@ test.describe('fixture boundary (development build only)', () => {
   test('the sticky bars sit below the indicator, never under it', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await atSellerHome(page, PHONE.owner, SELLER.alem.name);
+    await page.setViewportSize({ width: 1440, height: 400 });
+    await page.evaluate(() => window.scrollTo(0, 300));
     const strip = await page.getByRole('complementary', { name: 'Demonstration notice' }).boundingBox();
     const top = await page.getByRole('banner').boundingBox();
-    expect(strip && top && top.y >= strip.y + strip.height - 1).toBe(true);
+    expect(strip && top && top.y >= strip.y + strip.height - 1, 'the sticky top bar must sit below the strip even when scrolled').toBe(true);
   });
 
   test('the fixture handle is installed only here, and the live transport is not in play', async ({ page }) => {

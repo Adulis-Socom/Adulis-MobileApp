@@ -114,9 +114,11 @@ test.describe('SC-FE-02: authentication', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Sign in to your Seller Console' })).toBeVisible();
     await expect(page.getByText('You have signed out.')).toBeVisible();
     await page.goBack();
-    await page.goBack();
+    await expect(page).toHaveURL(/\/sign-in$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Sign in to your Seller Console' })).toBeVisible();
-    await expect(page.getByText(SELLER.alem.name)).toHaveCount(0);
+    // the demonstration-account helper names Alem in its labels, so look for Seller screens, not for the name
+    await expect(page.getByRole('link', { name: SELLER.alem.name })).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1, name: SELLER.alem.name })).toHaveCount(0);
   });
 
   test('a session the server ended shows the session-expired state and drops every Seller screen', async ({ page }) => {

@@ -32,5 +32,8 @@ export function problemText(error: TransportError): string {
       return t('error.refused');
     case 'INTERNAL':
       return t('error.request.internal');
+    default:
+      // A code a newer client/server pair adds: say something rather than render an empty alert.
+      return t('error.request.internal');
   }
 }

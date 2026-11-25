@@ -39,6 +39,7 @@ export function Declarations() {
     try {
       await session.selected.transport.send('auth.declarations.accept', { adult_declaration: adult, policy_accepted: policy, policy_version: version });
       await session.refresh();
+      setBusy(false);
     } catch (e) {
       const failure = asTransportError(e);
       if (failure.code === 'VALIDATION_FAILED') {

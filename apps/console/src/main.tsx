@@ -34,4 +34,8 @@ async function start() {
   );
 }
 
-void start();
+// A failed start (a missing root, a failed chunk) must not leave a blank page.
+start().catch(() => {
+  const root = document.getElementById('root');
+  if (root) root.textContent = t('error.request.internal');
+});

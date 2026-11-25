@@ -51,6 +51,9 @@ test.describe('SC-FE-03: the daily operating Home', () => {
       await atSellerHome(page, e.phone, SELLER.alem.name);
       for (const name of e.present) await expect(area(page, name).first()).toBeVisible();
       for (const name of e.absent) await expect(area(page, name)).toHaveCount(0);
+      // obligations are carried by Owner and Admin only
+      if (e.limited) await expect(page.getByRole('region', { name: 'Things to do' })).toContainText('Nothing is due.');
+      else await expect(page.getByRole('region', { name: 'Things to do' })).toContainText('Accept the updated Seller policy.');
       if (e.limited) await expect(page.getByText('You see the tools your role allows.')).toBeVisible();
       else await expect(page.getByText('You see the tools your role allows.')).toHaveCount(0);
     }
@@ -83,7 +86,8 @@ test.describe('SC-FE-03: the daily operating Home', () => {
     const items = page.getByRole('list', { name: 'Notifications' }).getByRole('listitem');
     await expect(items).toHaveCount(3);
     await expect(items.filter({ hasText: 'Unread' })).toHaveCount(2);
-    await expect(items.filter({ hasText: 'Read' })).not.toHaveCount(0);
+    await expect(items.locator('.badge', { hasText: /^Read$/ })).toHaveCount(1);
+    await expect(items.locator('.badge', { hasText: /^Unread$/ })).toHaveCount(2);
     await expect(page.getByRole('main').getByRole('button')).toHaveCount(0);
     const text = await page.getByRole('main').innerText();
     expect(text).not.toMatch(/order|payment|paid|delivery|refund|claim/i);
@@ -94,5 +98,7 @@ test.describe('SC-FE-03: the daily operating Home', () => {
     await page.evaluate((id) => window.__ADULIS_FIXTURE__?.revokeCapability(id, 'notifications.view'), SELLER.alem.id);
     await goInApp(page, `/s/${SELLER.alem.id}/notifications`);
     await expect(page.getByRole('heading', { level: 1, name: 'You do not have access to this' })).toBeVisible();
+    // the bell is the same capability: it is gone, not left pointing at a denied page
+    await expect(page.getByRole('banner').getByRole('link', { name: /Notifications/ })).toHaveCount(0);
   });
 });

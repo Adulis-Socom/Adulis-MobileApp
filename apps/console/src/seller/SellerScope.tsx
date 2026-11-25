@@ -64,7 +64,11 @@ function SellerScope({ sellerId }: { sellerId: string }) {
         if (!live) return;
         const e = asTransportError(error);
         if (e.code === 'AUTHENTICATION_REQUIRED') expire();
-        else setFailure(e);
+        else {
+          // Fail closed: if the account's access cannot be re-confirmed, the old grants are not served.
+          setAccess(null);
+          setFailure(e);
+        }
       });
     return () => {
       live = false;

@@ -13,6 +13,11 @@ export function codeText(prefix: string, code: string): string | null {
   return Object.hasOwn(en, key) ? en[key as MessageKey] : null;
 }
 
+/** A label for a server value (status, role, platform...): the catalogue entry, or the raw code when this version does not know it. */
+export function label(prefix: string, code: string): string {
+  return codeText(prefix, code) ?? code;
+}
+
 /** Whole-instant formatting. UTC instants from the API are shown in the Market's IANA timezone when it is known. */
 export function formatInstant(iso: string, timeZone?: string): string {
   const date = new Date(iso);

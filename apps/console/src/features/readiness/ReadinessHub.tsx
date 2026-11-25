@@ -3,7 +3,7 @@ import type { DestinationKey, ReadinessItem, SellerAccess } from '../../contract
 import { Badge, type Tone } from '../../components/Badge';
 import { Skeleton } from '../../components/Skeleton';
 import { StatePanel } from '../../components/StatePanel';
-import { codeText, t } from '../../i18n/t';
+import { codeText, label, t } from '../../i18n/t';
 import { destinationAccess, sellerPath } from '../../seller/access';
 import { useSeller } from '../../seller/context';
 import { useSellerQuery } from '../../seller/useSellerQuery';
@@ -48,7 +48,7 @@ function Row({ item, limeHere }: { item: ReadinessItem; limeHere: boolean }) {
       <div className="ledger-main">
         <span className="ledger-title">{title}</span>
         <Badge tone={STATUS_TONE[status]} icon={status === 'waiting' ? 'clock' : status === 'blocked' ? 'lock' : undefined}>
-          {t(`readiness.status.${status}`)}
+          {label('readiness.status', status)}
         </Badge>
         {status === 'waiting' && waiting ? <span className="ledger-meta">{waiting}</span> : null}
         {reasons.map((r) => (

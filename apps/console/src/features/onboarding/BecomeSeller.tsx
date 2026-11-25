@@ -22,6 +22,7 @@ export function BecomeSeller() {
   const session = useSession();
   const navigate = useNavigate();
   const { transport } = session.selected;
+  const expire = session.expire;
   const [market, setMarket] = useState<OnboardingMarket | null>(null);
   const [marketError, setMarketError] = useState<TransportError | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -33,7 +34,7 @@ export function BecomeSeller() {
   const [busy, setBusy] = useState(false);
   const [focusToken, setFocusToken] = useState(0);
   // Minted when the form MOUNTS, not on click: a key minted per tap is a new key per retry, which defeats it.
-  const keyRef = useRef(crypto.randomUUID());
+  const keyRef = useRef({ key: crypto.randomUUID(), body: '' });
 
   useEffect(() => {
     let live = true;
@@ -46,12 +47,15 @@ export function BecomeSeller() {
         }
       })
       .catch((error: unknown) => {
-        if (live) setMarketError(asTransportError(error));
+        if (!live) return;
+        const e = asTransportError(error);
+        if (e.code === 'AUTHENTICATION_REQUIRED') expire();
+        else setMarketError(e);
       });
     return () => {
       live = false;
     };
-  }, [transport, attempt]);
+  }, [transport, attempt, expire]);
 
   const summary: FieldError[] = [
     ...(errors.type ? [{ fieldId: 'seller-type', message: errors.type }] : []),
@@ -75,21 +79,27 @@ export function BecomeSeller() {
     }
     setBusy(true);
     try {
-      const created = await transport.send('seller.create', { market_id: market.market_id, seller_type: type, display_name: name.trim(), handle }, { idempotencyKey: keyRef.current });
+      const input = { market_id: market.market_id, seller_type: type, display_name: name.trim(), handle };
+      // One key per command: a retry of the SAME body keeps its key (the point of minting it on mount), an edited body is a
+      // different command and gets its own, so an edit after a lost response can never replay the old result.
+      const body = JSON.stringify(input);
+      if (keyRef.current.body !== '' && keyRef.current.body !== body) keyRef.current = { key: crypto.randomUUID(), body };
+      else keyRef.current.body = body;
+      const created = await transport.send('seller.create', input, { idempotencyKey: keyRef.current.key });
       await session.refresh();
       void navigate(sellerPath(created.id, 'admission'));
     } catch (error) {
       const e = asTransportError(error);
-      if (e.code === 'VALIDATION_FAILED') {
-        // The payload will change, so the next attempt is a different command and needs its own key.
-        keyRef.current = crypto.randomUUID();
-        setErrors({
-          type: undefined,
-          name: e.fields['display_name'] ? t('become.name.required') : undefined,
-          handle: e.fields['handle'] === 'HANDLE_TAKEN' ? t('become.handle.taken') : e.fields['handle'] ? t('become.handle.invalid') : undefined,
-        });
+      const mapped = {
+        type: undefined,
+        name: e.fields['display_name'] ? t('become.name.required') : undefined,
+        handle: e.fields['handle'] === 'HANDLE_TAKEN' ? t('become.handle.taken') : e.fields['handle'] ? t('become.handle.invalid') : undefined,
+      };
+      if (e.code === 'AUTHENTICATION_REQUIRED') expire();
+      else if (e.code === 'VALIDATION_FAILED' && (mapped.name || mapped.handle)) {
+        setErrors(mapped);
         setFocusToken((n) => n + 1);
-      } else setProblem(e);
+      } else setProblem(e); // includes a validation failure on a field this screen does not map: never a silent no-op
       setBusy(false);
     }
   }

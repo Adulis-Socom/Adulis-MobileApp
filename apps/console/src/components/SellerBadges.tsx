@@ -1,5 +1,5 @@
 import type { SellerSummary } from '../contracts/gap-sc';
-import { t } from '../i18n/t';
+import { label } from '../i18n/t';
 import { Badge, type Tone } from './Badge';
 
 const STATUS_TONE: Record<SellerSummary['status'], Tone> = { DRAFT: 'neutral', ACTIVE: 'success', SUSPENDED: 'warn' };
@@ -9,8 +9,8 @@ const PUBLICATION_TONE: Record<SellerSummary['publication'], Tone> = { NEVER_PUB
 export function SellerBadges({ seller }: { seller: SellerSummary }) {
   return (
     <span className="badges">
-      <Badge tone={STATUS_TONE[seller.status]}>{t(`seller.status.${seller.status}`)}</Badge>
-      {seller.status === 'DRAFT' ? null : <Badge tone={PUBLICATION_TONE[seller.publication]}>{t(`seller.publication.${seller.publication}`)}</Badge>}
+      <Badge tone={STATUS_TONE[seller.status]}>{label('seller.status', seller.status)}</Badge>
+      {seller.status === 'DRAFT' ? null : <Badge tone={PUBLICATION_TONE[seller.publication]}>{label('seller.publication', seller.publication)}</Badge>}
     </span>
   );
 }
