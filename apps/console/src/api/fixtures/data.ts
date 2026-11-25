@@ -22,7 +22,7 @@
  */
 export interface FixtureOrderRow {
   readonly id: string;
-  readonly state: 'CREATED';
+  readonly state: 'CREATED' | 'PAYMENT_SUBMITTED';
   readonly total: { readonly amount_minor: number; readonly currency: string };
   readonly expires_at: string | null;
   readonly ready_at: string | null;
@@ -53,10 +53,15 @@ export const FIXTURE_SELLERS: readonly FixtureSeller[] = [
 
 const IN_AN_HOUR = (): string => new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
-function order(id: string, lines: number, amountMinor: number): FixtureOrderRow {
+function order(
+  id: string,
+  lines: number,
+  amountMinor: number,
+  state: FixtureOrderRow['state'] = 'CREATED',
+): FixtureOrderRow {
   return {
     id,
-    state: 'CREATED',
+    state,
     total: { amount_minor: amountMinor, currency: 'ETB' },
     expires_at: IN_AN_HOUR(),
     ready_at: null,
@@ -69,7 +74,97 @@ function order(id: string, lines: number, amountMinor: number): FixtureOrderRow 
 
 /** Disjoint by construction, so a cross-Seller leak is visible by id. */
 export function fixtureOrders(sellerId: string): readonly FixtureOrderRow[] | null {
-  if (sellerId === 'fx_seller_a') return [order('fx_order_a1', 1, 12000), order('fx_order_a2', 2, 34000)];
+  if (sellerId === 'fx_seller_a') return [
+      order('fx_order_a1', 1, 12000),
+      order('fx_order_a2', 2, 34000),
+      // Legacy payment state, drawn on purpose: the Console must show no payment action for it.
+      order('fx_order_a3', 1, 56000, 'PAYMENT_SUBMITTED'),
+    ];
   if (sellerId === 'fx_seller_b') return [order('fx_order_b1', 3, 56000)];
   return null;
+}
+
+/**
+ * Order detail (SC-SAFE-01). `fx_order_a3` carries an OPEN payment submission and the full set of
+ * handoff permission codes on purpose: the containment tests assert the Console still offers no
+ * payment decision, evidence, reissue, Mark Ready, courier assignment, custody transfer or QR.
+ */
+export function fixtureOrderDetail(sellerId: string, orderId: string): Record<string, unknown> | null {
+  const row = fixtureOrders(sellerId)?.find((o) => o.id === orderId);
+  if (!row) return null;
+  const submitted = row.state === 'PAYMENT_SUBMITTED';
+  const later = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  return {
+    ...row,
+    lines: [
+      {
+        id: `${row.id}_l1`,
+        variant_id: 'fx_variant_1',
+        quantity: 1,
+        state: 'ACTIVE',
+        unit_price_minor: row.total.amount_minor,
+        unit_price_currency: row.total.currency,
+        variant_key: 'default',
+        product_name: 'Fixture product',
+      },
+    ],
+    payment_submissions: submitted
+      ? [{ id: 'fx_sub_1', submitted_at: row.created_at, state: 'SUBMITTED', decided_at: null, rejection_reason: null, sla_deadline: later }]
+      : [],
+    history: [{ from_state: 'CREATED', to_state: row.state, reason: null, occurred_at: row.created_at }],
+    allowed_actions: [
+      'seller.order_ready:update',
+      'seller.handoff:read',
+      'seller.handoff:custody_transfer',
+      'seller.couriers:manage',
+    ],
+  };
+}
+
+/** Readiness (SC-SAFE-01): the server still lists payout details; the Console must not ask for them. */
+export const FIXTURE_READINESS = {
+  items: [
+    { code: 'STORE_PROFILE', kind: 'READINESS_ITEM', satisfied: true },
+    { code: 'PAYOUT_DETAILS', kind: 'READINESS_ITEM', satisfied: false, resolving_action: { kind: 'ADD_PAYOUT_DETAILS' } },
+    { code: 'AT_LEAST_ONE_PRODUCT', kind: 'READINESS_ITEM', satisfied: false, resolving_action: { kind: 'ADD_A_PRODUCT' } },
+  ],
+} as const;
+
+/** Obligations of deferred workflows (SC-SAFE-01): the Console must not show them. */
+export function fixtureObligations(): Record<string, unknown> {
+  const deadline = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+  return {
+    data: [
+      { kind: 'PAYMENT_AWAITING_CONFIRMATION', object_kind: 'ORDER', object_id: 'fx_order_a3', deadline, consequence_key: 'obligation.fixture.consequence' },
+      { kind: 'CLAIM_AWAITING_SELLER', object_kind: 'CLAIM', object_id: 'fx_claim_1', deadline, consequence_key: 'obligation.fixture.consequence' },
+    ],
+  };
+}
+
+/** Subscription (SC-SAFE-01): an ACTIVE plan and a stale OPEN purchase intent the Console must not draw. */
+export function fixtureSubscription(): Record<string, unknown> {
+  const later = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  return {
+    subscription: {
+      state: 'ACTIVE',
+      tier: 'ASSISTED',
+      term: 'MONTHLY',
+      trial_ends_at: null,
+      current_period_start: '2026-11-01T00:00:00.000Z',
+      current_period_end: later,
+      locked_rate_minor: null,
+      locked_rate_currency: null,
+    },
+    intent: {
+      intent_id: 'fx_intent_1',
+      collection_record_id: 'fx_collection_1',
+      tier: 'VERIFIED_PRO',
+      term: 'MONTHLY',
+      amount_minor: 99900,
+      currency: 'ETB',
+      expires_at: later,
+      reference: 'FX-REFERENCE-123',
+      marked_transferred_at: null,
+    },
+  };
 }
