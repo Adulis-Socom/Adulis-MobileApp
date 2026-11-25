@@ -18,7 +18,7 @@ Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` fr
 
 ## Current MVP constraints — 24 November 2026
 
-Payment authority undecided (D24-01–03); no PSP, Seller confirmation, real paid Orders, refunds, settlement, credentials or surcharge. Checkout A is real Seller-scoped Cart/review only; C is isolated internal simulation. Subscription and payout scope remains open after Batch 01; do not add or activate financial behavior by inference. Preserve existing data, permissions, encryption and audit until authorized quarantine.
+Payment authority undecided (D24-01–03); no PSP, Seller confirmation, real paid Orders, refunds, settlement, credentials or surcharge. Checkout A is real Seller-scoped Cart/review only; C is isolated internal simulation. Subscription Option B (B02-D01): no purchase, manual transfer billing, payment instructions, purchase intent, transfer confirmation or paid upgrade; keep status and entitlement resolution. Payout Option A (B02-D02): deferred entirely, no bank-detail collection, edit or disclosure path, never a readiness requirement; keep existing data and controls. Add no financial behavior by inference. Preserve existing data, permissions, encryption and audit until authorized quarantine.
 
 ## Governing sources (legacy executable references unless noted)
 - `ADU-00_One_Page_Business_Model_v9_1.md` — no custody/payment-verification doctrine.
