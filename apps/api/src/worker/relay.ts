@@ -141,7 +141,9 @@ export class OutboxRelay {
       } catch (err) {
         allQueued = false;
         this.log.warn({ consumer: consumer.name, eventType: event.eventType, ...errorFields(err, true) }, 'enqueue failed; event stays durable for retry');
-        await this.sys((tx) => tx.update(eventDelivery).set({ lastErrorCode: 'ENQUEUE_FAILED', updatedAt: sql`now()` }).where(pk));
+        await this.sys((tx) =>
+          tx.update(eventDelivery).set({ lastErrorCode: 'ENQUEUE_FAILED', updatedAt: sql`now()` }).where(and(pk, inArray(eventDelivery.state, ['PENDING', 'ENQUEUE_UNKNOWN']))),
+        );
         continue;
       }
       // Accepted by BullMQ. Only advance from ENQUEUE_UNKNOWN: the consumer may already have written SUCCEEDED.

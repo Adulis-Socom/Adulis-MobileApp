@@ -148,7 +148,7 @@ export class OutboxReconciler {
         tx
           .update(eventDelivery)
           .set({ lastErrorCode: 'ENQUEUE_FAILED', reconcileAttempts: sql`greatest(${eventDelivery.reconcileAttempts} - 1, 0)`, updatedAt: sql`now()` })
-          .where(pk(d)),
+          .where(and(pk(d), inArray(eventDelivery.state, [...UNFINISHED_STATES]))),
       );
       return 'QUEUE_UNAVAILABLE';
     }

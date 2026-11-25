@@ -142,23 +142,30 @@ export class EventConsumerRunner {
    */
   async recordFinalFailure(job: JobLike): Promise<void> {
     const parsed = jobEnvelopeSchema.safeParse(job.data);
-    let target: VerifiedDelivery | null = null;
+    let target: VerifiedDelivery | 'processed' | null = null;
     try {
       if (parsed.success && job.id !== undefined) target = await this.verifyByJobId(job.id, parsed.data);
     } catch (err) {
       this.log.error({ jobId: job.id, ...errorFields(err, true) }, 'failed job could not be verified; quarantined');
     }
+    // The effect committed with its marker (a job that stalled after success): a dead letter would contradict it.
+    if (target === 'processed') return;
     const label = parsed.success ? this.registry.consumer(parsed.data.job_type)?.name : undefined;
     await this.deadLetter(job, target, new ConsumerError('TRANSIENT', 'failed-outside-processor'), 'keep', label);
   }
 
-  private async verifyByJobId(jobId: string, env: JobEnvelope): Promise<VerifiedDelivery | null> {
+  private async verifyByJobId(jobId: string, env: JobEnvelope): Promise<VerifiedDelivery | 'processed' | null> {
     return withRequestContext(this.db, SYSTEM_CONTEXT, async (tx) => {
       const [delivery] = await tx.select().from(eventDelivery).where(eq(eventDelivery.jobId, jobId));
       const consumer = delivery ? this.registry.consumer(delivery.consumer) : undefined;
       if (!delivery || !consumer || consumer.name !== env.job_type || consumer.jobVersion !== env.job_version || env.source_event_id !== delivery.eventId) return null;
       const [event] = await tx.select().from(eventOutbox).where(eq(eventOutbox.eventId, delivery.eventId));
       if (!event || deliveryMismatch(env, jobId, event, delivery, consumer) !== null) return null;
+      const marked = await tx
+        .select({ eventId: processedEvent.eventId })
+        .from(processedEvent)
+        .where(and(eq(processedEvent.consumer, consumer.name), eq(processedEvent.eventId, delivery.eventId)));
+      if (marked.length > 0) return 'processed';
       return { jobId: delivery.jobId, eventId: delivery.eventId, consumer: consumer.name };
     });
   }

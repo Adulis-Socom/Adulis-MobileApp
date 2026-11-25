@@ -258,6 +258,17 @@ describe('transactional outbox, relay and idempotent consumers (ARC-BE-04)', () 
     expect(await deadLetters(`source_event_id = '${id}' and failure_class = 'PERMANENT_VALIDATION'`)).toBe(1);
   });
 
+  it('the failed-job fallback writes no dead letter for a job whose effect already committed', async () => {
+    const id = await append(15);
+    await relay().runOnce();
+    const r = runner();
+    const job = await jobFor(id);
+    expect(await r.process(job)).toBe('SUCCEEDED');
+    await r.recordFinalFailure(job); // e.g. the job stalled after its transaction committed
+    expect(await deadLetters(`logical_job_id = '${jid(id)}'`)).toBe(0);
+    expect(await delivery(id)).toMatchObject({ state: 'SUCCEEDED' });
+  });
+
   it('the consumer transaction carries the SYSTEM context', async () => {
     let seen: string | undefined;
     const probe: ConsumerDefinition = {
