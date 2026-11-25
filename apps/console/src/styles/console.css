@@ -27,6 +27,8 @@ body {
   font-size: var(--adu-font-size-base);
   line-height: var(--adu-line-height-base);
   caret-color: var(--adu-color-primary);
+  /* An unbreakable run (a timezone name, a handle, a long Amharic word) wraps instead of pushing the page sideways. */
+  overflow-wrap: anywhere;
 }
 
 ::selection {
@@ -258,7 +260,9 @@ code {
 
 .topbar-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--adu-space-xs);
 }
 
@@ -399,7 +403,8 @@ code {
   }
 
   .shell {
-    grid-template-columns: 15rem minmax(0, 1fr);
+    /* 15rem, but never more than a third of the window: at doubled text size 15rem would take half of it */
+    grid-template-columns: minmax(0, min(15rem, 32vw)) minmax(0, 1fr);
     grid-template-rows: auto 1fr;
     grid-template-areas:
       'side top'
