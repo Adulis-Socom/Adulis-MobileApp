@@ -2,6 +2,7 @@ import helmet from '@fastify/helmet';
 import { Inject, Module, type DynamicModule, type OnApplicationShutdown, type Type } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { LogController } from 'fastify';
 import type { Pool } from 'pg';
 import type { Logger } from 'pino';
 import type { ApiEnv } from './config/env';
@@ -69,7 +70,7 @@ export async function createApp(deps: AppDeps): Promise<NestFastifyApplication> 
 
   const adapter = new FastifyAdapter({
     loggerInstance: deps.logger,
-    logController: { disableRequestLogging: true }, // Fastify would log raw URLs with query strings (OBS-01 S11)
+    logController: new LogController({ disableRequestLogging: true }), // Fastify would log raw URLs with query strings (OBS-01 S11)
     genReqId: makeGenReqId(deps.env.TRUST_GATEWAY_REQUEST_ID),
     requestIdHeader: false,
     bodyLimit: BODY_LIMIT_BYTES,
