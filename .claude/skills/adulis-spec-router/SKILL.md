@@ -19,7 +19,7 @@ Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` fr
 
 ## Current MVP constraints — 24 November 2026
 
-Nov24 decisions control design, not execution authorization. Payment OPEN_DECISION; Checkout A+C and Stories decided. K-3/K-8 target stacks decided, migration separately gated. Resolve exact amended domain design before legacy contract. Old gap registers are historical evidence, not overrides. CTO palette supersedes earlier baseline for design direction. Missing source or approval blocks affected work only.
+Nov24 decisions control design, not execution authorization. Payment OPEN_DECISION; Checkout A+C and Stories decided. K-3/K-8 target stacks decided, migration separately gated. Resolve exact amended domain design before legacy contract. Old gap registers are historical evidence, not overrides. CTO palette supersedes earlier baseline for design direction and the prototype terracotta theme is superseded (B02-D03). Subscription Option B and Payout Option A are decided (B02-D01/D02): do not route them as OPEN_DECISION. The K-1 provider/backend-verified payment ruling is superseded by D24-01 and is not an approved direction. Missing source or approval blocks affected work only.
 
 ## Governing sources (legacy executable references unless noted)
 
@@ -49,7 +49,7 @@ Repository specifications (position 5: what is built and gate-checked):
 6. Return exactly one status per decision: `CLEAR`, `CLEAR_WITH_CONSTRAINTS`, `SPEC_VERSION_GAP`, `SPEC_CONFLICT`, `OPEN_DECISION`, `OUT_OF_SCOPE`, or `MISSING_SOURCE`.
 7. Implement CLEAR or CLEAR_WITH_CONSTRAINTS only within named work-order limits; block affected parts for other statuses.
 8. A disagreement already recorded in `docs/mobile/WO-001C-CONTRACT-GAPS.json` takes its register status, mapped as follows:
-   - a founder-ruled `LEGACY_SPEC_DRIFT` (K-1, K-2), `CONTRACT_DRIFT`, `MISSING_SCHEMA` or `MISSING_ENDPOINT` -> `SPEC_VERSION_GAP`: the ruling exists, and the executable contract has not been reissued;
+   - a founder-ruled `LEGACY_SPEC_DRIFT` (K-2; the K-1 payment ruling is superseded by D24-01, so payment items stay `OPEN_DECISION`), `CONTRACT_DRIFT`, `MISSING_SCHEMA` or `MISSING_ENDPOINT` -> `SPEC_VERSION_GAP`: the ruling exists, and the executable contract has not been reissued;
    - `FOUNDER_DECISION_REQUIRED` or `OPEN_DESIGN_DECISION` -> `OPEN_DECISION` unless later explicit decisions resolve them; apply the current decision and execution gate.
    - `ALIGNED` -> `CLEAR`;
    - `PARTIALLY_ALIGNED` -> `CLEAR_WITH_CONSTRAINTS` for the aligned part only.

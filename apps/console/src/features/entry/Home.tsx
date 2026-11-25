@@ -73,7 +73,6 @@ const ACTION_ROUTE: Readonly<Record<string, string>> = {
   COMPLETE_IDENTITY_VERIFICATION: 'eligibility',
   PROVIDE_COMPANY_DETAILS: 'profile',
   COMPLETE_STORE_PROFILE: 'profile',
-  ADD_PAYOUT_DETAILS: 'payouts',
   ADD_FULFILMENT_METHOD: 'fulfilment',
   ADD_A_PRODUCT: 'products',
 };
@@ -95,10 +94,18 @@ interface Obligation {
  * like an unrouted readiness action.
  */
 const OBLIGATION_ROUTE: Readonly<Record<string, (id: string) => string>> = {
-  PAYMENT_AWAITING_CONFIRMATION: (id) => `orders/${id}`,
-  ORDER_NOT_READY: (id) => `orders/${id}`,
-  CLAIM_AWAITING_SELLER: (id) => `claims/${id}`,
 };
+
+/**
+ * Obligations of a deferred workflow (D24-01 payment, B02-D02 payout): the Seller can no longer
+ * act on them here, so showing a deadline with a consequence would invite a miss that nothing in
+ * this console can prevent. They are not shown; the server still returns them (a backend gap).
+ */
+const DEFERRED_OBLIGATION: ReadonlySet<string> = new Set([
+  'PAYMENT_AWAITING_CONFIRMATION',
+  'ORDER_NOT_READY',
+  'CLAIM_AWAITING_SELLER',
+]);
 
 export function Home() {
   const { sellerId } = useParams<{ sellerId: string }>();
@@ -137,7 +144,7 @@ export function Home() {
     if (!sellerId) return;
     try {
       const r = await api<{ data: Obligation[] }>('/seller/obligations', { sellerId });
-      setObligations(r.data);
+      setObligations(r.data.filter((o) => !DEFERRED_OBLIGATION.has(o.kind)));
       setObligationsFailed(false);
     } catch {
       // Failure is not emptiness: the region says it could not load and the
@@ -266,6 +273,10 @@ export function Home() {
 }
 
 function ResolvingLink({ kind }: { kind: string }) {
+  // B02-D02: Payout is deferred entirely and is never a thing the Seller is asked to do here.
+  if (kind === 'ADD_PAYOUT_DETAILS') {
+    return <span className="readiness-action deferred" data-deferred="payout">{en['console.deferred.payout']}</span>;
+  }
   const route = ACTION_ROUTE[kind];
   // An action the server names and this build has no route for is SHOWN and
   // not linked, with its own code visible. Rendering nothing would hide a

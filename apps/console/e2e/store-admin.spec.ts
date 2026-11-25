@@ -30,15 +30,20 @@ test.describe('More menu and shell navigation', () => {
     for (const heading of ['Insights', 'Store', 'Settings', 'Billing']) {
       await expect(page.locator('.more-menu').getByRole('heading', { name: heading })).toBeVisible();
     }
-    // ALL fourteen entries, not a sample -- a typo in any one dead-ends a
+    // ALL thirteen entries, not a sample -- a typo in any one dead-ends a
     // seller (the pass's vacuity note on this test).
     for (const entry of [
       'Analytics', 'Trust and level', 'Reviews',
       'Profile', 'Fulfilment', 'Availability', 'Identity', 'Couriers',
       'Sessions and devices', 'Notifications', 'Team', 'Closing',
-      'Subscription', 'Payout',
+      'Subscription',
     ]) {
       await expect(page.locator('.more-menu').getByRole('link', { name: entry, exact: true })).toBeVisible();
+    }
+    // B02-D02 / D24-01: Payout and Claims are deferred, so they are not offered (and SC-24 is covered
+    // by the negative tests below, not by the old five-facts screen).
+    for (const gone of ['Payout', 'Claims']) {
+      await expect(page.locator('.more-menu').getByRole('link', { name: gone })).toHaveCount(0);
     }
     await page.locator('.more-menu').getByRole('link', { name: 'Fulfilment' }).click();
     await expect(page).toHaveURL(new RegExp(`${SEEDED.sellerId}/fulfilment$`));
@@ -270,165 +275,30 @@ test.describe('SC-23 Couriers -- invite and revoke, for real', () => {
   });
 });
 
-test.describe('SC-24 Payout -- R21, the five facts, and the step-up pipeline', () => {
-  test('cancel is ABSENT with no pending change, and the five facts render', async ({ page }) => {
-    await page.goto(`${base}/payouts`);
-    await expect(page.locator('[data-screen="SC-24"]')).toBeVisible();
-
-    for (const fact of [
-      'The new account takes effect in 24 hours, not now.',
-      'The current details stay in force until then.',
-      'Everyone with admin access is notified and that cannot be switched off.',
-      'Orders already placed are unaffected.',
-      'You can cancel any time before the new details activate.',
-    ]) {
-      await expect(page.getByText(fact)).toBeVisible();
-    }
-
-    // R21's absence half, against the REAL server (the seed has no pending
-    // row): the control does not exist -- not disabled, ABSENT.
-    await expect(page.getByRole('button', { name: /Cancel pending change/ })).toHaveCount(0);
-  });
-
-  test('a seller with no payout details meets NO lock, from the real GET (T18 Phase 4)', async ({
+/*
+ * SC-24 Payout -- SUPERSEDED by B02-D02 (Payout Option A, 25 November 2026). The four tests that stood
+ * here drove the bank-detail screen: the R21 five facts, the cancel control's absence and presence,
+ * the "no payout details means no lock" read, and the new-device lock wording. The screen is removed
+ * from the MVP console and no code calls the payout endpoints, so those positive expectations are
+ * replaced by this negative one rather than deleted; the originals are in git history. The backend
+ * controls they exercised still exist and are NOT touched by the frontend work order.
+ */
+test.describe('SC-24 Payout -- deferred entirely (B02-D02) @safety', () => {
+  test('the old URL meets an honest deferred state, with no bank-detail field and no payout call', async ({
     page,
   }) => {
-    /*
-     * THIS TEST USED TO ASSERT THE OPPOSITE, and the change is the point of
-     * T18 Phase 4. The harness device signed in minutes ago, so the 24h
-     * new-device window is open -- but the seeded seller has NO ACTIVE payout
-     * row, so there is no destination to redirect and the lock has no subject.
-     * 0047 stopped it firing; this asserts the seller is no longer held.
-     *
-     * The history is worth keeping. T15 P4 made the lock render PROACTIVELY
-     * from the GET instead of being discovered on a doomed POST's 409 (D-224).
-     * T17 then reworded it, because telling a brand-new seller "a sign-in from
-     * a device we have not seen ... if that was not you" reports a security
-     * event that did not happen. T18 removed the state instead of wording it
-     * better, which is why that string is gone rather than improved.
-     *
-     * The proactive panel and the write path read the SAME row by the SAME
-     * predicate (0047 and payoutLockState's `act` CTE). A panel that disagrees
-     * with the write path is worse than no panel, so this asserts the panel's
-     * silence and c4-financial asserts the write path's 201 on the same state.
-     */
-    await page.goto(`${base}/payouts`);
-    await expect(page.locator('[data-screen="SC-24"]')).toBeVisible();
-
-    // No lock panel at all -- not a disabled one, not an empty one.
-    await expect(page.locator('[data-payout-lock]')).toHaveCount(0);
-    await expect(page.getByText(/Locked until/)).toHaveCount(0);
-    await expect(page.getByText(/device we have not seen/)).toHaveCount(0);
-
-    // R20's disabled-not-hidden rule still governs the CHANGE case; here there
-    // is nothing to explain, so the control is simply available.
-    await expect(page.locator('[data-action="change-payout"]')).toBeEnabled();
-
-    // The five facts stay where they are -- before the control, never behind a
-    // disclosure. Removing a lock must not remove the standing explanation.
-    await expect(page.locator('.payout-facts')).toBeVisible();
-  });
-
-  test('the new-device lock keeps its security wording for an actual CHANGE (planted)', async ({
-    page,
-    context,
-  }) => {
-    /*
-     * The other half of T17's first-set split, and the half that matters for
-     * safety: a seller who HAS payout details and meets a new-device lock is
-     * exactly the person the original sentence was written for -- someone whose
-     * account may be being taken over. That warning must survive.
-     *
-     * Planted because the real harness cannot hold active details under this
-     * lock (the real-GET test above is the locked, detail-less case).
-     */
-    await context.route('**/v1/seller/payout', async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback();
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        json: {
-          active: {
-            id: '33333333-3333-4333-8333-333333333333',
-            bank_code: 'CBE',
-            account_last4: '4821',
-            state: 'ACTIVE',
-            requested_at: '2026-08-01T10:00:00Z',
-            activates_at: null,
-            activated_at: '2026-08-02T10:00:00Z',
-          },
-          pending: null,
-          payout_locked_until: '2026-09-04T10:00:00Z',
-          reason: 'NEW_DEVICE',
-          // The grant is PRESENT -- R20 is about a control that is rendered and
-          // unavailable, not one that is absent. With an empty allowed_actions
-          // the button is not drawn at all (D-155 gates rendering on the grant),
-          // and "disabled" could not be asserted because there is nothing to
-          // disable. The state forbids the action; the grant does not.
-          allowed_actions: ['seller.payout:update'],
-        },
-      });
+    const payoutCalls: string[] = [];
+    page.on('request', (r) => {
+      const u = new URL(r.url());
+      if (u.pathname.startsWith('/v1/') && /payout/i.test(u.pathname)) payoutCalls.push(`${r.method()} ${u.pathname}`);
     });
     await page.goto(`${base}/payouts`);
-    const lock = page.locator('[data-payout-lock]');
-    await expect(lock).toHaveAttribute('data-payout-lock', 'NEW_DEVICE');
-    // The warning stands, verbatim, for the person it was written for.
-    await expect(lock.getByText(/device we have not seen/)).toBeVisible();
-    await expect(lock.getByText(/If that was not you/)).toBeVisible();
-    // R20: PRESENT and DISABLED -- not hidden, and not armed to waste a real
-    // step-up code on a refusal the panel has already explained. T18 Phase 4
-    // moved this assertion here from the real-GET test, because that test now
-    // proves the opposite case (no lock at all); without the move, R20's
-    // disabled rule would have lost its only assertion in the suite.
-    await expect(page.locator('[data-action="change-payout"]')).toBeDisabled();
-  });
-
-  test('R21 presence half (planted): a pending row summons the cancel control', async ({ page, context }) => {
-    // The real server cannot hold a pending row in this harness (the lock
-    // above), so the GET is planted -- the client obligation under test is
-    // R21's rendering, and only the client renders.
-    await context.route('**/v1/seller/payout', async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback();
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        json: {
-          active: {
-            id: '11111111-1111-4111-8111-111111111111',
-            bank_code: 'CBE',
-            account_last4: '4821',
-            state: 'ACTIVE',
-            requested_at: '2026-08-01T10:00:00Z',
-            activates_at: null,
-            activated_at: '2026-08-02T10:00:00Z',
-          },
-          pending: {
-            id: '22222222-2222-4222-8222-222222222222',
-            bank_code: 'AWASH',
-            account_last4: '9034',
-            state: 'PENDING',
-            requested_at: '2026-08-30T10:00:00Z',
-            activates_at: '2026-08-31T10:00:00Z',
-            activated_at: null,
-          },
-          // A plant derives from the server (D-227): the read carries
-          // allowed_actions (D-155) and, since T15 Phase 4, the lock state.
-          // This plant is the UNLOCKED shape, so the change control is live.
-          payout_locked_until: null,
-          reason: null,
-          allowed_actions: ['seller.payout:update'],
-        },
-      });
-    });
-    await page.goto(`${base}/payouts`);
-    await expect(page.getByRole('heading', { name: 'Pending change' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Cancel pending change/ })).toBeVisible();
-    // The two decisions are PEERS: both render, neither is buried -- and with
-    // no lock in the plant, the change control is ENABLED (the disabled state
-    // belongs to the lock, which the real-GET test above proves).
-    const change = page.getByRole('button', { name: /Change payout account/ });
-    await expect(change).toBeVisible();
-    await expect(change).toBeEnabled();
+    const screen = page.locator('[data-deferred-screen="payout"]');
+    await expect(screen).toBeVisible();
+    await expect(screen).toContainText('Payouts are not part of this release');
+    expect(await screen.locator('input, textarea, select, form').count()).toBe(0);
+    await expect(page.locator('[data-screen="SC-24"]')).toHaveCount(0);
+    expect(payoutCalls, payoutCalls.join(' | ')).toEqual([]);
   });
 });
 
@@ -493,7 +363,7 @@ test.describe('SC-26 Subscription -- honest about having none', () => {
     await expect(table.locator('tr', { hasText: 'Business' }).getByText('Included, with roles')).toBeVisible();
   });
 
-  test('an open intent renders ITS REFERENCE from the GET (planted; A7, T15 Phase 4)', async ({
+  test('a stale open intent from the server is NOT drawn: no reference, no instructions, no transfer (B02-D01, planted)', async ({
     page,
     context,
   }) => {
@@ -534,12 +404,18 @@ test.describe('SC-26 Subscription -- honest about having none', () => {
         },
       });
     });
+    const writes: string[] = [];
+    page.on('request', (r) => {
+      const u = new URL(r.url());
+      if (u.pathname.startsWith('/v1/billing') && r.method() !== 'GET') writes.push(`${r.method()} ${u.pathname}`);
+    });
     await page.goto(`${base}/subscription`);
-    // The seller who closed the tab reads back what to write on the transfer.
-    await expect(page.locator('[data-reference="ADU-SUB-AB12CD34"]')).toBeVisible();
-    await expect(page.getByText('Write ADU-SUB-AB12CD34 on the bank transfer.')).toBeVisible();
-    // And the owed sentence is gone.
-    await expect(page.getByText(/cannot be shown again yet/)).toHaveCount(0);
+    await expect(page.locator('.purchase [data-deferred="purchase"]')).toBeVisible();
+    // The seller must not read back a transfer reference, an amount to pay, or be offered a transfer.
+    await expect(page.locator('[data-reference]')).toHaveCount(0);
+    await expect(page.getByText(/ADU-SUB-AB12CD34|bank transfer/)).toHaveCount(0);
+    expect(await page.locator('.subscription select, .subscription button').count()).toBe(0);
+    expect(writes, writes.join(' | ')).toEqual([]);
   });
 });
 

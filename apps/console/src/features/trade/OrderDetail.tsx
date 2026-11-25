@@ -57,17 +57,9 @@ import { formatMinor, fillTemplate, timeFormatter } from '../../lib/intl';
 import { useMarketContext } from '../../lib/market';
 import { Deadline, clockFor } from '../../lib/clock';
 import { mintKey } from '../../lib/idempotency';
-import { useStepUp } from '../../auth/useStepUp';
 import { StateBadge, ORDER_STATE_LABEL } from './StateBadge';
-import { PaymentDecisions } from './PaymentDecisions';
-import { PaymentEvidence } from './PaymentEvidence';
-import { HandoffQr } from './HandoffQr';
-import {
-  isTerminal,
-  openSubmission,
-  type OrderDetail as Detail,
-  type SellerCourierRow,
-} from './types';
+import { DeferredNote } from '../../components/Deferred';
+import { isTerminal, type OrderDetail as Detail } from './types';
 
 /** core.reservation_state -> what a seller reads. Unknown values render as code. */
 const LINE_STATE_LABEL: Readonly<Record<string, string>> = {
@@ -85,30 +77,7 @@ export function OrderDetail() {
   const [screen, setScreen] = useState<UiState>('LOADING');
   const [order, setOrder] = useState<Detail | null>(null);
   const [problem, setProblem] = useState<ApiError | null>(null);
-  const [modal, setModal] = useState<'evidence' | 'qr' | null>(null);
-  const [readyKey] = useState(mintKey);
   const [actionProblem, setActionProblem] = useState<ApiError | null>(null);
-  const [reissueKey] = useState(mintKey);
-  // D-224.4/D-157: the courier assignment control is live now. Load the
-  // seller's couriers; only CLAIMED rows carry an account_id the assignment
-  // and custody endpoints can take, and pending invites render disabled with
-  // their real status (not a faked selectable row).
-  const [couriers, setCouriers] = useState<readonly SellerCourierRow[]>([]);
-  const [chosenCourier, setChosenCourier] = useState('');
-  const [assignKey] = useState(mintKey);
-  const [custodyKey] = useState(mintKey);
-  const stepUp = useStepUp();
-
-  const loadCouriers = useCallback(async () => {
-    if (!sellerId) return;
-    try {
-      const r = await api<{ data: SellerCourierRow[] }>(`/seller/couriers`, { sellerId });
-      setCouriers(r.data);
-    } catch {
-      setCouriers([]);
-    }
-  }, [sellerId]);
-
   const load = useCallback(async () => {
     if (!sellerId || !orderId) return;
     setScreen((s) => (s === 'READY' ? 'STALE' : 'LOADING'));
@@ -133,16 +102,8 @@ export function OrderDetail() {
   useEffect(() => {
     void load();
   }, [load]);
-  useEffect(() => {
-    void loadCouriers();
-  }, [loadCouriers]);
-
   if (!sellerId || !orderId) return null;
 
-  const submission = order ? openSubmission(order) : null;
-  const paid = order
-    ? ['PAYMENT_CONFIRMED', 'HANDED_OFF', 'COMPLETED'].includes(order.state)
-    : false;
   const ended = order ? isTerminal(order.state) : false;
 
   /**
@@ -195,7 +156,7 @@ export function OrderDetail() {
                 clock={clockFor({
                   state: order.state,
                   expires_at: order.expires_at,
-                  payment_sla_deadline: submission?.sla_deadline ?? null,
+                  payment_sla_deadline: null,
                 })}
                 onElapsed={() => void load()}
               />
@@ -261,210 +222,19 @@ export function OrderDetail() {
               </ul>
             </section>
 
-            {/* -------------------------------------------------- 4. payment */}
+            {/* ---------------------------------------- 4/5. payment and handoff */}
+            {/* D24-01: payment and everything gated on it (evidence, the two decisions,
+                reissued instructions, Mark Ready, courier assignment, custody transfer,
+                the handoff QR) is removed, not disabled. The regions stay so the order
+                reads as a complete record; they call no API. */}
             <section className="region payment-region" aria-labelledby="r-payment">
               <h2 id="r-payment">{en['console.trade.detail.payment_heading']}</h2>
-              {order.payment_submissions.length === 0 ? (
-                <p className="empty">{en['console.trade.detail.no_submission']}</p>
-              ) : (
-                <>
-                  <p className="submitted-at">
-                    {market && order.payment_submissions[0]
-                      ? timeFormatter(market).format(
-                          new Date(order.payment_submissions[0].submitted_at),
-                        )
-                      : ''}
-                  </p>
-                  <button
-                    type="button"
-                    data-action="view-evidence"
-                    onClick={() => setModal('evidence')}
-                  >
-                    {en['console.trade.detail.view_evidence']}
-                  </button>
-                </>
-              )}
-              {/*
-                The two decisions, on the screen and in the modal, from ONE
-                component. Offered only while a submission is open -- after a
-                decision there is nothing left to decide, and a live Confirm
-                on a confirmed order is a second irreversible act.
-              */}
-              {submission ? (
-                <PaymentDecisions
-                  sellerId={sellerId}
-                  orderId={orderId}
-                  onDecided={() => void load()}
-                  idPrefix="detail"
-                />
-              ) : null}
-
-              {/*
-                REISSUE PAYMENT INSTRUCTIONS -- the one step-up-protected
-                action in C-4's surface, and the first real caller of
-                useStepUp. It is `challengeRequired` because `reissueBody`
-                declares step_up_challenge_id as a required uuid: calling
-                without one earns a 400 from zod, never the 403 that the
-                interception path is for. Both doors end in the same retry.
-
-                OFFERED ONLY IN THE STATES fn_reissue_instructions ACCEPTS --
-                CREATED, NOTIFIED, PAYMENT_SUBMITTED (migration 0022, "order
-                is not payable" otherwise). The first version withheld it only
-                on `ended`, so PAYMENT_CONFIRMED and HANDED_OFF rendered an
-                enabled control the database always refuses (T11 Phase 5,
-                D-170) -- and because this action is challengeRequired, the
-                seller spent an OTP and six digits BEFORE the refusal arrived.
-                A control the server will refuse must not cost a step-up to
-                find out. Absent rather than disabled: unlike R20's handoff
-                region, this is not "opens later in the sequence" -- once
-                payment is confirmed there are no instructions to reissue,
-                ever, so a disabled control would teach a seller to wait for
-                something that never comes.
-              */}
-              {['CREATED', 'NOTIFIED', 'PAYMENT_SUBMITTED'].includes(order.state) ? (
-                <>
-                  <button
-                    type="button"
-                    data-action="reissue-instructions"
-                    onClick={() =>
-                      void stepUp
-                        .guard(
-                          'REISSUE_INSTRUCTIONS',
-                          orderId,
-                          async (challengeId) => {
-                            await api(`/seller/orders/${orderId}/reissue-instructions`, {
-                              method: 'POST',
-                              sellerId,
-                              idempotencyKey: reissueKey,
-                              body: { step_up_challenge_id: challengeId },
-                            });
-                          },
-                          { challengeRequired: true },
-                        )
-                        .then(
-                          () => void load(),
-                          (e: unknown) => {
-                            if (e instanceof ApiError) setActionProblem(e);
-                          },
-                        )
-                    }
-                  >
-                    {en['console.trade.detail.reissue']}
-                  </button>
-                  <p className="hint">{en['console.trade.detail.reissue_hint']}</p>
-                </>
-              ) : null}
+              <DeferredNote what="payment" />
             </section>
 
-            {/* -------------------------------------------------- 5. handoff */}
-            {/*
-              R20. ALWAYS RENDERED. `disabled` is the only thing state
-              changes, and the explaining line appears whenever it is off.
-            */}
-            <section className="region handoff-region" aria-labelledby="r-handoff" data-gated={String(!paid)}>
+            <section className="region handoff-region" aria-labelledby="r-handoff">
               <h2 id="r-handoff">{en['console.trade.detail.handoff_heading']}</h2>
-              {!paid ? (
-                <p className="hint" data-gate="R20">
-                  {en['console.trade.detail.handoff_locked']}
-                </p>
-              ) : null}
-
-              {/* `ready_at` as a FACT, never as a state badge. */}
-              {order.ready_at && market ? (
-                <p className="ready-fact" data-ready-at={order.ready_at}>
-                  {fillTemplate(en['console.trade.detail.marked_ready'], {
-                    time: timeFormatter(market).format(new Date(order.ready_at)),
-                  })}
-                </p>
-              ) : null}
-
-              {/*
-                D-155 + R20 held together. The handoff REGION and its controls
-                RENDER whenever the order exists (R20: a region that
-                disappears makes a seller wonder what they broke) -- but each
-                control is ENABLED iff the server's allowed_actions carries
-                its permission code. allowed_actions already encodes BOTH the
-                state gate and the grant gate, so the console reads ONE array
-                and never unions its own guess: an ANALYST on a confirmed
-                order sees the controls disabled, a pre-payment OWNER sees
-                them disabled, and only a confirmed OWNER acts.
-              */}
-              <div className="handoff-controls">
-                <button
-                  type="button"
-                  data-action="mark-ready"
-                  disabled={!order.allowed_actions.includes('seller.order_ready:update')}
-                  onClick={() => void act('/ready', readyKey)}
-                >
-                  {en['console.trade.detail.mark_ready']}
-                </button>
-                {/*
-                  D-157/D-224.4: courier assignment is LIVE. The couriers
-                  endpoint returns claimed rows with account_id now; the
-                  select offers only claimed couriers, and a pending invite
-                  shows disabled with its real status rather than a faked
-                  selectable row.
-                */}
-                <div className="courier-assign">
-                  <label htmlFor="courier-select" className="visually-hidden">
-                    {en['console.trade.detail.assign_courier']}
-                  </label>
-                  <select
-                    id="courier-select"
-                    value={chosenCourier}
-                    disabled={!order.allowed_actions.includes('seller.couriers:manage')}
-                    onChange={(e) => setChosenCourier(e.target.value)}
-                  >
-                    <option value="">{en['console.trade.detail.courier_choose']}</option>
-                    {couriers.map((c) => (
-                      <option key={c.id} value={c.account_id ?? ''} disabled={c.account_id === null}>
-                        {c.account_id
-                          ? c.phone
-                          : fillTemplate(en['console.trade.detail.courier_pending'], {
-                              phone: c.phone,
-                            })}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    data-action="assign-courier"
-                    disabled={
-                      !order.allowed_actions.includes('seller.couriers:manage') || !chosenCourier
-                    }
-                    onClick={() =>
-                      void act('/courier-assignment', assignKey, {
-                        courier_account_id: chosenCourier,
-                      })
-                    }
-                  >
-                    {en['console.trade.detail.assign_courier']}
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  data-action="custody-transfer"
-                  disabled={
-                    !order.allowed_actions.includes('seller.handoff:custody_transfer') ||
-                    !chosenCourier
-                  }
-                  onClick={() =>
-                    void act('/custody-transfer', custodyKey, {
-                      courier_account_id: chosenCourier,
-                    })
-                  }
-                >
-                  {en['console.trade.detail.custody_transfer']}
-                </button>
-                <button
-                  type="button"
-                  data-action="show-qr"
-                  disabled={!order.allowed_actions.includes('seller.handoff:read')}
-                  onClick={() => setModal('qr')}
-                >
-                  {en['console.trade.detail.show_qr']}
-                </button>
-              </div>
+              <DeferredNote what="handoff" />
             </section>
 
             {/* -------------------------------------------------- 6. history */}
@@ -496,25 +266,6 @@ export function OrderDetail() {
         ) : null}
       </ScreenState>
 
-      {modal === 'evidence' && order ? (
-        <PaymentEvidence
-          sellerId={sellerId}
-          orderId={orderId}
-          submittedAt={order.payment_submissions[0]?.submitted_at ?? null}
-          decidable={submission !== null}
-          onDecided={() => {
-            setModal(null);
-            void load();
-          }}
-          onClose={() => setModal(null)}
-        />
-      ) : null}
-      {modal === 'qr' ? (
-        <HandoffQr sellerId={sellerId} orderId={orderId} onClose={() => setModal(null)} />
-      ) : null}
-      {/* SC-31 over SC-04. Rendered by the hook, opened by the hook, and this
-          screen knows nothing about codes or challenges. */}
-      {stepUp.modal}
     </main>
   );
 }

@@ -16,10 +16,19 @@
  */
 import { ApiError } from '../api-error';
 import type { AdulisProblem } from '../../lib/states';
-import { FIXTURE_MARKER, FIXTURE_SELLERS, FIXTURE_VERSION, fixtureOrders } from './data';
+import {
+  FIXTURE_MARKER,
+  FIXTURE_READINESS,
+  FIXTURE_SELLERS,
+  FIXTURE_VERSION,
+  fixtureObligations,
+  fixtureOrderDetail,
+  fixtureOrders,
+  fixtureSubscription,
+} from './data';
 
 export const DENIED_PATH =
-  /payment|billing|payout|refund|settle|confirm-receipt|custody|moderation|operator|report|evidence|qr|handoff/i;
+  /payment|billing(?!\/subscription$)|payout|refund|settle|confirm-receipt|custody|moderation|operator|report|evidence|qr|handoff/i;
 
 interface Call {
   readonly method?: string | undefined;
@@ -42,6 +51,11 @@ async function delayFor(sellerId: string | undefined): Promise<void> {
   const table = (globalThis as { __ADULIS_FIXTURE_DELAY_MS?: Record<string, number> }).__ADULIS_FIXTURE_DELAY_MS;
   const ms = sellerId ? table?.[sellerId] : undefined;
   if (ms && ms > 0) await new Promise((r) => setTimeout(r, ms));
+}
+
+/** Test seam: every call the console TRIES to make, so a test can assert none was prohibited. */
+function record(path: string, call: Call): void {
+  (globalThis as { __ADULIS_FIXTURE_CALLS?: string[] }).__ADULIS_FIXTURE_CALLS?.push(`${(call.method ?? 'GET').toUpperCase()} ${path}`);
 }
 
 async function serve(path: string, call: Call): Promise<unknown> {
@@ -83,6 +97,15 @@ async function serve(path: string, call: Call): Promise<unknown> {
     if (rows === null) throw problem(403, 'FORBIDDEN');
     return { data: rows, has_more: false, next_cursor: null };
   }
+  if (clean === '/seller/readiness') return FIXTURE_READINESS;
+  if (clean === '/seller/obligations') return fixtureObligations();
+  if (clean === '/billing/subscription') return fixtureSubscription();
+  const detail = /^\/seller\/orders\/([^/]+)$/.exec(clean);
+  if (detail?.[1]) {
+    const d = call.sellerId ? fixtureOrderDetail(call.sellerId, detail[1]) : null;
+    if (d === null) throw problem(403, 'FORBIDDEN');
+    return d;
+  }
   throw problem(501, 'FIXTURE_BLOCKED');
 }
 
@@ -90,10 +113,12 @@ export const transport = {
   marker: FIXTURE_MARKER,
   version: FIXTURE_VERSION,
   async json<T>(path: string, call: Call): Promise<T> {
+    record(path, call);
     if (DENIED_PATH.test(path)) throw problem(501, 'FIXTURE_BLOCKED');
     return (await serve(path, call)) as T;
   },
-  async blob(_path: string, _call: Call): Promise<Blob> {
+  async blob(path: string, call: Call): Promise<Blob> {
+    record(path, call);
     // Bytes are evidence-shaped by definition in this console; none are served.
     throw problem(501, 'FIXTURE_BLOCKED');
   },

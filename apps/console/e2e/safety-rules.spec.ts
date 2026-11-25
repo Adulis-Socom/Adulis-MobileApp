@@ -147,11 +147,14 @@ test.describe('the six rules @safety', () => {
    * a paid order is, in the spec's words, the single most misleading thing the
    * screen could display.
    */
-  test('rule 6: a submitted order shows the CONFIRMATION clock and no other', async ({ page }) => {
+  test('rule 6 (D24-01): a submitted order shows NO clock -- the Seller decides nothing, so nothing is timed', async ({
+    page,
+  }) => {
     await page.goto(`/s/${SEEDED.sellerId}/orders/${ORDER_SUBMITTED}`);
     await expect(page.locator('.state-region')).toBeVisible();
-    await expect(page.locator('[data-clock="CONFIRMATION"]')).toBeVisible();
-    // Not a stopped one, not "0:00" -- absent.
+    // Superseded: this asserted the 24h CONFIRMATION clock. The Seller no longer confirms payment,
+    // so a confirmation countdown would time a decision nobody here can make. Neither clock appears.
+    await expect(page.locator('[data-clock="CONFIRMATION"]')).toHaveCount(0);
     await expect(page.locator('[data-clock="RESERVATION"]')).toHaveCount(0);
   });
 });
