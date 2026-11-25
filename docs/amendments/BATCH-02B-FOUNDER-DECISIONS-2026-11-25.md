@@ -29,14 +29,17 @@ replacement Order lifecycle is built or invented here. Live Order creation stays
 Cart and checkout review reserve no inventory; internal simulations never use Reservation
 infrastructure.
 
-Historical preservation is not authorised away: no deleted history, dropped tables, rewritten
-applied migrations, database reset, or removal of financial, inventory or audit history. Where full
-retirement needs a physical schema change it is a controlled-migration item with a manifest
-(`ops` stage, single backend writer); where deletion would break compatibility or history the
-executable path is quarantined (fail-closed) and its retirement condition is recorded. Stock held
-by historical Reservations is protected: the expiry drain stays until a reconciliation is approved
-by the founder as a persistent-data operation. Platform-wide retirement is not claimed while
-inactive surfaces (Mobile) or historical structures still depend on the model.
+SUPERSEDED IN PART by the founder's pre-launch architectural authorization (25 November 2026,
+later the same day): Adulis has not launched, backward compatibility with obsolete unreleased
+application versions is no longer a design requirement, and the Reservation model is retired
+COMPLETELY from the active architecture rather than quarantined. Obsolete unreleased compatibility
+contracts (endpoints, DTOs, enums, fields, error codes, fixtures, jobs) may be removed outright, and
+breaking internal API, database, service, fixture and application changes are authorized where
+retirement needs them. What still binds: applied migration history is preserved and changed only by
+forward migrations; no unknown or valuable persistent database is reset, rebuilt or migrated; a
+database holding legacy commerce rows needs an explicit export-or-rebuild decision before the
+retiring migration applies; stock history and stock invariants are never erased or faked; nothing
+replaces the retired model while payment authority is unresolved.
 
 ### B02B-D02 -- Courier relationship management is retained
 Authorised Courier invitations stay: invite a Courier, view invitation status, view authorised
