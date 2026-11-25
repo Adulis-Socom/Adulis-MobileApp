@@ -329,6 +329,24 @@ code {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+.bottombar {
+  container-type: inline-size;
+}
+
+/* When four labels no longer fit the bar at the current text size, the bar shows its icons and the names stay for assistive
+   technology: a label broken mid-word (Hom-e, Prod-ucts) is worse than none. rem scales with the text-size setting. */
+@container (max-width: 19.5rem) {
+  .tab .nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
 .bottombar ul {
   list-style: none;
   padding: var(--adu-space-xs);
