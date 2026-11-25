@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "jest --selectProjects unit",
-    "test:integration": "jest --selectProjects integration --runInBand",
+    "test:integration": "jest --selectProjects integration --runInBand --forceExit",
     "start": "node dist/main.js",
     "start:worker": "node dist/worker.js",
     "db:bootstrap": "node dist/db/bootstrap.js",

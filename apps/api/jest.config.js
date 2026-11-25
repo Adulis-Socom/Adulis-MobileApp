@@ -33,8 +33,6 @@ module.exports = {
       setupFiles: ['reflect-metadata'],
       testMatch: ['<rootDir>/test/**/*.int.ts'],
       testTimeout: 60000,
-      // Safety net only: every suite closes its pools and connections; a leak must not hang CI for 30 minutes.
-      forceExit: true,
     },
   ],
 };
