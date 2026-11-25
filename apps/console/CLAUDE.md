@@ -88,6 +88,20 @@ scripts/                   release scan, dependency-rule fire test
 10. **Provisional decisions made without a governing requirement** are listed in `docs/rebuild/SC-FE-01-03-PROPOSALS.md` as
     proposals, not product rules.
 
+## Lessons that each cost a CI cycle (do not relearn them)
+
+- `Intl.DateTimeFormat` throws if `timeStyle` is combined with `timeZoneName`: use `timeStyle: 'long'` (src/i18n/t.ts has unit tests for both branches).
+- The fixture session lives in memory, so a full `page.goto` resets the world. Tests navigate inside the app with `goInApp`, and use `signInHere` after sign-out, never `signIn`.
+- A draft Seller Home has BOTH the readiness and Alerts headings: never assert exactly one of them with `.or()` without `.first()`.
+- Text scaling is tested by setting the root font size; `scaleText` attaches on `readystatechange` and every scaled test calls `expectTextScale`, because an earlier version silently did nothing. The overflow assertion names the offending elements.
+- Every one-column grid uses `grid-template-columns: minmax(0, 1fr)`, and flex children that hold text carry `min-width: 0`; an `input` is about 368px wide at doubled text.
+- axe `target-size` is evaluated at the END of the page, where the sticky bottom bar covers nothing; everything else is evaluated at the top.
+- `pnpm lint` has `--max-warnings 0` and `jsx-a11y/label-has-associated-control` depth 3; a type-only import counts as an edge for dependency-cruiser (keep shared types in `transport/port.ts`).
+
+## Design
+
+`PRODUCT.md` (product truth), `DESIGN.md` and `.impeccable/` (Impeccable direction contract, surface brief, design sidecar) describe the visual system: a ruled-row ledger, one lime action per screen, status as icon plus word. Change them with the CSS, not instead of it.
+
 ## Boundary
 
 May import `@adulis/api-client`, `@adulis/locale`, `@adulis/tokens`, `@adulis/config`. Never anything under `apps/`.
