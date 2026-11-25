@@ -25,6 +25,8 @@
 --     ADU-AUTH-01_v2_4_permission_seed.sql and the ADU-AUTH-01 matrix move with it.
 --   * The financial-boundary functions that collected or disclosed payment
 --     evidence, payment instructions and payout credentials. The purges stay.
+--   * Every app and worker write on the inert legacy order-family tables; the
+--     order stock reasons, refused by CHECK.
 --
 -- REWRITTEN (from the live definitions; only the retired term is removed)
 --   fn_delete_account (no Reservation release loop), fn_publication_readiness
@@ -52,21 +54,30 @@
 
 -- Up Migration
 
--- 1. Refuse rather than destroy.
+-- 1. Refuse rather than destroy. The lock first, so no writer can commit a row
+-- between the count and the DROP below.
+LOCK TABLE core.reservation, core."order", core.refund, billing.purchase_intent,
+  billing.collection_record, core.payout_details IN ACCESS EXCLUSIVE MODE;
 DO $guard$
 DECLARE
-  v_res int; v_ord int; v_ref int; v_int int;
+  v_res int; v_ord int; v_ref int; v_int int; v_col int; v_pay int;
 BEGIN
   SELECT count(*) INTO v_res FROM core.reservation;
   SELECT count(*) INTO v_ord FROM core."order";
   SELECT count(*) INTO v_ref FROM core.refund;
   SELECT count(*) INTO v_int FROM billing.purchase_intent
    WHERE reconciled_at IS NULL AND cancelled_at IS NULL;
-  IF v_res + v_ord + v_ref + v_int > 0 THEN
+  -- An open collection record (a seller may already have said they paid) and a pending
+  -- payout change both lose the only functions that could resolve them, below.
+  SELECT count(*) INTO v_col FROM billing.collection_record
+   WHERE reconciled_at IS NULL AND voided_at IS NULL;
+  SELECT count(*) INTO v_pay FROM core.payout_details WHERE state = 'PENDING';
+  IF v_res + v_ord + v_ref + v_int + v_col + v_pay > 0 THEN
     RAISE EXCEPTION
-      'legacy commerce rows present (reservations %, orders %, refunds %, open purchase intents %): '
+      'legacy commerce rows present (reservations %, orders %, refunds %, open purchase intents %, '
+      'open collection records %, pending payout changes %): '
       'export or rebuild first, see ops/runbooks/legacy-reservation-retirement.md',
-      v_res, v_ord, v_ref, v_int
+      v_res, v_ord, v_ref, v_int, v_col, v_pay
       USING ERRCODE = 'restrict_violation';
   END IF;
 END
@@ -102,6 +113,14 @@ ALTER TABLE core.stock_event
   DROP CONSTRAINT release_has_a_line,
   DROP CONSTRAINT stock_event_reservation,
   DROP COLUMN reservation_id;
+-- The release rules died with the column (release_has_a_line, and the stock_release_once
+-- index). Without an order there is no order stock reason, so the database refuses all
+-- three rather than trusting that no code writes them: a positive ORDER_EXPIRED row would
+-- otherwise invent inventory. Validates: section 1 proved no order exists.
+ALTER TABLE core.stock_event ADD CONSTRAINT stock_event_no_order_reason
+  CHECK (reason NOT IN ('ORDER_CREATED', 'ORDER_EXPIRED', 'LINE_CANCELLED'));
+-- The column takes the claim_one_open_per_scope expression index with it; claims are
+-- unwritable after the REVOKE at the end of this migration, so nothing is left to deduplicate.
 ALTER TABLE core.claim
   DROP CONSTRAINT claim_line_belongs_to_order,
   DROP COLUMN reservation_id;
@@ -140,6 +159,17 @@ DROP FUNCTION financial.read_payment_evidence(uuid, uuid, text);
 DROP FUNCTION financial.write_payment_evidence(uuid, text, text, integer, integer);
 DROP FUNCTION financial.render_payment_instructions(uuid, uuid);
 DROP FUNCTION financial.write_payout_credential(uuid, bytea, bytea, text);
+
+-- The legacy order family stays as inert structure, and inert means unwritable: the app and
+-- worker roles lose every write on it, so no path can recreate an order, claim, handoff,
+-- review, payout change or collection record outside a future approved design. SECURITY
+-- DEFINER functions that still touch these tables (deletion, anonymisation) run as owner.
+REVOKE INSERT, UPDATE, DELETE ON core."order", core.order_state_transition, core.order_qr_token,
+  core.order_courier_assignment, core.order_confirmation, core.courier_custody_transfer,
+  core.handoff_scan, core.payment_submission, core.payment_instruction_reissue,
+  core.evidence_export, core.claim, core.claim_evidence_item, core.review,
+  core.review_item_rating, core.payout_details, billing.collection_record
+  FROM adulis_app, adulis_jobs;
 
 -- 2. Rewritten, from the live definitions: each loses only its Reservation, refund or payout term.
 CREATE OR REPLACE FUNCTION core.fn_delete_account(p_account_id uuid, p_otp_challenge_id uuid, p_phone_hash bytea)

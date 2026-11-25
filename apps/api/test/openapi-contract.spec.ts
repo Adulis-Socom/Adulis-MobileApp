@@ -44,6 +44,14 @@ describe('contracts/openapi.json against the controllers', () => {
     expect(routes.map((r) => `${r.http} ${r.path}`).sort()).toEqual(declared.sort());
   });
 
+  it('carries no operation of the model retired by migration 0063', () => {
+    // The route table in c3 cannot prove absence for id-carrying paths (an unknown id is 404
+    // either way); the generated contract can, because it is derived from the controllers.
+    const RETIRED = /^\/v1\/(orders|seller\/orders|courier\/orders|handoffs|claims|seller\/claims|seller\/payout|billing\/purchase-intent|billing\/mark-transferred)(\/|$)/;
+    expect(Object.keys(contract.paths).filter((p) => RETIRED.test(p))).toEqual([]);
+    expect(JSON.stringify(contract)).not.toMatch(/reservation/i);
+  });
+
   it('leaves exactly the commerce controllers to the derivation skip list', () => {
     const commerce = new Set(routes.filter((r) => COMMERCE_MODULES.has(r.module)).map((r) => r.controller));
     expect([...LEGACY_COMMERCE_CONTROLLERS].sort()).toEqual([...commerce].sort());
