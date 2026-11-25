@@ -52,6 +52,11 @@ describe('roles and privileges (ARC-BE-03)', () => {
     expect(await sqlstate(db.worker, 'delete from platform.event_outbox')).toBe('42501');
     expect(await sqlstate(db.worker, 'delete from platform.processed_event')).toBe('42501');
     expect(await sqlstate(db.worker, 'insert into platform.event_outbox (event_id) values (gen_random_uuid())')).toBe('42501');
+    // A delivery's identity is fixed at materialisation: the worker moves its state and counters, never who or which job.
+    expect(await sqlstate(db.worker, `update platform.event_delivery set job_id = 'forged.job'`)).toBe('42501');
+    expect(await sqlstate(db.worker, `update platform.event_delivery set consumer = 'forged'`)).toBe('42501');
+    expect(await sqlstate(db.worker, 'update platform.event_delivery set reconcile_attempts = 0')).toBeUndefined();
+    expect(await sqlstate(db.worker, 'delete from platform.event_delivery')).toBe('42501');
   });
 
   it('an outbox fact is immutable even for its owner, and dispatch is final', async () => {

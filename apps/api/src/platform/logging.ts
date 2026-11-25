@@ -12,7 +12,7 @@ export const LOG_FIELDS: readonly string[] = [
   'errorCode', 'errorName', 'sqlstate', 'causeCode', 'stack',
   // worker and relay: compile-time names and counts only
   'consumer', 'eventType', 'eventVersion', 'jobId', 'attempt', 'outcome', 'count', 'queue',
-  'waiting', 'active', 'delayed', 'failed', 'undispatched', 'oldestUndispatchedSeconds', 'unresolvedDeadLetters', 'staleDeliveries',
+  'waiting', 'active', 'delayed', 'failed', 'undispatched', 'oldestUndispatchedSeconds', 'unresolvedDeadLetters', 'staleDeliveries', 'repairs',
 ];
 
 /** OBS-01 S11: never in broad telemetry. Removed even if a caller bypasses the allow-list. */

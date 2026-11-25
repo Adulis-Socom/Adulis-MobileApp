@@ -10,7 +10,7 @@ export interface QueueHealth {
   readonly undispatched: number;
   readonly oldestUndispatchedSeconds: number;
   readonly unresolvedDeadLetters: number;
-  /** Deliveries not finished 10 minutes after their last change: a lost or stalled job (reconciliation is deferred). */
+  /** Deliveries not finished 10 minutes after their last change: work the reconciler (reconcile.ts) has not yet resolved. */
   readonly staleDeliveries: number;
 }
 

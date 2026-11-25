@@ -18,7 +18,7 @@ describe('clean replacement lineage (ARC-BE-03)', () => {
     await runMigrations(db.migrator);
     expect(await schemaSnapshot(db.superuser)).toEqual(before);
     const applied = await withClient(db.superuser, async (c) => (await c.query('select count(*)::int as n from drizzle.__drizzle_migrations')).rows[0].n);
-    expect(applied).toBe(1);
+    expect(applied).toBe(readMigrationFiles({ migrationsFolder: MIGRATIONS_FOLDER }).length);
   });
 
   it('two independent clean initialisations converge to the same normalized schema', async () => {

@@ -46,6 +46,12 @@ export const workerEnvSchema = base.extend({
   RELAY_LEASE_MS: int(1_000, 300_000).default(30_000),
   WORKER_CONCURRENCY: int(1, 32).default(1),
   HEALTH_LOG_INTERVAL_MS: int(5_000, 3_600_000).default(60_000),
+  // reconcile_outbox (EVT-01 S23): how often, how stale before a delivery is examined, how many per pass, and how
+  // many rematerialisations before a delivery becomes a dead letter.
+  RECONCILE_INTERVAL_MS: int(1_000, 3_600_000).default(30_000),
+  RECONCILE_STALE_MS: int(10_000, 86_400_000).default(300_000),
+  RECONCILE_BATCH_SIZE: int(1, 1_000).default(100),
+  RECONCILE_MAX_ATTEMPTS: int(1, 25).default(5),
 });
 
 export const migrateEnvSchema = z.object({ DATABASE_URL_MIGRATE: pgUrl });

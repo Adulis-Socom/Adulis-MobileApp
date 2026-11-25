@@ -66,9 +66,13 @@ export function toAdulisException(err: unknown): AdulisException {
   }
   // Fastify's own errors (body limit, bad JSON, content type) carry statusCode and are not HttpExceptions.
   const status = err instanceof HttpException ? err.getStatus() : (err as { statusCode?: unknown } | null)?.statusCode;
-  if (status === 404) return new AdulisException('NOT_FOUND');
+  if (status === 401) return new AdulisException('AUTHENTICATION_REQUIRED');
+  if (status === 403) return new AdulisException('PERMISSION_DENIED');
+  if (status === 404 || status === 405) return new AdulisException('NOT_FOUND', { status });
   if (status === 413) return new AdulisException('PAYLOAD_TOO_LARGE');
-  if (status === 400 || status === 415) return new AdulisException('VALIDATION_FAILED', { status });
+  // Any other client error stays a client error with its real status (RB-B01-18), mapped onto the closed
+  // catalogue: never a 500, and never the framework's own text.
+  if (typeof status === 'number' && Number.isInteger(status) && status >= 400 && status < 500) return new AdulisException('VALIDATION_FAILED', { status });
   return new AdulisException('INTERNAL');
 }
 

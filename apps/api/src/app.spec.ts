@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpException, Post } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
@@ -24,6 +24,12 @@ class ProbeController {
   @Post('validated')
   validated(@Body(new ZodPipe(nameSchema)) body: z.infer<typeof nameSchema>) {
     return body;
+  }
+
+  @Public()
+  @Get('client-error')
+  clientError(): never {
+    throw new HttpException('framework text that must not leak', 429);
   }
 
   @Audiences('CONSOLE')
@@ -177,6 +183,14 @@ describe('API platform (ARC-BE-02)', () => {
     const huge = await h.inject({ method: 'POST', url: '/v1/probe/validated', headers: { 'content-type': 'application/json' }, payload: JSON.stringify({ name: 'x'.repeat(BODY_LIMIT_BYTES) }) });
     expect(huge.statusCode).toBe(413);
     expect(huge.json()).toMatchObject({ code: 'PAYLOAD_TOO_LARGE' });
+  });
+
+  it('keeps other client errors as client errors in the closed catalogue, without framework text', async () => {
+    h = await harness();
+    const res = await h.inject({ method: 'GET', url: '/v1/probe/client-error' });
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toMatchObject({ code: 'VALIDATION_FAILED', status: 429 });
+    expect(res.body).not.toContain('framework text');
   });
 
   it('accepts a gateway request id only when trusted and well formed', async () => {

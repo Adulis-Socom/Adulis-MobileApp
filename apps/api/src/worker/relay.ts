@@ -1,15 +1,54 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import type { Queue } from 'bullmq';
+import type { JobsOptions, Queue } from 'bullmq';
 import type { Logger } from 'pino';
 import { SYSTEM_CONTEXT, withRequestContext, type Db, type Tx } from '../db/client';
 import { eventDelivery, eventOutbox } from '../db/schema';
 import type { JobEnvelope } from '../events/envelope';
-import type { EventRegistry, StoredEvent } from '../events/registry';
+import type { ConsumerDefinition, EventRegistry, StoredEvent } from '../events/registry';
 import { errorFields } from '../platform/logging';
 
 export const EVENTS_QUEUE = 'adulis-events';
 /** Deterministic physical job identity (EVT-01 S12 step 4). BullMQ forbids ':' in custom ids. */
 export const jobIdFor = (consumer: string, eventId: string): string => `${consumer}.${eventId}`;
+
+/** The trusted service reference every event-derived job carries; the consumer refuses any other actor. */
+export const RELAY_SERVICE_REF = 'adulis-worker.outbox-relay';
+
+/**
+ * The S15 envelope of an event-derived job. Business payload is EMPTY (founder ruling, 01_FOUNDER_RULINGS): the
+ * consumer re-reads the fact from PostgreSQL. Market, aggregate and actor are routing/trace metadata, never
+ * authority: the consumer checks each against the durable event before any effect. Relay and reconciler both
+ * build jobs here, so a rematerialised job is identical to the original.
+ */
+export function eventJobEnvelope(event: StoredEvent, jobId: string, consumer: ConsumerDefinition): JobEnvelope {
+  return {
+    logical_job_id: jobId,
+    job_type: consumer.name,
+    job_version: consumer.jobVersion,
+    ...(event.marketId ? { market_id: event.marketId } : {}),
+    priority_class: consumer.priorityClass,
+    criticality: consumer.criticality,
+    correlation_id: event.correlationId,
+    causation_id: event.eventId,
+    source_event_id: event.eventId,
+    aggregate_type: event.aggregateType,
+    aggregate_id: event.aggregateId,
+    actor_context: { actor_type: 'SYSTEM', trusted_service_ref: RELAY_SERVICE_REF },
+    payload: {},
+  };
+}
+
+/** BullMQ execution properties come from the registry, never from business truth (S15). */
+export function jobOptionsFor(consumer: ConsumerDefinition, jobId: string): JobsOptions {
+  return {
+    jobId,
+    attempts: consumer.attempts,
+    backoff: { type: 'exponential', delay: 1_000 },
+    removeOnComplete: { age: 86_400 },
+    removeOnFail: { age: 7 * 86_400 },
+    stackTraceLimit: 0, // no stack (and so no error text) is kept in Valkey
+  };
+}
 
 export interface RelayOptions {
   readonly owner: string;
@@ -24,7 +63,8 @@ export interface RelayOptions {
  *  4.   enqueue each open delivery with its deterministic jobId, marking it ENQUEUE_UNKNOWN first;
  *  5.   mark it QUEUED once BullMQ accepts;
  *  6.   a crash between 4 and 5 leaves ENQUEUE_UNKNOWN, and the lease expiry hands the event to the next
- *       relay pass, which re-enqueues under the same jobId;
+ *       relay pass, which re-enqueues under the same jobId; a job lost AFTER dispatch is the reconciler's
+ *       (reconcile.ts, S23);
  *  7.   duplicate physical execution is safe because consumers commit a processed-event marker.
  * An event is marked dispatched only when every delivery is past enqueue. Valkey being down leaves events
  * undispatched and durable; nothing is lost and nothing is dual-written.
@@ -95,30 +135,9 @@ export class OutboxRelay {
         .set({ state: 'ENQUEUE_UNKNOWN', enqueueAttempts: sql`${eventDelivery.enqueueAttempts} + 1`, updatedAt: sql`now()` })
         .where(and(pk, inArray(eventDelivery.state, ['PENDING', 'ENQUEUE_UNKNOWN']))),
       );
-      const envelope: JobEnvelope = {
-        logical_job_id: delivery.jobId,
-        job_type: consumer.name,
-        job_version: consumer.jobVersion,
-        ...(event.marketId ? { market_id: event.marketId } : {}),
-        priority_class: consumer.priorityClass,
-        criticality: consumer.criticality,
-        correlation_id: event.correlationId,
-        causation_id: event.eventId,
-        source_event_id: event.eventId,
-        aggregate_type: event.aggregateType,
-        aggregate_id: event.aggregateId,
-        actor_context: { actor_type: 'SYSTEM', trusted_service_ref: 'adulis-worker.outbox-relay' },
-        payload: {},
-      };
+      const envelope = eventJobEnvelope(event, delivery.jobId, consumer);
       try {
-        await this.queue.add(consumer.name, envelope, {
-          jobId: delivery.jobId,
-          attempts: consumer.attempts,
-          backoff: { type: 'exponential', delay: 1_000 },
-          removeOnComplete: { age: 86_400 },
-          removeOnFail: { age: 7 * 86_400 },
-          stackTraceLimit: 0, // no stack (and so no error text) is kept in Valkey
-        });
+        await this.queue.add(consumer.name, envelope, jobOptionsFor(consumer, delivery.jobId));
       } catch (err) {
         allQueued = false;
         this.log.warn({ consumer: consumer.name, eventType: event.eventType, ...errorFields(err, true) }, 'enqueue failed; event stays durable for retry');

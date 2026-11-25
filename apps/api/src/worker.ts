@@ -9,6 +9,7 @@ import { createLogger, errorFields } from './platform/logging';
 import { assertQueuePolicy, QueuePolicyRefused, queueProducerConnection, queueWorkerConnection } from './platform/valkey';
 import { EventConsumerRunner } from './worker/consumer';
 import { queueHealth } from './worker/health';
+import { OutboxReconciler } from './worker/reconcile';
 import { EVENTS_QUEUE, OutboxRelay } from './worker/relay';
 
 /** A repeating task that never overlaps itself and can be stopped between iterations. */
@@ -71,6 +72,22 @@ export async function startWorker(env: WorkerEnv, log: Logger): Promise<{ shutdo
       log.error({ ...errorFields(err, true) }, 'relay pass failed; events remain durable');
     }
   }, env.RELAY_INTERVAL_MS);
+  const reconciler = new OutboxReconciler(
+    db,
+    queue,
+    registry,
+    { batchSize: env.RECONCILE_BATCH_SIZE, staleMs: env.RECONCILE_STALE_MS, maxRematerializations: env.RECONCILE_MAX_ATTEMPTS },
+    log,
+  );
+  const reconcileLoop = repeat(async () => {
+    try {
+      const repairs = await reconciler.runOnce();
+      const touched = Object.values(repairs).reduce((a, b) => a + b, 0);
+      if (touched > repairs.PRESENT) log.info({ queue: EVENTS_QUEUE, repairs }, 'reconcile pass');
+    } catch (err) {
+      log.error({ ...errorFields(err, true) }, 'reconcile pass failed; deliveries remain durable');
+    }
+  }, env.RECONCILE_INTERVAL_MS);
   const healthLoop = repeat(async () => {
     try {
       const h = await queueHealth(db, queue);
@@ -85,6 +102,7 @@ export async function startWorker(env: WorkerEnv, log: Logger): Promise<{ shutdo
   return {
     async shutdown() {
       await relayLoop.stop();
+      await reconcileLoop.stop();
       await healthLoop.stop();
       await worker.close(); // waits for active jobs; claims nothing new
       await queue.close();

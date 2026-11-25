@@ -69,7 +69,7 @@ export async function createApp(deps: AppDeps): Promise<NestFastifyApplication> 
 
   const adapter = new FastifyAdapter({
     loggerInstance: deps.logger,
-    disableRequestLogging: true, // Fastify would log raw URLs with query strings (OBS-01 S11)
+    logController: { disableRequestLogging: true }, // Fastify would log raw URLs with query strings (OBS-01 S11)
     genReqId: makeGenReqId(deps.env.TRUST_GATEWAY_REQUEST_ID),
     requestIdHeader: false,
     bodyLimit: BODY_LIMIT_BYTES,

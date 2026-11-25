@@ -12,6 +12,8 @@ const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'string
 
 export const ACTOR_TYPES = ['ANONYMOUS_PUBLIC', 'ORDINARY_ACCOUNT', 'OPERATOR_ACCOUNT', 'SYSTEM'] as const;
 export const DELIVERY_STATES = ['PENDING', 'ENQUEUE_UNKNOWN', 'QUEUED', 'PROCESSING', 'SUCCEEDED', 'SKIPPED', 'DEAD_LETTERED'] as const;
+/** Not yet resolved. SUCCEEDED, SKIPPED and DEAD_LETTERED are terminal: nothing automatic ever reopens them. */
+export const UNFINISHED_STATES = ['PENDING', 'ENQUEUE_UNKNOWN', 'QUEUED', 'PROCESSING'] as const;
 export const FAILURE_CLASSES = [
   'TRANSIENT', 'RATE_LIMIT', 'DEPENDENCY_UNAVAILABLE', 'PERMANENT_VALIDATION', 'STATE_CONFLICT', 'POISON_PAYLOAD', 'SECURITY_FAILURE', 'UNSUPPORTED_VERSION',
 ] as const;
@@ -53,6 +55,7 @@ export const eventDelivery = platform.table(
     state: text('state', { enum: DELIVERY_STATES }).notNull().default('PENDING'),
     jobId: text('job_id').notNull().unique(),
     enqueueAttempts: integer('enqueue_attempts').notNull().default(0),
+    reconcileAttempts: integer('reconcile_attempts').notNull().default(0),
     lastErrorCode: text('last_error_code'),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
