@@ -51,13 +51,13 @@ const resolve = (value, depth = 0) => {
   return declared.has(ref[1]) ? resolve(declared.get(ref[1]), depth + 1) : `unresolved ${ref[1]}`;
 };
 const norm = (v) => String(v).replace(/\s+/g, ' ').trim().toLowerCase();
-let parityOk = true;
+const before = failures.length;
 for (const [name, value] of expected) {
-  if (!declared.has(name)) (parityOk = false), fail(`${name} exported by index.ts is missing from tokens.css`);
-  else if (norm(resolve(declared.get(name))) !== norm(value)) (parityOk = false), fail(`${name}: css ${resolve(declared.get(name))} vs ts ${value}`);
+  if (!declared.has(name)) fail(`${name} exported by index.ts is missing from tokens.css`);
+  else if (norm(resolve(declared.get(name))) !== norm(value)) fail(`${name}: css ${resolve(declared.get(name))} vs ts ${value}`);
 }
-for (const name of declared.keys()) if (!expected.has(name)) (parityOk = false), fail(`${name} in tokens.css has no token in index.ts`);
-if (parityOk) pass(`parity: ${expected.size} tokens agree between index.ts and tokens.css in both directions`);
+for (const name of declared.keys()) if (!expected.has(name)) fail(`${name} in tokens.css has no token in index.ts`);
+if (failures.length === before) pass(`parity: ${expected.size} tokens agree between index.ts and tokens.css in both directions`);
 
 // --- 2. CTO palette ----------------------------------------------------------------------------------
 const CTO = {
@@ -96,14 +96,16 @@ const TEXT = [
   ['danger', 'surface'], ['danger', 'bg'], ['danger', 'dangerBg'], ['success', 'surface'], ['success', 'successBg'], ['warn', 'surface'], ['warn', 'warnBg'], ['info', 'surface'], ['info', 'infoBg'],
 ];
 const NON_TEXT = [['borderStrong', 'bg'], ['borderStrong', 'surface'], ['highlightBorder', 'bg'], ['highlightBorder', 'surface'], ['like', 'bg'], ['like', 'surface'], ['dangerSolid', 'surface']];
-let pairs = 0;
-for (const [fg, bg] of TEXT) (pairs += 1), ratio(c[fg], c[bg]) >= 4.5 || fail(`text ${fg} on ${bg}: ${ratio(c[fg], c[bg]).toFixed(2)}:1 < 4.5`);
-for (const [fg, bg] of NON_TEXT) (pairs += 1), ratio(c[fg], c[bg]) >= 3 || fail(`non-text ${fg} on ${bg}: ${ratio(c[fg], c[bg]).toFixed(2)}:1 < 3`);
-for (const surface of ['bg', 'surface', 'highlight', 'secondary']) (pairs += 1), ratio(T.focus.ringColor, c[surface]) >= 3 || fail(`focus ring on ${surface} < 3:1`);
+const pairs = [
+  ...TEXT.map(([fg, bg]) => [`text ${fg} on ${bg}`, c[fg], c[bg], 4.5]),
+  ...NON_TEXT.map(([fg, bg]) => [`non-text ${fg} on ${bg}`, c[fg], c[bg], 3]),
+  ...['bg', 'surface', 'highlight', 'secondary'].map((s) => [`focus ring on ${s}`, T.focus.ringColor, c[s], 3]),
+];
+for (const [label, fg, bg, min] of pairs) if (ratio(fg, bg) < min) fail(`${label}: ${ratio(fg, bg).toFixed(2)}:1 < ${min}`);
 // The forbidden uses must be measured as failing, or the rules above prove nothing.
 if (ratio('#ffffff', c.highlight) >= 4.5) fail('white on lime unexpectedly passes: the highlightText rule is not biting');
 if (ratio(c.like, c.surface) >= 4.5) fail('the CTO red passes as text: re-check the like/danger split');
-if (!failures.some((f) => f.includes(' on '))) pass(`contrast: ${pairs} pairs clear their targets; white-on-lime and red-as-text measured as failing`);
+if (!failures.some((f) => f.includes(' on '))) pass(`contrast: ${pairs.length} pairs clear their targets; white-on-lime and red-as-text measured as failing`);
 
 if (failures.length) {
   console.log(`verify:tokens: ${failures.length} failure(s)`);
