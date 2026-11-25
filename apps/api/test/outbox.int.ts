@@ -89,8 +89,9 @@ describe('transactional outbox, relay and idempotent consumers (ARC-BE-04)', () 
     await (await queue.getJob(jid(eventId)))?.remove();
     expect(await queue.getJob(jid(eventId))).toBeUndefined();
   };
-  /** Makes one delivery old enough for the reconciler (staleMs 60 s) without waiting. */
-  const age = (eventId: string) => withClient(tdb.superuser, (c) => c.query(`update platform.event_delivery set updated_at = now() - interval '1 hour' where event_id = $1`, [eventId]));
+  /** Makes one delivery old enough, and unchecked, for the reconciler (staleMs 60 s) without waiting. */
+  const age = (eventId: string) =>
+    withClient(tdb.superuser, (c) => c.query(`update platform.event_delivery set updated_at = now() - interval '1 hour', reconcile_checked_at = null where event_id = $1`, [eventId]));
   const jobsWithId = async (eventId: string) =>
     (await queue.getJobs(['waiting', 'delayed', 'active', 'completed', 'failed', 'prioritized'])).filter((j) => j?.id === jid(eventId));
 
@@ -468,6 +469,41 @@ describe('transactional outbox, relay and idempotent consumers (ARC-BE-04)', () 
       expect(await deadLetters(`logical_job_id = '${jid(id)}' and failure_fingerprint = 'reconcile-exhausted' and failure_class = 'DEPENDENCY_UNAVAILABLE'`)).toBe(1);
       expect(await queue.getJob(jid(id))).toBeUndefined();
       expect(await effects(id)).toBe(0);
+    });
+
+    it('looking does not hide a stuck delivery from the staleDeliveries gauge', async () => {
+      const id = await append(49);
+      await relay().runOnce();
+      await withClient(tdb.superuser, (c) => c.query(`update platform.event_delivery set updated_at = now() - interval '1 hour' where event_id = $1`, [id]));
+      expect((await reconciler().runOnce()).PRESENT).toBeGreaterThanOrEqual(1); // the job is alive: left alone
+      expect((await queueHealth(workerDb, queue)).staleDeliveries).toBeGreaterThanOrEqual(1);
+      // ...and the reconciler's own lease stops a second pass re-examining it at once.
+      expect((await reconciler().runOnce()).PRESENT).toBe(0);
+    });
+
+    it('a refused re-enqueue gives its attempt back; an orphaned job hash is dead-lettered, not "repaired"', async () => {
+      const id = await append(50);
+      await relay().runOnce();
+      await loseJob(id);
+      await age(id);
+      const writeRefused: Pick<Queue, 'add' | 'getJob'> = {
+        getJob: async () => undefined, // reads work...
+        add: async () => Promise.reject(Object.assign(new Error('OOM command not allowed'), { name: 'ReplyError' })), // ...writes refused
+      };
+      expect((await reconciler({}, writeRefused).runOnce()).QUEUE_UNAVAILABLE).toBeGreaterThanOrEqual(1);
+      expect(await delivery(id)).toMatchObject({ state: 'ENQUEUE_UNKNOWN', reconcile_attempts: 0, last_error_code: 'ENQUEUE_FAILED' });
+
+      const orphan = await append(51);
+      await relay().runOnce();
+      await age(orphan);
+      const unknownState = { getState: async () => 'unknown' };
+      const hashOnly: Pick<Queue, 'add' | 'getJob'> = {
+        getJob: async (jobId: string) => (jobId === jid(orphan) ? (unknownState as never) : queue.getJob(jobId)),
+        add: async () => Promise.reject(new Error('add must not be called for an orphaned hash')),
+      };
+      await reconciler({}, hashOnly).runOnce();
+      expect(await delivery(orphan)).toMatchObject({ state: 'DEAD_LETTERED', reconcile_attempts: 0, last_error_code: 'reconcile-unknown-without-outcome' });
+      expect(await deadLetters(`logical_job_id = '${jid(orphan)}' and failure_class = 'STATE_CONFLICT'`)).toBe(1);
     });
 
     it('a marker without a closed delivery is closed as SUCCEEDED, never re-run', async () => {

@@ -57,10 +57,10 @@ export async function startWorker(env: WorkerEnv, log: Logger): Promise<{ shutdo
   // A job can fail without process() running (stalled past BullMQ's limit): make sure it still leaves a dead letter.
   worker.on('failed', (job) => {
     if (!job) return;
-    void job.isFailed().then(
-      (final) => (final ? runner.recordFinalFailure(job) : undefined),
-      () => undefined,
-    );
+    void job
+      .isFailed()
+      .then((final) => (final ? runner.recordFinalFailure(job) : undefined))
+      .catch((err: unknown) => log.error({ queue: EVENTS_QUEUE, jobId: job.id, ...errorFields(err, true) }, 'final-failure handling failed; the reconciler will see the delivery'));
   });
 
   const relay = new OutboxRelay(db, queue, registry, { owner: `${hostname()}:${process.pid}`, batchSize: env.RELAY_BATCH_SIZE, leaseMs: env.RELAY_LEASE_MS }, log);

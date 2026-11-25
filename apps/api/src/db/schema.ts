@@ -56,6 +56,7 @@ export const eventDelivery = platform.table(
     jobId: text('job_id').notNull().unique(),
     enqueueAttempts: integer('enqueue_attempts').notNull().default(0),
     reconcileAttempts: integer('reconcile_attempts').notNull().default(0),
+    reconcileCheckedAt: ts('reconcile_checked_at'),
     lastErrorCode: text('last_error_code'),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at').notNull().defaultNow(),

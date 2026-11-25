@@ -65,20 +65,22 @@ export class OutboxReconciler {
 
   /**
    * A bounded batch of stale unfinished deliveries of DISPATCHED events (an undispatched event's deliveries are
-   * the relay's, under its lease). Touching updated_at in the claim is the reconciler's lease: a concurrent
-   * reconciler skips the locked rows, then finds them no longer stale.
+   * the relay's, under its lease). reconcile_checked_at is the reconciler's lease: a concurrent reconciler skips the
+   * locked rows, then finds them recently checked. Looking never touches updated_at, so the staleDeliveries gauge
+   * keeps counting a delivery that stays stuck (a hung but lock-renewing job is PRESENT on every pass).
    */
   private claim(): Promise<Delivery[]> {
     return this.sys((tx) =>
       tx
         .update(eventDelivery)
-        .set({ updatedAt: sql`now()` })
+        .set({ reconcileCheckedAt: sql`now()` })
         .where(
           sql`(${eventDelivery.eventId}, ${eventDelivery.consumer}) in (
             select d.event_id, d.consumer from platform.event_delivery d
               join platform.event_outbox e on e.event_id = d.event_id
              where d.state in ('PENDING', 'ENQUEUE_UNKNOWN', 'QUEUED', 'PROCESSING') and e.dispatched_at is not null
                and d.updated_at < now() - make_interval(secs => ${this.opts.staleMs / 1000})
+               and (d.reconcile_checked_at is null or d.reconcile_checked_at < now() - make_interval(secs => ${this.opts.staleMs / 1000}))
              order by d.updated_at limit ${this.opts.batchSize}
                for update of d skip locked)`,
         )
@@ -109,8 +111,9 @@ export class OutboxReconciler {
       }
       return 'PRESENT';
     }
-    if (jobState !== 'missing' && jobState !== 'unknown') {
-      // Completed or failed in BullMQ with no durable outcome: re-running blindly could repeat a lost decision.
+    if (jobState !== 'missing') {
+      // Completed or failed with no durable outcome (re-running blindly could repeat a lost decision), or 'unknown':
+      // the job hash exists in no list, and add() under that id would be a silent no-op, not a repair.
       return this.deadLetter(d, 'STATE_CONFLICT', `reconcile-${jobState}-without-outcome`);
     }
     if (d.reconcileAttempts >= this.opts.maxRematerializations) return this.deadLetter(d, 'DEPENDENCY_UNAVAILABLE', 'reconcile-exhausted');
@@ -139,7 +142,14 @@ export class OutboxReconciler {
       await this.queue.add(consumer.name, eventJobEnvelope(event, d.jobId, consumer), jobOptionsFor(consumer, d.jobId));
     } catch (err) {
       this.log.warn({ consumer: d.consumer, ...errorFields(err, true) }, 'reconcile: re-enqueue failed; delivery stays durable');
-      await this.sys((tx) => tx.update(eventDelivery).set({ lastErrorCode: 'ENQUEUE_FAILED', updatedAt: sql`now()` }).where(pk(d)));
+      // A refused add() is not a lost job: give the attempt back, so a Valkey write outage (noeviction OOM) cannot use
+      // up the budget. If Valkey did accept it after all, the next pass finds the job alive and leaves it alone.
+      await this.sys((tx) =>
+        tx
+          .update(eventDelivery)
+          .set({ lastErrorCode: 'ENQUEUE_FAILED', reconcileAttempts: sql`greatest(${eventDelivery.reconcileAttempts} - 1, 0)`, updatedAt: sql`now()` })
+          .where(pk(d)),
+      );
       return 'QUEUE_UNAVAILABLE';
     }
     await this.transition(d, { state: 'QUEUED', lastErrorCode: null }, ['ENQUEUE_UNKNOWN']);

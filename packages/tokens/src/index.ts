@@ -110,7 +110,7 @@ export const color = {
   warnBg: '#fffaeb',
   warnBorder: '#fedf89',
   // Informational state on the neutral ramp: the legacy blue is retired (RB25-D05) and the CTO palette
-  // defines no blue. DESIGN REVIEW PENDING (RB-B01-07): a dedicated info hue needs an approved value.
+  // defines no blue. The neutral role is APPROVED (RB25-D14): #333846 on #F4F5F7, never a new hue.
   info: neutral[700],
   infoBg: neutral[100],
   infoBorder: neutral[300],

@@ -124,8 +124,11 @@ export class EventConsumerRunner {
     } catch (err) {
       const permanent = err instanceof ConsumerError && PERMANENT.has(err.failureClass);
       const final = permanent || job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
-      this.log.warn({ consumer: consumer.name, attempt: job.attemptsMade + 1, outcome: final ? 'dead-lettered' : 'retrying', ...errorFields(err, true) }, 'job failed');
-      if (final) await this.deadLetter(job, verified, err, 'update', consumer.name);
+      const errorCode = err instanceof ConsumerError ? err.fingerprint : undefined;
+      this.log.warn({ consumer: consumer.name, jobId: job.id, attempt: job.attemptsMade + 1, outcome: final ? 'final' : 'retrying', errorCode, ...errorFields(err, true) }, 'job failed');
+      // Before verification only a refusal is quarantined. An infrastructure failure there (connection reset, timeout)
+      // is no evidence against the job: the failed-job fallback or the reconciler attributes it once it verifies.
+      if (final && (verified !== null || err instanceof ConsumerError)) await this.deadLetter(job, verified, err, 'update', consumer.name);
       if (permanent) throw new UnrecoverableError((err as ConsumerError).failureClass);
       // BullMQ keeps the thrown message in Valkey: rethrow a class name only, never the original text.
       throw new Error(err instanceof Error ? err.name : 'Error');
@@ -143,7 +146,7 @@ export class EventConsumerRunner {
     try {
       if (parsed.success && job.id !== undefined) target = await this.verifyByJobId(job.id, parsed.data);
     } catch (err) {
-      this.log.error({ ...errorFields(err, true) }, 'failed job could not be verified; quarantined');
+      this.log.error({ jobId: job.id, ...errorFields(err, true) }, 'failed job could not be verified; quarantined');
     }
     const label = parsed.success ? this.registry.consumer(parsed.data.job_type)?.name : undefined;
     await this.deadLetter(job, target, new ConsumerError('TRANSIENT', 'failed-outside-processor'), 'keep', label);
@@ -205,7 +208,7 @@ export class EventConsumerRunner {
       });
     } catch (writeErr) {
       // The job still fails visibly in BullMQ's failed set; this line makes the missing dead letter visible too.
-      this.log.error({ consumer, ...errorFields(writeErr, true) }, 'dead letter could not be written');
+      this.log.error({ consumer, jobId: job.id, errorCode: fingerprint, outcome: failureClass, ...errorFields(writeErr, true) }, 'dead letter could not be written');
     }
   }
 }

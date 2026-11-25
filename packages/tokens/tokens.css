@@ -64,7 +64,7 @@
   --adu-color-warn: #b54708;
   --adu-color-warn-bg: #fffaeb;
   --adu-color-warn-border: #fedf89;
-  /* info on the neutral ramp: legacy blue retired; design review pending (RB-B01-07) */
+  /* info on the neutral ramp: legacy blue retired; neutral role approved (RB25-D14) */
   --adu-color-info: var(--adu-neutral-700);
   --adu-color-info-bg: var(--adu-neutral-100);
   --adu-color-info-border: var(--adu-neutral-300);

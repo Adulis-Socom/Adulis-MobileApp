@@ -32,10 +32,12 @@ export const queueWorkerConnection = (url: string, log: Logger): Redis =>
 
 /**
  * Relay (producer) connection: NO offline queue, so an add fails fast while Valkey is down instead of
- * buffering in memory. The event stays durable in PostgreSQL and the relay retries it (EVT-01 S12).
+ * buffering in memory. The event stays durable in PostgreSQL and the relay retries it (EVT-01 S12). Producer
+ * commands never block, so a command timeout and TCP keep-alive turn a half-open socket into a visible, logged
+ * failure instead of a silently stalled relay, reconcile and health loop.
  */
 export const queueProducerConnection = (url: string, log: Logger): Redis =>
-  quietErrors(new Redis(url, { enableOfflineQueue: false, maxRetriesPerRequest: 1, lazyConnect: true }), log, 'queue-producer');
+  quietErrors(new Redis(url, { enableOfflineQueue: false, maxRetriesPerRequest: 1, lazyConnect: true, commandTimeout: 5_000, keepAlive: 10_000 }), log, 'queue-producer');
 
 /** A startup refusal whose message is safe to log: it names a policy, never a URL or credential. */
 export class QueuePolicyRefused extends Error {

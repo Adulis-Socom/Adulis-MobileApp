@@ -189,7 +189,7 @@ describe('API platform (ARC-BE-02)', () => {
     h = await harness();
     const res = await h.inject({ method: 'GET', url: '/v1/probe/client-error' });
     expect(res.statusCode).toBe(429);
-    expect(res.json()).toMatchObject({ code: 'VALIDATION_FAILED', status: 429 });
+    expect(res.json()).toMatchObject({ code: 'VALIDATION_FAILED', status: 429, retryable: true });
     expect(res.body).not.toContain('framework text');
   });
 

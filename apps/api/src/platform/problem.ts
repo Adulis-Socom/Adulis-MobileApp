@@ -72,7 +72,11 @@ export function toAdulisException(err: unknown): AdulisException {
   if (status === 413) return new AdulisException('PAYLOAD_TOO_LARGE');
   // Any other client error stays a client error with its real status (RB-B01-18), mapped onto the closed
   // catalogue: never a 500, and never the framework's own text.
-  if (typeof status === 'number' && Number.isInteger(status) && status >= 400 && status < 500) return new AdulisException('VALIDATION_FAILED', { status });
+  // shortcut: 408 and 429 have no catalogue code of their own (RATE_LIMITED is a spec GAP, RB-B02A-02); they are at
+  // least retryable, so a client backs off instead of asking the person to fix their input.
+  if (typeof status === 'number' && Number.isInteger(status) && status >= 400 && status < 500) {
+    return new AdulisException('VALIDATION_FAILED', { status, retryable: status === 408 || status === 429 });
+  }
   return new AdulisException('INTERNAL');
 }
 
