@@ -1,0 +1,108 @@
+event_type,event_version,owner,replacement_status,owner_work_order,allowed_scopes,consumers,payload_schema_ref,source,note
+account.created,1,Accounts,ACTIVE,SC-BE-02,GLOBAL,Notifications ; Analytics,event_payload_schemas.json#/$defs/account__created__v1,AUTH S123,
+account.deletion_requested,1,Account Lifecycle,ACTIVE,SC-BE-06,GLOBAL,Auth ; Privacy,event_payload_schemas.json#/$defs/account__deletion_requested__v1,AUTH S52/140,
+account.deleted,1,Account Lifecycle,ACTIVE,SC-BE-06,GLOBAL,Privacy ; Auth ; Recommendation,event_payload_schemas.json#/$defs/account__deleted__v1,WEB S39 AUTH S140,
+session.revoked,1,Auth,ACTIVE,SC-BE-02,GLOBAL,Auth ; Security,event_payload_schemas.json#/$defs/session__revoked__v1,AUTH S38/118/123,
+seller.created,1,Seller,ACTIVE,SC-BE-03,MARKET,Onboarding ; Notifications ; Analytics,event_payload_schemas.json#/$defs/seller__created__v1,ONB S141,
+seller.eligibility_changed,1,Seller Eligibility,ACTIVE,SC-BE-03,MARKET,Content ; Search ; Recommendation ; Storefront ; Trust,event_payload_schemas.json#/$defs/seller__eligibility_changed__v1,EVT S35 ONB S141,
+seller.social_verification_changed,1,Onboarding,ACTIVE,SC-BE-03,MARKET,Seller Eligibility ; Audit,event_payload_schemas.json#/$defs/seller__social_verification_changed__v1,EVT S35 ONB S141,
+seller.social_connection.verified,1,Onboarding,ACTIVE,SC-BE-03,MARKET,Seller Eligibility ; Audit,event_payload_schemas.json#/$defs/seller__social_connection__verified__v1,ONB S141,
+seller.social_connection.revoked,1,Onboarding,ACTIVE,SC-BE-03,MARKET,Seller Eligibility ; Media ; Audit,event_payload_schemas.json#/$defs/seller__social_connection__revoked__v1,ONB S141,
+seller.eligibility.evaluated,1,Seller Eligibility,ACTIVE,SC-BE-03,MARKET,Onboarding ; Audit,event_payload_schemas.json#/$defs/seller__eligibility__evaluated__v1,ONB S141,
+seller.eligibility.satisfied,1,Seller Eligibility,ACTIVE,SC-BE-03,MARKET,Onboarding ; Audit,event_payload_schemas.json#/$defs/seller__eligibility__satisfied__v1,ONB S141,
+seller.readiness.changed,1,Onboarding,ACTIVE,SC-BE-03,MARKET,Seller Console ; Notifications,event_payload_schemas.json#/$defs/seller__readiness__changed__v1,ONB S141,
+seller.onboarding.completed,1,Onboarding,ACTIVE,SC-BE-03,MARKET,Seller Console ; Notifications ; Analytics,event_payload_schemas.json#/$defs/seller__onboarding__completed__v1,ONB S141,
+product.created,1,Catalogue,ACTIVE,SC-BE-04,MARKET,Search ; Storefront ; Analytics,event_payload_schemas.json#/$defs/product__created__v1,CATINV S93,
+product.updated,1,Catalogue,ACTIVE,SC-BE-04,MARKET,Search ; Storefront ; Analytics,event_payload_schemas.json#/$defs/product__updated__v1,CATINV S93,
+product.published,1,Catalogue,ACTIVE,SC-BE-04,MARKET,Search ; Storefront ; Content,event_payload_schemas.json#/$defs/product__published__v1,CATINV S93,
+product.withdrawn,1,Catalogue,ACTIVE,SC-BE-04,MARKET,Search ; Storefront ; Content,event_payload_schemas.json#/$defs/product__withdrawn__v1,CATINV S93,
+variant.updated,1,Catalogue,ACTIVE,SC-BE-04,MARKET,Checkout ; Search ; Storefront,event_payload_schemas.json#/$defs/variant__updated__v1,CATINV S93,
+product_post.updated,1,Catalogue,ACTIVE,SC-BE-04,MARKET,Content ; Search ; Storefront ; Recommendation,event_payload_schemas.json#/$defs/product_post__updated__v1,CATINV S93,
+product_post.published,1,Catalogue,ACTIVE,SC-BE-04,MARKET,Content ; Search ; Storefront ; Analytics,event_payload_schemas.json#/$defs/product_post__published__v1,EVT S35 CATINV S93,
+product_post.unpublished,1,Catalogue,ACTIVE,SC-BE-04,MARKET,Content ; Search ; Storefront ; Recommendation,event_payload_schemas.json#/$defs/product_post__unpublished__v1,EVT S35 CATINV S93,
+inventory.changed,1,Inventory,ACTIVE,SC-BE-04,MARKET,Content ; Checkout ; Search ; Storefront ; Recommendation,event_payload_schemas.json#/$defs/inventory__changed__v1,CATINV S94,
+inventory.stock_confirmed,1,Inventory,ACTIVE,SC-BE-04,MARKET,Content ; Search ; Storefront ; Analytics,event_payload_schemas.json#/$defs/inventory__stock_confirmed__v1,CATINV S94,
+inventory.public_stock_projection_changed,1,Inventory,ACTIVE,SC-BE-04,MARKET,Search ; Storefront ; Recommendation,event_payload_schemas.json#/$defs/inventory__public_stock_projection_changed__v1,CATINV S94,
+scene_post.published,1,Content,ACTIVE,SC-BE-05,MARKET,Search ; Recommendation ; Storefront ; Media ; Analytics,event_payload_schemas.json#/$defs/scene_post__published__v1,SCN S44,
+scene_post.revised,1,Content,ACTIVE,SC-BE-05,MARKET,Search ; Recommendation ; Storefront,event_payload_schemas.json#/$defs/scene_post__revised__v1,EVT S35 SCN S44,
+scene_post.visibility_changed,1,Content,ACTIVE,SC-BE-05,MARKET,Search ; Recommendation ; Storefront ; Collections ; Notifications ; Analytics,event_payload_schemas.json#/$defs/scene_post__visibility_changed__v1,SCN S44,
+scene_post.archived,1,Content,ACTIVE,SC-BE-05,MARKET,Search ; Recommendation ; Storefront ; Collections,event_payload_schemas.json#/$defs/scene_post__archived__v1,EVT S35 SCN S44,
+scene_post.deleted,1,Content,ACTIVE,SC-BE-05,MARKET,Search ; Recommendation ; Storefront ; Collections ; Media,event_payload_schemas.json#/$defs/scene_post__deleted__v1,EVT S35 SCN S44,
+checkout.allocation_created,1,Checkout/Orders,DORMANT (payment-dependent; P2),P2-02,MARKET,Inventory ; Analytics,event_payload_schemas.json#/$defs/checkout__allocation_created__v1,EVT S35 ORDER S35,
+checkout.allocation_released,1,Checkout/Orders,DORMANT (payment-dependent; P2),P2-02,MARKET,Inventory ; Analytics,event_payload_schemas.json#/$defs/checkout__allocation_released__v1,EVT S35 ORDER S52,
+payment.attempt_created,1,Finance,DORMANT (payment-dependent; P2),P2-01,MARKET,Checkout ; Analytics,event_payload_schemas.json#/$defs/payment__attempt_created__v1,FIN S17 EVT S35,
+payment.verified,1,Finance,DORMANT (payment-dependent; P2),P2-01,MARKET,Orders ; Notifications ; Analytics ; Reviews ; Trust,event_payload_schemas.json#/$defs/payment__verified__v1,FIN S15/16 EVT S35,
+payment.failed,1,Finance,DORMANT (payment-dependent; P2),P2-01,MARKET,Orders ; Notifications,event_payload_schemas.json#/$defs/payment__failed__v1,EVT S35 FIN S17,
+refund.status_changed,1,Finance,DORMANT (payment-dependent; P2),P2-01,MARKET,Claims ; Reviews ; Trust ; Notifications ; Analytics,event_payload_schemas.json#/$defs/refund__status_changed__v1,TRUST S66 EVT S7,
+order.paid,1,Orders,DORMANT (payment-dependent; P2),P2-02,MARKET,Fulfilment ; Notifications ; Analytics,event_payload_schemas.json#/$defs/order__paid__v1,ORDER S53 EVT S35,
+order.ready,1,Orders,DORMANT (payment-dependent; P2),P2-02,MARKET,Fulfilment ; Notifications,event_payload_schemas.json#/$defs/order__ready__v1,ORDER S90 EVT S35,
+order.completed,1,Orders,DORMANT (payment-dependent; P2),P2-02,MARKET,Trust ; Notifications ; Analytics,event_payload_schemas.json#/$defs/order__completed__v1,ORDER S102 EVT S35,
+handoff.created,1,Handoff,DORMANT (payment-dependent; P2),P2-02,MARKET,Orders ; Analytics,event_payload_schemas.json#/$defs/handoff__created__v1,HND S41,
+handoff.delegate_created,1,Handoff,DORMANT (payment-dependent; P2),P2-02,MARKET,Handoff ; Notifications ; Audit,event_payload_schemas.json#/$defs/handoff__delegate_created__v1,HND S41,
+handoff.delegate_revoked,1,Handoff,DORMANT (payment-dependent; P2),P2-02,MARKET,Handoff ; Notifications ; Audit,event_payload_schemas.json#/$defs/handoff__delegate_revoked__v1,HND S41,
+handoff.qr_issued,1,Handoff,DORMANT (payment-dependent; P2),P2-02,MARKET,Audit ; Observability,event_payload_schemas.json#/$defs/handoff__qr_issued__v1,HND S41,
+handoff.otp_requested,1,Handoff,DORMANT (payment-dependent; P2),P2-02,MARKET,Audit ; Observability,event_payload_schemas.json#/$defs/handoff__otp_requested__v1,HND S41,
+handoff.otp_sent,1,Handoff,DORMANT (payment-dependent; P2),P2-02,MARKET,Audit ; Observability,event_payload_schemas.json#/$defs/handoff__otp_sent__v1,HND S41,
+handoff.verification_failed,1,Handoff,DORMANT (payment-dependent; P2),P2-02,MARKET,Claims ; Audit ; Observability,event_payload_schemas.json#/$defs/handoff__verification_failed__v1,HND S41,
+handoff.manual_review_requested,1,Handoff,DORMANT (payment-dependent; P2),P2-02,MARKET,Operations ; Audit,event_payload_schemas.json#/$defs/handoff__manual_review_requested__v1,HND S41,
+handoff.verified,1,Handoff,DORMANT (payment-dependent; P2),P2-02,MARKET,FUL_PICKUP ; FUL_DELIVERY ; ORDER_DELIVERY ; REV_FINAL_DELIVERY ; TRUST_FINAL_RECEIPT ; CLAIMS_EVIDENCE ; NOTIF_STAGE ; ANL_STAGE,event_payload_schemas.json#/$defs/handoff__verified__v1,HND S41,
+handoff.revoked,1,Handoff,DORMANT (payment-dependent; P2),P2-02,MARKET,Fulfilment ; Orders ; Notifications ; Audit,event_payload_schemas.json#/$defs/handoff__revoked__v1,HND S41,
+courier.relationship.approved,1,Fulfilment,"ACTIVE (relationships only, B02B-D02)",SC-BE-06,MARKET,Notifications ; Courier UI ; Audit,event_payload_schemas.json#/$defs/courier__relationship__approved__v1,FUL S57,no delivery execution
+courier.terms.updated,1,Fulfilment,"ACTIVE (relationships only, B02B-D02)",SC-BE-06,MARKET,Notifications ; Seller Console ; Courier UI,event_payload_schemas.json#/$defs/courier__terms__updated__v1,FUL S57,no delivery execution
+delivery.request.created,1,Fulfilment,DORMANT (live delivery deferred; P2-02),SC-BE-06,MARKET,Notifications ; Analytics,event_payload_schemas.json#/$defs/delivery__request__created__v1,FUL S57,
+delivery.offer.accepted,1,Fulfilment,DORMANT (live delivery deferred; P2-02),SC-BE-06,MARKET,Seller Console ; Notifications ; Audit,event_payload_schemas.json#/$defs/delivery__offer__accepted__v1,FUL S57,
+delivery.assigned,1,Fulfilment,DORMANT (live delivery deferred; P2-02),SC-BE-06,MARKET,Seller Console ; Courier UI ; Notifications,event_payload_schemas.json#/$defs/delivery__assigned__v1,FUL S57,
+delivery.started,1,Fulfilment,DORMANT (live delivery deferred; P2-02),SC-BE-06,MARKET,Notifications ; Analytics,event_payload_schemas.json#/$defs/delivery__started__v1,FUL S57,
+delivery.completed,1,Fulfilment,DORMANT (live delivery deferred; P2-02),SC-BE-06,MARKET,Notifications ; Analytics ; Trust,event_payload_schemas.json#/$defs/delivery__completed__v1,FUL S57,
+delivery.cancelled,1,Fulfilment,DORMANT (live delivery deferred; P2-02),SC-BE-06,MARKET,Notifications ; Claims ; Trust,event_payload_schemas.json#/$defs/delivery__cancelled__v1,FUL S57,
+location.pickup.captured,1,Fulfilment,DORMANT (live delivery deferred; P2-02),SC-BE-06,MARKET,Claims ; Audit,event_payload_schemas.json#/$defs/location__pickup__captured__v1,FUL S57,
+location.delivery.captured,1,Fulfilment,DORMANT (live delivery deferred; P2-02),SC-BE-06,MARKET,Claims ; Audit,event_payload_schemas.json#/$defs/location__delivery__captured__v1,FUL S57,
+claim.opened,1,Claims,DORMANT (payment-dependent; P2),P2-03,MARKET,Notifications ; Analytics,event_payload_schemas.json#/$defs/claim__opened__v1,CLAIM S89,
+claim.evidence_attached,1,Claims,DORMANT (payment-dependent; P2),P2-03,MARKET,Claims workflow ; Notifications ; Audit,event_payload_schemas.json#/$defs/claim__evidence_attached__v1,CLAIM S89,
+claim.evidence_requested,1,Claims,DORMANT (payment-dependent; P2),P2-03,MARKET,Notifications ; Claims workflow,event_payload_schemas.json#/$defs/claim__evidence_requested__v1,CLAIM S89,
+claim.state_changed,1,Claims,DORMANT (payment-dependent; P2),P2-03,MARKET,Notifications ; Analytics,event_payload_schemas.json#/$defs/claim__state_changed__v1,CLAIM S89,
+claim.decision_recorded,1,Claims,DORMANT (payment-dependent; P2),P2-03,MARKET,Reviews ; Trust ; Notifications ; Analytics ; Finance,event_payload_schemas.json#/$defs/claim__decision_recorded__v1,CLAIM S89,
+claim.decision_corrected,1,Claims,DORMANT (payment-dependent; P2),P2-03,MARKET,Reviews ; Trust ; Notifications ; Analytics ; Finance,event_payload_schemas.json#/$defs/claim__decision_corrected__v1,CLAIM S89,
+claim.remedy_requested,1,Claims,DORMANT (payment-dependent; P2),P2-03,MARKET,Finance ; Notifications ; Analytics,event_payload_schemas.json#/$defs/claim__remedy_requested__v1,CLAIM S89,
+claim.remedy_completed,1,Claims,DORMANT (payment-dependent; P2),P2-03,MARKET,Reviews ; Trust ; Notifications ; Analytics,event_payload_schemas.json#/$defs/claim__remedy_completed__v1,CLAIM S89,
+claim.resolved,1,Claims,DORMANT (payment-dependent; P2),P2-03,MARKET,Notifications ; Analytics,event_payload_schemas.json#/$defs/claim__resolved__v1,CLAIM S89,
+review.eligibility_changed,1,Reviews,DORMANT (purchase-derived Reviews deferred; P2-03),P2-03,MARKET,Notifications ; Analytics ; Trust,event_payload_schemas.json#/$defs/review__eligibility_changed__v1,REV S29,no producer until Review Grants exist
+review.published,1,Reviews,DORMANT (purchase-derived Reviews deferred; P2-03),P2-03,MARKET,Ratings ; Trust ; Recommendation ; Analytics,event_payload_schemas.json#/$defs/review__published__v1,REV S29 EVT S35,no producer until Review Grants exist
+trust.level_changed,1,Trust,ACTIVE (non-commerce inputs only),SC-BE-06,MARKET,Search ; Recommendation ; Storefront ; Notifications,event_payload_schemas.json#/$defs/trust__level_changed__v1,TRUST S66,"no payment, handoff or claim input exists in the MVP"
+moderation.enforcement_changed,1,Moderation,ACTIVE,OP-BE-03,MARKET,Content ; Catalogue ; Media ; Auth ; Trust ; Search ; Recommendation ; Storefront ; Notifications,event_payload_schemas.json#/$defs/moderation__enforcement_changed__v1,MOD S49,
+collection.item_added,1,Collections,ACTIVE,MOB-BE-08,MARKET,Analytics ; Recommendation,event_payload_schemas.json#/$defs/collection__item_added__v1,SRC S17 EVT S35,
+collection.item_removed,1,Collections,ACTIVE,MOB-BE-08,MARKET,Analytics ; Recommendation,event_payload_schemas.json#/$defs/collection__item_removed__v1,EVT S7 SRC S17,
+notification.created,1,Notifications,ACTIVE,ARC-BE-04 / SC-BE-06,MARKET,Notification delivery,event_payload_schemas.json#/$defs/notification__created__v1,NOTIF S6 EVT S35,
+notification.delivery_recorded,1,Notifications,ACTIVE,ARC-BE-04 / SC-BE-06,MARKET,Audit ; Analytics,event_payload_schemas.json#/$defs/notification__delivery_recorded__v1,EVT S7 NOTIF S6,
+media.image_uploaded,1,Media,ACTIVE,SC-BE-04,MARKET,Media processing,event_payload_schemas.json#/$defs/media__image_uploaded__v1,EVT S35 MEDIA S9,
+media.image_ready,1,Media,ACTIVE,SC-BE-04,MARKET,Catalogue ; Content,event_payload_schemas.json#/$defs/media__image_ready__v1,EVT S35 MEDIA S9,
+media.image_failed,1,Media,ACTIVE,SC-BE-04,MARKET,Media workflow ; Notifications,event_payload_schemas.json#/$defs/media__image_failed__v1,EVT S7 MEDIA S9,
+privacy.lifecycle_requested,1,Privacy,ACTIVE,SC-BE-06 / OP-BE-04,GLOBAL MARKET,Auth ; Privacy tasks,event_payload_schemas.json#/$defs/privacy__lifecycle_requested__v1,PRV S59,
+privacy.lifecycle_confirmed,1,Privacy,ACTIVE,SC-BE-06 / OP-BE-04,GLOBAL MARKET,Privacy tasks ; Notifications,event_payload_schemas.json#/$defs/privacy__lifecycle_confirmed__v1,PRV S59,
+privacy.lifecycle_blocked,1,Privacy,ACTIVE,SC-BE-06 / OP-BE-04,GLOBAL MARKET,Notifications ; Audit,event_payload_schemas.json#/$defs/privacy__lifecycle_blocked__v1,PRV S59,
+privacy.lifecycle_processing_started,1,Privacy,ACTIVE,SC-BE-06 / OP-BE-04,GLOBAL MARKET,Privacy tasks ; Audit,event_payload_schemas.json#/$defs/privacy__lifecycle_processing_started__v1,PRV S59,
+privacy.domain_task_completed,1,Privacy,ACTIVE,SC-BE-06 / OP-BE-04,GLOBAL MARKET,Privacy tasks ; Audit,event_payload_schemas.json#/$defs/privacy__domain_task_completed__v1,PRV S59,
+privacy.hold_created,1,Privacy,ACTIVE,SC-BE-06 / OP-BE-04,GLOBAL MARKET,Held domain owners ; Audit,event_payload_schemas.json#/$defs/privacy__hold_created__v1,PRV S59,
+privacy.hold_released,1,Privacy,ACTIVE,SC-BE-06 / OP-BE-04,GLOBAL MARKET,Held domain owners ; Audit,event_payload_schemas.json#/$defs/privacy__hold_released__v1,PRV S59,
+privacy.lifecycle_completed,1,Privacy,ACTIVE,SC-BE-06 / OP-BE-04,GLOBAL MARKET,Auth ; Notifications ; Audit,event_payload_schemas.json#/$defs/privacy__lifecycle_completed__v1,PRV S59,
+privacy.export_ready,1,Privacy,ACTIVE,SC-BE-06 / OP-BE-04,GLOBAL MARKET,Notifications ; Audit,event_payload_schemas.json#/$defs/privacy__export_ready__v1,PRV S59,
+privacy.incident_awareness_recorded,1,Privacy,ACTIVE,SC-BE-06 / OP-BE-04,GLOBAL MARKET,Privacy workflow ; Observability,event_payload_schemas.json#/$defs/privacy__incident_awareness_recorded__v1,PRV S59,
+privacy.incident_assessment_updated,1,Privacy,ACTIVE,SC-BE-06 / OP-BE-04,GLOBAL MARKET,Privacy workflow ; Observability,event_payload_schemas.json#/$defs/privacy__incident_assessment_updated__v1,PRV S59,
+chatbot.knowledge_version_published,1,Chatbot,ACTIVE (owner gap RB-005),SC-BE-06 (RB-005),MARKET,Chatbot runtime ; Audit,event_payload_schemas.json#/$defs/chatbot__knowledge_version_published__v1,CHATBOT S73,scripted help owner proposed SC-BE-06
+chatbot.localization_completeness_changed,1,Chatbot,ACTIVE (owner gap RB-005),SC-BE-06 (RB-005),MARKET,Chatbot runtime ; Seller Console,event_payload_schemas.json#/$defs/chatbot__localization_completeness_changed__v1,CHATBOT S73,scripted help owner proposed SC-BE-06
+chatbot.feedback_submitted,1,Chatbot,ACTIVE (owner gap RB-005),SC-BE-06 (RB-005),MARKET,Chatbot workflow ; Audit,event_payload_schemas.json#/$defs/chatbot__feedback_submitted__v1,CHATBOT S73,scripted help owner proposed SC-BE-06
+chatbot.feedback_triaged,1,Chatbot,ACTIVE (owner gap RB-005),SC-BE-06 (RB-005),MARKET,Chatbot workflow ; Audit,event_payload_schemas.json#/$defs/chatbot__feedback_triaged__v1,CHATBOT S73,scripted help owner proposed SC-BE-06
+chatbot.intent_version_published,1,Chatbot,ACTIVE (owner gap RB-005),SC-BE-06 (RB-005),MARKET,Chatbot runtime ; Audit,event_payload_schemas.json#/$defs/chatbot__intent_version_published__v1,CHATBOT S73,scripted help owner proposed SC-BE-06
+chatbot.template_version_published,1,Chatbot,ACTIVE (owner gap RB-005),SC-BE-06 (RB-005),MARKET,Chatbot runtime ; Audit,event_payload_schemas.json#/$defs/chatbot__template_version_published__v1,CHATBOT S73,scripted help owner proposed SC-BE-06
+chatbot.kill_switch_changed,1,Chatbot,ACTIVE (owner gap RB-005),SC-BE-06 (RB-005),MARKET,Chatbot runtime ; Seller Console,event_payload_schemas.json#/$defs/chatbot__kill_switch_changed__v1,CHATBOT S73,scripted help owner proposed SC-BE-06
+chatbot.escalation_created,1,Chatbot,ACTIVE (owner gap RB-005),SC-BE-06 (RB-005),MARKET,Chat ; Notifications,event_payload_schemas.json#/$defs/chatbot__escalation_created__v1,CHATBOT S73,scripted help owner proposed SC-BE-06
+chatbot.bot_turn_completed,1,Chatbot,ACTIVE (owner gap RB-005),SC-BE-06 (RB-005),MARKET,Chat ; Analytics,event_payload_schemas.json#/$defs/chatbot__bot_turn_completed__v1,CHATBOT S73,scripted help owner proposed SC-BE-06
+market.config_published,1,Market,ACTIVE,SC-BE-03 / OP-BE-06 (provider routing: SC-BE-02),MARKET,Activated domain readers ; Audit,event_payload_schemas.json#/$defs/market__config_published__v1,MKT S105,
+market.activation_changed,1,Market,ACTIVE,SC-BE-03 / OP-BE-06 (provider routing: SC-BE-02),MARKET,Activated domain readers ; Audit,event_payload_schemas.json#/$defs/market__activation_changed__v1,MKT S105,
+market.locale_pack_changed,1,Market,ACTIVE,SC-BE-03 / OP-BE-06 (provider routing: SC-BE-02),MARKET,Surface localization ; Chatbot,event_payload_schemas.json#/$defs/market__locale_pack_changed__v1,MKT S105,
+market.provider_routing_changed,1,Market,"ACTIVE (SMS/OTP transport routing, MKT-01)",SC-BE-03 / OP-BE-06 (provider routing: SC-BE-02),MARKET,Finance ; Deployment,event_payload_schemas.json#/$defs/market__provider_routing_changed__v1,MKT S105,"MKT-01: Market owns the ordered transport-provider routing for OTP (Afromessage, SMS Ethiopia); the registry also lists a Finance consumer, which stays dormant"
+(job intent) handoff.delegate_invitation,1,Handoff,DORMANT (payment-dependent; P2),P2-02,MARKET,,event_payload_schemas.json#/$defs/handoff_delegate_invitation__intent_v1,HND S65; NOTIF S6,
+story.created,(proposed),Stories,GAP (not in registry v1),SC-BE-05S,MARKET,Storefront; Search; Recommendation; Notifications (to define),(to register per ADU-EVT procedures),Governance/STORY_CONTRACT_2026-11-24; EVT-01 Nov24 change 1-2,query-time expiry is authoritative; jobs only clean up and invalidate
+story.withdrawn,(proposed),Stories,GAP (not in registry v1),SC-BE-05S,MARKET,Storefront; Search; Recommendation; Notifications (to define),(to register per ADU-EVT procedures),Governance/STORY_CONTRACT_2026-11-24; EVT-01 Nov24 change 1-2,query-time expiry is authoritative; jobs only clean up and invalidate
+story.restricted,(proposed),Stories,GAP (not in registry v1),SC-BE-05S,MARKET,Storefront; Search; Recommendation; Notifications (to define),(to register per ADU-EVT procedures),Governance/STORY_CONTRACT_2026-11-24; EVT-01 Nov24 change 1-2,query-time expiry is authoritative; jobs only clean up and invalidate
+story.expired / invalidation,(proposed),Stories,GAP (not in registry v1),SC-BE-05S,MARKET,Storefront; Search; Recommendation; Notifications (to define),(to register per ADU-EVT procedures),Governance/STORY_CONTRACT_2026-11-24; EVT-01 Nov24 change 1-2,query-time expiry is authoritative; jobs only clean up and invalidate

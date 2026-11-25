@@ -1,0 +1,122 @@
+prototype_section,screen_id,work_order,disposition,note
+src/sections/SellerConsole.tsx,home,SC-FE-03,BUILD,daily operating Home
+src/sections/SellerConsole.tsx,overview,SC-FE-03,BUILD,status overview
+src/sections/SellerConsole.tsx,products,SC-FE-04,BUILD,catalogue
+src/sections/SellerConsole.tsx,content,SC-FE-05,BUILD,"Content nav: Scenes (and Stories entry, SC-FE-05S)"
+src/sections/SellerConsole.tsx,scenes,SC-FE-05,BUILD,Scene list/editor
+src/sections/SellerConsole.tsx,inbox,SC-FE-08,BUILD,messages
+src/sections/SellerConsole.tsx,automation,SC-FE-08,BUILD,explicitly allowed scripted help; CHATBOT-01 owner gap RB-005
+src/sections/SellerConsole.tsx,insights,SC-FE-10,BUILD,discovery metrics only; no revenue/GMV
+src/sections/SellerConsole.tsx,reputation,SC-FE-09,BUILD,truthful trust facts
+src/sections/SellerConsole.tsx,trust,SC-FE-09,BUILD,trust facts
+src/sections/SellerConsole.tsx,reviews,SC-FE-09,BUILD,review reads; no purchased-review promise
+src/sections/SellerConsole.tsx,claims,SC-FE-09,SIMULATION ONLY,payment-related Claim demo only if needed; live Claims P2-03
+src/sections/SellerConsole.tsx,store,SC-FE-06,BUILD,"profile, coverage, fulfilment, hours, closure, socials"
+src/sections/SellerConsole.tsx,settings,SC-FE-11,BUILD,"team, sessions, ownership, closure, deletion"
+src/sections/SellerConsole.tsx,couriers,SC-FE-06,BUILD,Courier relationships (B02B-D02); no delivery execution
+src/sections/SellerConsole.tsx,invitations,SC-FE-06,BUILD,Courier invitations
+src/sections/SellerConsole.tsx,applications,SC-FE-06,BUILD,Courier pool state
+src/sections/SellerConsole.tsx,approved,SC-FE-06,BUILD,Courier pool state
+src/sections/SellerConsole.tsx,inactive,SC-FE-06,BUILD,Courier pool state
+src/sections/SellerConsole.tsx,orders,SC-FE-07,SIMULATION ONLY,"internal Order UX demo only, ADU-ORDER-01 not Reservation; outside ordinary navigation"
+src/sections/SellerConsole.tsx,needs-action,SC-FE-07,SIMULATION ONLY,Order demo bucket
+src/sections/SellerConsole.tsx,preparing,SC-FE-07,SIMULATION ONLY,Order demo bucket
+src/sections/SellerConsole.tsx,ready,SC-FE-07,SIMULATION ONLY,Order demo bucket
+src/sections/SellerConsole.tsx,completed,SC-FE-07,SIMULATION ONLY,Order demo bucket
+src/sections/SellerConsole.tsx,cancelled,SC-FE-07,SIMULATION ONLY,Order demo bucket
+src/sections/SellerConsole.tsx,delivery,SC-FE-07,SIMULATION ONLY,delivery demo; live delivery P2-02
+src/sections/MobileBuyer.tsx,home,MOB-FE-02,BUILD,five Home channels
+src/sections/MobileBuyer.tsx,feed,MOB-FE-02,BUILD,
+src/sections/MobileBuyer.tsx,foryou,MOB-FE-02,BUILD,Scene-only FYP
+src/sections/MobileBuyer.tsx,following,MOB-FE-02,BUILD,
+src/sections/MobileBuyer.tsx,nearby,MOB-FE-02,BUILD,honest disabled state if contract not ready
+src/sections/MobileBuyer.tsx,discounts,MOB-FE-02,BUILD,
+src/sections/MobileBuyer.tsx,locally-made,MOB-FE-02,BUILD,
+src/sections/MobileBuyer.tsx,scenes,MOB-FE-02,BUILD,Explore
+src/sections/MobileBuyer.tsx,shop,MOB-FE-02,BUILD,Search/Shop
+src/sections/MobileBuyer.tsx,products,MOB-FE-02,BUILD,
+src/sections/MobileBuyer.tsx,sellers,MOB-FE-02,BUILD,Search sellers
+src/sections/MobileBuyer.tsx,product,MOB-FE-02,BUILD,product detail (Collections/report entry MOB-FE-03)
+src/sections/MobileBuyer.tsx,saved,MOB-FE-03,BUILD,Product and Scene Collections
+src/sections/MobileBuyer.tsx,messages,MOB-FE-09,BUILD,"messaging with context: no dedicated Mobile FE order; GAP RB-007, proposed owner MOB-FE-09/MOB-BE-08"
+src/sections/MobileBuyer.tsx,conversation,MOB-FE-09,BUILD,see messages (RB-007)
+src/sections/MobileBuyer.tsx,checkout-coordinator,MOB-FE-05,BUILD,Checkout review A only; submit disabled
+src/sections/MobileBuyer.tsx,payment-transition,MOB-FE-06,SIMULATION ONLY,payment-return fixture in internal demo; live P2-02
+src/sections/MobileBuyer.tsx,orders,MOB-FE-06,SIMULATION ONLY,paid-Order fixtures in internal demo; live P2-02
+src/sections/MobileBuyer.tsx,purchased-products,MOB-FE-06,SIMULATION ONLY,purchase-derived; live P2-02/P2-03
+src/sections/MobileBuyer.tsx,claims,MOB-FE-08,SIMULATION ONLY,Claim simulation only if needed; live P2-03
+src/sections/MobileBuyer.tsx,reviews,MOB-FE-08,BUILD,approved Review reads
+src/sections/MobileBuyer.tsx,notifications,MOB-FE-09,BUILD,
+src/sections/MobileBuyer.tsx,notification-settings,MOB-FE-09,BUILD,
+src/sections/MobileBuyer.tsx,you,MOB-FE-09,BUILD,account
+src/sections/MobileBuyer.tsx,edit-profile,MOB-FE-09,BUILD,
+src/sections/MobileBuyer.tsx,privacy-security,MOB-FE-09,BUILD,
+src/sections/MobileBuyer.tsx,delete-account,MOB-FE-09,BUILD,
+src/sections/MobileBuyer.tsx,appearance,MOB-FE-09,BUILD,light-first; no unapproved dark theme
+src/sections/MobileBuyer.tsx,help-support,MOB-FE-09,BUILD,
+src/sections/MobileBuyer.tsx,about,MOB-FE-09,BUILD,
+src/sections/MobileSellerCompanion.tsx,alerts,MOB-FE-10,BUILD,"urgent stock, notifications"
+src/sections/MobileSellerCompanion.tsx,inbox,MOB-FE-10,BUILD,
+src/sections/MobileSellerCompanion.tsx,more,MOB-FE-10,BUILD,mode switch
+src/sections/MobileSellerCompanion.tsx,orders,MOB-FE-10,SIMULATION ONLY,seller Order list demo
+src/sections/MobileSellerCompanion.tsx,handoff,MOB-FE-07,SIMULATION ONLY,handoff UX as gated simulation
+src/sections/MobileSellerCompanion.tsx,pickup,MOB-FE-07,SIMULATION ONLY,
+src/sections/MobileSellerCompanion.tsx,route,MOB-FE-07,SIMULATION ONLY,
+src/sections/MobileSellerCompanion.tsx,done,MOB-FE-07,SIMULATION ONLY,
+src/sections/MobileCourier.tsx,account,MOB-FE-11,BUILD,verified Courier availability and relationship
+src/sections/MobileCourier.tsx,assignments,MOB-FE-11,SIMULATION ONLY,offers demo; live P2-02
+src/sections/MobileCourier.tsx,accepted,MOB-FE-11,SIMULATION ONLY,
+src/sections/MobileCourier.tsx,active,MOB-FE-11,SIMULATION ONLY,one-active-delivery demo
+src/sections/MobileCourier.tsx,pickup,MOB-FE-11,SIMULATION ONLY,
+src/sections/MobileCourier.tsx,delivery,MOB-FE-11,SIMULATION ONLY,
+src/sections/MobileCourier.tsx,handoff,MOB-FE-07,SIMULATION ONLY,
+src/sections/MobileCourier.tsx,checkpoint,MOB-FE-11,SIMULATION ONLY,checkpoint-only location; no continuous GPS
+src/sections/MobileCourier.tsx,history,MOB-FE-11,SIMULATION ONLY,delivery history deferred until paid commerce
+src/sections/SellerStorefront.tsx,products,SF-FE-02,BUILD,plus Product detail SF-FE-03
+src/sections/SellerStorefront.tsx,scenes,SF-FE-02,BUILD,Scene detail SF-FE-04
+src/sections/SellerStorefront.tsx,reviews,SF-FE-02,BUILD,
+src/sections/SellerStorefront.tsx,about,SF-FE-02,BUILD,"trust disclosures; app handoff, no checkout"
+src/sections/OperatorConsole.tsx,overview,OP-FE-02,BUILD,
+src/sections/OperatorConsole.tsx,current,OP-FE-02,BUILD,
+src/sections/OperatorConsole.tsx,work-queue,OP-FE-02,BUILD,
+src/sections/OperatorConsole.tsx,wq-moderation,OP-FE-04,BUILD,
+src/sections/OperatorConsole.tsx,wq-support,OP-FE-03,BUILD,
+src/sections/OperatorConsole.tsx,wq-verification,OP-FE-06,BUILD,identity/recovery
+src/sections/OperatorConsole.tsx,wq-trust-appeals,OP-FE-05,BUILD,payment-related decisions marked gated
+src/sections/OperatorConsole.tsx,wq-claims,OP-FE-05,SIMULATION ONLY,payment Claims gated
+src/sections/OperatorConsole.tsx,wq-handoff,OP-FE-06,SIMULATION ONLY,manual handoff case design gated
+src/sections/OperatorConsole.tsx,search-accounts,OP-FE-03,BUILD,purpose declaration
+src/sections/OperatorConsole.tsx,search-sellers,OP-FE-03,BUILD,
+src/sections/OperatorConsole.tsx,search-global,OP-FE-03,BUILD,
+src/sections/OperatorConsole.tsx,gov-approvals,OP-FE-07,BUILD,Founder two-person review
+src/sections/OperatorConsole.tsx,gov-access,OP-FE-07,BUILD,CEO + COO/CTO only; Staff flag off
+src/sections/OperatorConsole.tsx,gov-config,OP-FE-08,BUILD,payment provider panels disabled
+src/sections/OperatorConsole.tsx,gov-audit,OP-FE-08,BUILD,
+src/sections/OperatorConsole.tsx,gov-health,OP-FE-08,BUILD,incident and queue visibility
+src/sections/SystemStates.tsx,empty-collection,MOB-FE-03,STATE,
+src/sections/SystemStates.tsx,location-unavailable,MOB-FE-02,STATE,
+src/sections/SystemStates.tsx,no-entitlement,SC-FE-10,STATE,
+src/sections/SystemStates.tsx,notification-network,MOB-FE-09,STATE,
+src/sections/SystemStates.tsx,operator-permission,OP-FE-01,STATE,
+src/sections/SystemStates.tsx,otp-fallback,SC-FE-02,STATE,also MOB-FE-09
+src/sections/SystemStates.tsx,out-of-stock,MOB-FE-04,STATE,
+src/sections/SystemStates.tsx,restricted-post,SC-FE-05,STATE,also MOB-FE-02
+src/sections/SystemStates.tsx,search-zero,MOB-FE-02,STATE,
+src/sections/SystemStates.tsx,seller-conflict,SC-FE-01,STATE,Seller switch conflict
+src/sections/SystemStates.tsx,seller-loading,SC-FE-01,STATE,
+src/sections/SystemStates.tsx,offer-expired,MOB-FE-11,SIMULATION ONLY,Courier offer demo
+src/sections/SystemStates.tsx,order-stale,SC-FE-07,SIMULATION ONLY,
+src/sections/SystemStates.tsx,qr-expired,MOB-FE-07,SIMULATION ONLY,
+src/sections/SystemStates.tsx,qr-invalid,MOB-FE-07,SIMULATION ONLY,
+src/sections/SystemStates.tsx,claim-evidence,MOB-FE-08,SIMULATION ONLY,
+src/sections/SystemStates.tsx,provider-incident,OP-FE-08,DEFERRED P2,payment provider
+src/sections/SystemStates.tsx,payment-failed,P2-02,DEFERRED P2,
+src/sections/SystemStates.tsx,payment-processing,P2-02,DEFERRED P2,
+src/sections/SystemStates.tsx,payment-reconciliation,P2-01,DEFERRED P2,
+src/sections/SystemStates.tsx,payment-success,P2-02,DEFERRED P2,
+src/sections/CompanyWebsite.tsx,(whole section),-,EXCLUDED,Company Website excluded
+src/sections/Foundations.tsx,(design foundations),ARC-BE-05,BUILD,semantic tokens; legacy blue/terracotta values NOT carried (RB25-D05)
+src/sections/Components.tsx,(component gallery),SC-FE-01,BUILD,visual reference only; never copied into React Native or the Console
+src/sections/DemoFlows.tsx,(demo flows),GOV-06,SIMULATION ONLY,demo semantics inform the fixture boundary; never in release
+src/sections/ShellHelpers.tsx,"(phone shell, bottom nav, icons)",MOB-FE-01,BUILD,reference for navigation and icons
+src/sections/PrototypeGuide.tsx,(guide),GOV-03,REFERENCE,prototype documentation

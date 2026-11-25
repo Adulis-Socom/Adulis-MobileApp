@@ -1,0 +1,72 @@
+asset_id,area,legacy_path_or_asset,status,target_work_order,evidence,note
+C-01,Console,apps/console/src/auth/SignIn.tsx,REBUILD,SC-FE-02,[KEEP] OTP via real API; e2e/00-identity,conforming reference; re-verify against AUTH-02 at SC-FE-00
+C-02,Console,"apps/console/src/auth/StepUpModal.tsx, useStepUp.tsx",REBUILD,SC-FE-11,[KEEP],step-up pattern reference
+C-03,Console,apps/console/src/features/entry/Home.tsx,REBUILD,SC-FE-03,[FIX] readiness hub,payout item and deferred obligations already removed by #185/#191
+C-04,Console,apps/console/src/features/entry/BecomeSeller.tsx,REBUILD,SC-FE-02,[KEEP],
+C-05,Console,"apps/console/src/features/entry/Chooser.tsx, layout/SellerSwitcher.tsx",REBUILD,SC-FE-01,[FIX] cross-Seller state; fixed by Outlet key (#181),isolation cases from #188 carried as tests
+C-06,Console,apps/console/src/features/trade/Orders.tsx,ARCHIVE,SC-FE-07 (demo only),[FIX] Orders list; retired by #191,no ordinary Orders screen; ADU-ORDER-01 demo fixtures only
+C-07,Console,apps/console/src/features/trade/OrderDetail.tsx,ARCHIVE,SC-FE-07 (demo only),[REPLACE],payment and handoff regions retired
+C-08,Console,apps/console/src/features/trade/PaymentEvidence.tsx,ARCHIVE,-,[REPLACE] P0 B-001,payment deferred (RB25-D03)
+C-09,Console,apps/console/src/features/trade/PaymentDecisions.tsx,ARCHIVE,-,[REPLACE] P0 B-001,Seller payment confirmation never returns
+C-10,Console,"apps/console/src/features/trade/HandoffQr.tsx, lib/qr.tsx",ARCHIVE,MOB-FE-07 (simulation),[DEFER],qrcode-generator dependency unused (PL-005)
+C-11,Console,apps/console/src/features/catalogue/Products.tsx,REBUILD,SC-FE-04,[KEEP],preserve conforming behaviour after SC-FE-00 check
+C-12,Console,"apps/console/src/features/catalogue/ProductEditor.tsx, ProductNew.tsx",REBUILD,SC-FE-04,[KEEP] stale-state check owed,effects must key on sellerId
+C-13,Console,apps/console/src/features/catalogue (Variants section),REBUILD,SC-FE-04,[KEEP],
+C-14,Console,apps/console/src/features/catalogue (Media section),REBUILD,SC-FE-04 / SC-BE-04,[UNKNOWN] MEDIA-01 conformance unverified,
+C-15,Console,apps/console/src/features/catalogue/StockScreen.tsx,REBUILD,SC-FE-04,[KEEP],stock-ledger rules from #191 apply (RBL-03)
+C-16,Console,apps/console/src/features/trust/Analytics.tsx,REBUILD,SC-FE-10,[FIX],discovery metrics only
+C-17,Console,apps/console/src/features/trust/TrustLevel.tsx,REBUILD,SC-FE-09,[UNKNOWN],truthful trust facts; no fake trust
+C-18,Console,apps/console/src/features/trust/Reviews.tsx,REBUILD,SC-FE-09,[FIX],no purchased-review promise
+C-19,Console,"apps/console/src/features/trust/Claims.tsx, ClaimDetail.tsx",DEFER,P2-03 (demo in SC-FE-09 if needed),[DEFER],routes deferred by #185
+C-20,Console,apps/console/src/features/store/Profile.tsx,REBUILD,SC-FE-06,[KEEP],
+C-21,Console,apps/console/src/features/store/Fulfilment.tsx,REBUILD,SC-FE-06,[KEEP] service-area wording,nationwide Market does not imply Courier coverage
+C-22,Console,apps/console/src/features/store/Availability.tsx,REBUILD,SC-FE-06,[KEEP],
+C-23,Console,apps/console/src/features/store/Identity.tsx,REBUILD,SC-FE-02,[KEEP],no Government ID
+C-24,Console,apps/console/src/features/store/Couriers.tsx,REBUILD,SC-FE-06,[UNKNOWN] -> decided B02B-D02,invitations and relationships retained; no delivery
+C-25,Console,apps/console/src/features/admin/Payout.tsx,ARCHIVE,-,[UNKNOWN] -> Payout A,no active feature or readiness gate (RB25-D03)
+C-26,Console,apps/console/src/features/admin/Team.tsx,REBUILD,SC-FE-11,[KEEP],role union per AUTH-02
+C-27,Console,apps/console/src/features/admin/Subscription.tsx,REBUILD,SC-FE-10,[UNKNOWN] -> Subscription B; purchase removed in #185,status and plans only; no pricing invented
+C-28,Console,apps/console/src/features/admin/Sessions.tsx,REBUILD,SC-FE-11,[KEEP],
+C-29,Console,apps/console/src/features/admin/NotificationPrefs.tsx,REBUILD,SC-FE-11,[FIX] payment template key,
+C-30,Console,apps/console/src/features/admin/Closure.tsx,REBUILD,SC-FE-11,[KEEP],no settle-payment blocker (RBL-03)
+C-31,Console,"apps/console/src/features/conversation/Inbox.tsx, Thread.tsx",REBUILD,SC-FE-08,[KEEP] stale-state check owed,
+C-32,Console,apps/console/src/features/notifications/NotificationCentre.tsx,REBUILD,SC-FE-03,[FIX] paid-order template text,
+C-33,Console,apps/console/src/courier/CourierScreen.tsx,ARCHIVE,MOB-FE-11 (simulation),[DEFER],Courier mode belongs to Mobile; no live delivery
+C-34,Console,apps/console/src/features/entry/StateDemo.tsx,REBUILD,SC-FE-01,[KEEP] twelve states,state primitives reference
+C-35,Console,"apps/console/src/layout/Shell.tsx, More.tsx",REBUILD,SC-FE-01,"[KEEP] Outlet key per Seller (#181, red/green proven)",Content nav item for Scenes/Stories
+C-36,Console,(none),GAP,SC-FE-05S / SC-BE-05S,[NEW] Seller Stories absent,no backend Story module; supplemental Story contract
+C-37,Console,(none),GAP,SC-FE-05 / SC-BE-05,[NEW] Scene authoring absent,
+C-38,Console,apps/console/src/api/client.ts + api/fixtures/*,REUSE VERIFIED,GOV-06 -> SC-FE-01,[NEW then DONE] #181 merged; CI gate [35] console-fixture-e2e passing (15/15 on #191 CI),"the PATTERN is verified (dev-only port, no fetch, fail-closed, release-excluded, N5 scan); the clean Console re-implements it against the replacement contract"
+P-01,Shared package,"packages/tokens (CTO semantic roles, contrast gate)",REUSE VERIFIED,ARC-BE-05,#187 merged; verify:tokens 64 contrast pairs green on dev,drop the legacy blue accent and terracotta from the target theme (RB25-D05); dark exemption B2-013
+P-02,Shared package,"packages/locale (en/am key union, completeness test)",REUSE VERIFIED,ARC-BE-05,locale package tests green on dev,structure reused; keys of removed screens purged (PL-004); Amharic placeholders stay non-public
+P-03,Shared package,packages/config (eslint/tsconfig presets),REBUILD,ARC-BE-05,no tests,re-verify presets against the new apps
+P-04,Shared package,packages/api-client (generated from the legacy contract),ARCHIVE,ARC-BE-05,generated; legacy contract,regenerate from the replacement OpenAPI; never hand-edit
+P-05,Contract,"contracts/openapi.json (legacy, CI-written)",ARCHIVE,ARC-BE-02 / ARC-BE-05,generated by legacy CI,replacement contract generated by the new API
+B-01,API runtime,"apps/api (NestJS on Express, Kysely)",ARCHIVE,ARC-BE-02,legacy runtime,no Express/Kysely in the replacement; patterns re-implemented on Fastify
+B-02,API pattern,"withRequestContext / set_config(..., true) transaction-local RLS context",REBUILD,ARC-BE-03,"proven in legacy API suite (1,100 tests on #191)",invariant carried; code re-implemented with Drizzle
+B-03,API pattern,problem-details error shape and error catalogue,REBUILD,ARC-BE-02,legacy error-locale gate,shape carried; legacy codes of retired flows dropped
+B-04,API pattern,"idempotency keys (hash, stored response, replay re-check)",REBUILD,ARC-BE-02,legacy tests; SEC-003 draft #116 open,replay must re-check current role and surface
+B-05,API pattern,rate limiting (Postgres bucket),REBUILD,ARC-BE-04,legacy,target: Valkey coordination per DEPLOY-01; rebuildable
+B-06,Worker,"apps/api/src/jobs (Graphile Worker, 22 cron tasks)",ARCHIVE,ARC-BE-04,legacy,no Graphile; no business job before its domain
+B-07,Database,db/migrations 0001-0062 (+ #191 0063),ARCHIVE,ARC-BE-03,applied on adulis-postgres (62),new migration lineage from an empty baseline
+B-08,Database,ops/scripts/seed.mjs,ARCHIVE,ARC-BE-03,creates legacy commerce rows,new synthetic seeds only; no real data
+B-09,Database,Appendix C checks (16) and table-count gates,ARCHIVE,ARC-BE-03 / ARC-BE-06,legacy counts,no hard-coded table counts; absence tests instead
+B-10,Database,Reservation dependency inventory R-001..R-040 (02B),ARCHIVE,-,"40 rows, all retired in #191",retired model; absence proven in ARC-BE-06
+B-11,Database guard,"migration-file guard, disposable-target mark (assert-disposable-db)",REBUILD,RBL-02 / ARC-BE-01,gate tests green on dev,concept carried: refuse non-disposable targets; re-implemented for the new lineage
+T-01,Tests,#191 stock-ledger release rules and permission negatives,REBUILD,RBL-03 -> SC-BE-04 / ARC-BE-03,#191 CI green; independent review ALLOW_WITH_FIXES,"carried as behaviour requirements, not ported code"
+T-02,Tests,"#188 responsive (6 widths, 150% text) and Seller-isolation cases",REBUILD,SC-FE-01 / SC-FE-12,#188 CI failing on retired Orders screen (PL-002),cases carried; targets rebuilt screens
+T-03,Tests,"Console fixture suite N1-N5 (no fetch, fail-closed, release scan with positive control)",REUSE VERIFIED,GOV-06 -> ARC-BE-05,gate [35] green on dev,release-negative pattern reused
+T-04,Tests,"Console real-API e2e (57 on #191) and Mobile (2,503) suites",ARCHIVE,GOV-04,evidence only,old passing tests are not a pass for new code
+T-05,Tests,Mobile theme contrast/token-twin tests,REBUILD,MOB-FE-01,125/125 locally (Batch 02),pattern carried; Mobile palette consumption rebuilt
+O-01,CI,.github/workflows/ci.yml + ops/scripts/gates.mjs (35 gates),REBUILD,ARC-BE-05,green on dev and #191,gate list is legacy-bound; runner shape and no-skip rule carried
+O-02,Tooling,.dependency-cruiser.cjs (apps may not import apps),REUSE VERIFIED,ARC-BE-05,verify:deps green on dev,boundary rules carried unchanged
+O-03,Tooling,"verify-docs-ascii, verify-mt-keys, verify-tokens",REUSE VERIFIED,ARC-BE-05,green on dev,
+O-04,Tooling,"ops/scripts/adulis-ssd-env.sh, adulis-storage-audit.ps1",REUSE VERIFIED,all batches,used in every batch,"development tooling only, not runtime"
+O-05,Deployment,"ops/render.yaml (staging, branch main)",ARCHIVE,REL-08 / ARC-BE-01,never applied (credentials unknown),replacement topology per DEPLOY-01; existence of staging UNKNOWN (B2-002)
+O-06,Agent tooling,.claude skills pack 1.2.0 / 16 skills 1.1.0,REUSE VERIFIED,GOV-05 / RBL-05,loaded and invoked in Batch 02,authority wording updated by GOV-02 (RB25)
+M-01,Mobile,"apps/mobile (Expo Buyer shell, 54-row Buyer plan)",REBUILD,MOB-FE-01,"Mobile suite 2,503 on #191",reuse conforming components only after MOB-FE-01 verification; Mobile paused until its stage
+M-02,Mobile,apps/mobile Cart (BUY-12A internal fixture Cart),REBUILD,MOB-FE-04,read-only fixture,Seller-separated Cart rebuilt against canonical contracts
+G-01,Backend,(none) Story module,GAP,SC-BE-05S,-,query-time 24h expiry + BullMQ cleanup
+G-02,Frontend,(none) Storefront app,GAP,SF-FE-01,-,independent Next.js SSR shell
+G-03,Frontend,(none) Operator app,GAP,OP-FE-01,-,"separate privileged origin, WebAuthn"
+G-04,Backend,(none) durable outbox + BullMQ/Valkey bootstrap,GAP,ARC-BE-04,-,

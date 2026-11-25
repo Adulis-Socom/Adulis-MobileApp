@@ -2,6 +2,10 @@
 
 Use exact filenames when locating source documents. Do not infer a newer revision from an older one.
 
+## 25 November 2026 clean-rebuild layer (RB25-D01..D08)
+
+`docs/amendments/REBUILD-2026-11-25-CLEAN-LINEAGE.md` sits ABOVE every layer below. It changes execution, not product rules: the active runtime is rebuilt clean on the integration branch `rebuild/2026-11-25` with a new schema lineage; the legacy lineage (dev 64d2e8c, migrations 0001-0062, plus draft PRs #191 (0063) and #188) is archived evidence; legacy migration and compatibility mandates bind that archived lineage only. Payment stays OPEN, Subscription B and Payout A stand, no Reservation or legacy Order/payment/handoff/payout model exists in the replacement, and the legacy database is never pointed at it.
+
 ## 24 November 2026 layer (founder decisions D24-01..D24-18)
 
 Placed **above** the list below: the decision register of the November 24 pack
