@@ -396,7 +396,7 @@ describe('C2 — catalogue, media and stock', () => {
       expect(r.body.data[0].reason).toBeDefined();
     });
 
-    it('delete and withdraw resolve ownership first: 404 for a variant or product that is not this Seller's', async () => {
+    it('delete and withdraw resolve ownership first: 404 for a variant or product owned by another Seller', async () => {
       // A non-member and an unknown id get the same 404; the real rows are untouched,
       // because the media tests below still need them.
       const missing = '77777777-6666-4000-8000-0000000000f0';

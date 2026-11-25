@@ -479,7 +479,7 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
   });
 
   describe('review creation is retired with the legacy Order (0063); the reads above stay', () => {
-    it('POST /v1/orders/:id/review is 404 for the Order's own Buyer and writes no review', async () => {
+    it('POST /v1/orders/:id/review is 404 for the Buyer of the Order and writes no review', async () => {
       const count = async () => (await sql(`SELECT count(*)::int AS n FROM core.review WHERE seller_id = $1`, [SELLER.a])).rows[0].n as number;
       const before = await count();
       await server()
