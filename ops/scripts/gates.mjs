@@ -646,6 +646,23 @@ const GATES = [
    * runs the guard, never the raw runner.
    */
   { id: 'migration-guard', title: 'The migration-file guard refuses an incomplete or altered migration set', cmd: ['node', '--test', 'ops/scripts/migration-guard.test.mjs', 'ops/scripts/migration-default-path.test.mjs', 'ops/scripts/migration-target.test.mjs'] },
+
+  /**
+   * APPENDED (CI-FIXTURE-01, B-011). The Seller Console's DEVELOPMENT FIXTURE MODE is safe and cannot ship.
+   *
+   * The fixture transport (apps/console/src/api/fixtures) answers from typed data and never calls fetch; it
+   * exists only when `import.meta.env.DEV` and VITE_CONSOLE_FIXTURES=1. This gate runs the Playwright
+   * fixture project (apps/console/playwright.fixture.config.ts): no request leaves the browser, financial
+   * and unserved paths fail closed, Seller switching shows no stale data, the legacy financial surfaces stay
+   * contained, and a RELEASE build made with the fixture flag SET contains none of the fixture's markers
+   * (with a positive control, so an empty scan means absence and not a blind scan).
+   *
+   * It needs NO database, NO API, NO sign-in, NO credentials and NO object store, so it is a separate gate
+   * from `console-e2e` (which resets a database and drives the built console against the real API and is
+   * deliberately untouched). It is NOT in DB_WRITING_GATES for the same reason. The browser is the installed
+   * Edge channel the other browser gates use; failure traces are uploaded by the workflow.
+   */
+  { id: 'console-fixture-e2e', title: 'The console fixture mode is safe, contained and absent from release builds', cmd: ['pnpm', '--filter', '@adulis/console', 'e2e:fixture'] },
 ];
 
 /**

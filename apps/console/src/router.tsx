@@ -28,7 +28,6 @@ import { Fulfilment } from './features/store/Fulfilment';
 import { Availability } from './features/store/Availability';
 import { Identity } from './features/store/Identity';
 import { Couriers } from './features/store/Couriers';
-import { Payout } from './features/admin/Payout';
 import { Team } from './features/admin/Team';
 import { Subscription } from './features/admin/Subscription';
 import { Sessions } from './features/admin/Sessions';
@@ -37,12 +36,10 @@ import { Closure } from './features/admin/Closure';
 import { Analytics } from './features/trust/Analytics';
 import { TrustLevel } from './features/trust/TrustLevel';
 import { Reviews } from './features/trust/Reviews';
-import { Claims } from './features/trust/Claims';
-import { ClaimDetail } from './features/trust/ClaimDetail';
 import { Inbox } from './features/conversation/Inbox';
 import { Thread } from './features/conversation/Thread';
 import { NotificationCentre } from './features/notifications/NotificationCentre';
-import { CourierScreen } from './courier/CourierScreen';
+import { Deferred } from './components/Deferred';
 
 export const router = createBrowserRouter([
   { path: '/sign-in', element: <SignIn /> },
@@ -90,7 +87,9 @@ export const router = createBrowserRouter([
           // since C-3 are discharged by the real screens.
           { path: 'eligibility', element: <Identity /> },
           { path: 'profile', element: <Profile /> },
-          { path: 'payouts', element: <Payout /> },
+          // B02-D02 Payout Option A: deferred entirely. The route stays so a stored link or
+          // a typed URL meets an honest state, not the catch-all; the Payout screen is unrouted.
+          { path: 'payouts', element: <Deferred what="payout" /> },
           { path: 'fulfilment', element: <Fulfilment /> },
           { path: 'availability', element: <Availability /> },
           { path: 'couriers', element: <Couriers /> },
@@ -105,8 +104,9 @@ export const router = createBrowserRouter([
           { path: 'insights', element: <Analytics /> },
           { path: 'insights/trust', element: <TrustLevel /> },
           { path: 'insights/reviews', element: <Reviews /> },
-          { path: 'claims', element: <Claims /> },
-          { path: 'claims/:claimId', element: <ClaimDetail /> },
+          // D24-01: purchase-derived claims (incl. payment-evidence claims) are deferred.
+          { path: 'claims', element: <Deferred what="claims" /> },
+          { path: 'claims/:claimId', element: <Deferred what="claims" /> },
           { path: 'inbox', element: <Inbox /> },
           { path: 'inbox/:conversationId', element: <Thread /> },
           { path: 'notifications', element: <NotificationCentre /> },
@@ -119,7 +119,8 @@ export const router = createBrowserRouter([
       },
       // C-8: the one screen for a DIFFERENT user -- no Shell, no seller
       // navigation, its own route tree (S12).
-      { path: '/courier', element: <CourierScreen /> },
+      // Live courier delivery is deferred (handoff depends on a confirmed payment, D24-01).
+      { path: '/courier', element: <Deferred what="courier" /> },
     ],
   },
 ]);

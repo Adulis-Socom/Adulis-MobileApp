@@ -27,6 +27,12 @@ and the recorded conflicts between the two (K-1 to K-8) are in
 | **ADU-VAL-01** | **v1.2** -- a register, not a specification; S1.1 is machine-read and enforced (`pnpm verify:deferred-values`, the `deferred-values` gate of the one list), **pinned at 14** since v1.2 removed `follower_threshold` (D-92: NULL there is decided) and the embedding dimension (a type question) | [`docs/registers/`](../registers/) |
 | The permission seed, §16.2a | v2.5, **unchanged from v2.3** — 42 codes, 139 grants | [`ADU-AUTH-01_v2_4_permission_seed.sql`](ADU-AUTH-01_v2_4_permission_seed.sql) |
 
+## Founder decision addenda (working authority, not amendments to a specification)
+
+| Addendum | Records |
+|---|---|
+| [`BATCH-02-FOUNDER-DECISIONS-2026-11-25.md`](BATCH-02-FOUNDER-DECISIONS-2026-11-25.md) | B02-D01 Subscription Option B, B02-D02 Payout Option A, B02-D03 CTO palette supersedes the prototype theme, B02-D04 accessibility variants, B02-D05 Batch 02 work orders. Adds to, and alters nothing in, the 8 and 24 November records |
+
 ## Proposed amendments -- NOT installed, nothing here governs yet
 
 | Amendment | Status | Records |

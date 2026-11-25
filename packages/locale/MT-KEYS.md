@@ -28,7 +28,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-1237 keys:
+1245 keys:
 
 - `health.ok`
 - `health.degraded`
@@ -1267,3 +1267,11 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.courier.chooser_link`
 - `console.trade.detail.courier_choose`
 - `console.trade.detail.courier_pending`
+- `console.deferred.heading`
+- `console.deferred.payout`
+- `console.deferred.payment`
+- `console.deferred.purchase`
+- `console.deferred.handoff`
+- `console.deferred.claims`
+- `console.deferred.courier`
+- `console.deferred.back`

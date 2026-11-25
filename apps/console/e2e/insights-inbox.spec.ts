@@ -121,109 +121,31 @@ test.describe('SC-14 Reviews -- read-only, and the empty state teaches the gate'
   });
 });
 
-test.describe('SC-15 Claims -- the empty list is good news', () => {
-  test('reads as a positive condition and offers NO action', async ({ page }) => {
-    await page.goto(`${base}/claims`);
-    await expect(page.locator('[data-screen="SC-15"]')).toBeVisible();
-    const empty = page.locator('[data-screen="SC-15"] .empty');
-    await expect(empty.getByText(/That is good news/)).toBeVisible();
-    // Deliberately actionless (S14): no button, no link, in the empty block.
-    await expect(empty.getByRole('button')).toHaveCount(0);
-    await expect(empty.getByRole('link')).toHaveCount(0);
-  });
-});
-
-test.describe('SC-16 Claim detail -- planted render, real refusal', () => {
-  /*
-   * THE PLANT IS DERIVED FROM THE SERVICE AND THE DDL, NOT FROM THE
-   * COMPONENT (the pass's B1: the first plant copied the code's invented
-   * evidence vocabulary and certified fiction). Kinds below are
-   * core.claim_evidence_kind values the attach trigger actually inserts;
-   * reference_id is NOT NULL at the schema; severity is always ORDINARY on
-   * real buyer claims.
-   */
-  const CLAIM = '99999999-9999-4999-8999-999999999999';
-  const planted = (state: string, decided: string | null) => ({
-    id: CLAIM,
-    order_id: '5eed0000-0000-4000-8000-000000000013',
-    reservation_id: null,
-    trigger: 'SLA_BREACH',
-    state,
-    severity: 'ORDINARY',
-    remedy: null,
-    outcome: null,
-    outcome_reason: null,
-    opened_at: '2026-08-26T09:10:00Z',
-    review_deadline: '2026-09-27T14:00:00Z',
-    decided_at: decided,
-    viewer: 'SELLER',
-    evidence: [
-      {
-        kind: 'ORDER_TRANSITIONS',
-        reference_id: '5eed0000-0000-4000-8000-000000000013',
-        attached_at: '2026-08-26T09:10:00Z',
-      },
-      {
-        kind: 'CHAT_HISTORY',
-        reference_id: '5eed0000-0000-4000-8000-000000000013',
-        attached_at: '2026-08-26T09:10:00Z',
-      },
-    ],
-  });
-
-  test('regions render from the wire shape; the remedy POST reaches the real server', async ({ page, context }) => {
-    await context.route(`**/v1/claims/${CLAIM}`, async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        json: planted('AWAITING_SELLER_EVIDENCE', null),
-      });
+/*
+ * SC-15 Claims and SC-16 Claim detail -- SUPERSEDED by D24-01 (payment authority unresolved; claims
+ * and their payment-evidence trail are purchase-derived and deferred). The four tests that stood
+ * here drove the empty-list good-news copy, a planted claim's regions, the real server's refusal of
+ * a remedy POST, and the TERMINAL render. The screens are removed from the MVP console, so those
+ * positive expectations are replaced by this negative one rather than deleted; originals are in git
+ * history. The backend claim controls are untouched.
+ */
+test.describe('SC-15/SC-16 Claims -- deferred (D24-01) @safety', () => {
+  test('the list and detail URLs meet an honest deferred state, with no claim control and no claim call', async ({
+    page,
+  }) => {
+    const claimCalls: string[] = [];
+    page.on('request', (r) => {
+      const u = new URL(r.url());
+      if (u.pathname.startsWith('/v1/') && /claim/i.test(u.pathname)) claimCalls.push(`${r.method()} ${u.pathname}`);
     });
-    await page.goto(`${base}/claims/${CLAIM}`);
-    await expect(page.locator('[data-screen="SC-16"]')).toBeVisible();
-
-    // The factual-language rule, the DDL's evidence kinds as words, the
-    // read-only sentence, the deadline.
-    await expect(page.getByText('This is a statement of recorded facts, not an accusation.')).toBeVisible();
-    await expect(page.getByText('Order history')).toBeVisible();
-    await expect(page.getByText('Conversation history')).toBeVisible();
-    await expect(page.getByText('ORDER_TRANSITIONS')).toHaveCount(0);
-    await expect(page.getByText(/Evidence is read-only/)).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Deadline' })).toBeVisible();
-
-    // M7's discrimination: the POST is watched at the wire -- method, path,
-    // Idempotency-Key header, body -- and the REAL server's answer for an
-    // unknown claim renders as its OWN copy ('Not found.'), which no other
-    // failure on this path shares (a keyless POST says the retry-key
-    // sentence; a network drop says the transport one).
-    const posted = page.waitForRequest(
-      (r) =>
-        r.method() === 'POST' &&
-        r.url().includes(`/v1/seller/claims/${CLAIM}/remedy`) &&
-        Boolean(r.headers()['idempotency-key']) &&
-        r.postData() === '{"remedy":"REFUND"}',
-    );
-    await page.locator('#remedy-refund').check();
-    await page.getByRole('button', { name: 'Record this remedy' }).click();
-    await posted;
-    await expect(page.getByText('Not found.', { exact: true })).toBeVisible();
-  });
-
-  test('RESOLVED renders TERMINAL: the badge, the history, and NO controls', async ({ page, context }) => {
-    await context.route(`**/v1/claims/${CLAIM}`, async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        json: planted('RESOLVED', '2026-08-27T10:20:00Z'),
-      });
-    });
-    await page.goto(`${base}/claims/${CLAIM}`);
-    await expect(page.locator('[data-screen="SC-16"]')).toBeVisible();
-    await expect(page.locator('[data-state="TERMINAL"]')).toBeVisible();
-    await expect(page.getByText(/Decided/)).toBeVisible();
-    // The case has ended: only history remains (S10 / wireframe annotation 3).
-    await expect(page.locator('.claim-remedy')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Record this remedy' })).toHaveCount(0);
+    for (const url of [`${base}/claims`, `${base}/claims/99999999-9999-4999-8999-999999999999`]) {
+      await page.goto(url);
+      const screen = page.locator('[data-deferred-screen="claims"]');
+      await expect(screen, url).toBeVisible();
+      expect(await screen.locator('input, textarea, select, form').count(), url).toBe(0);
+      await expect(page.locator('[data-screen="SC-15"], [data-screen="SC-16"]')).toHaveCount(0);
+    }
+    expect(claimCalls, claimCalls.join(' | ')).toEqual([]);
   });
 });
 

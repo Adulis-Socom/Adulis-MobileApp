@@ -714,6 +714,14 @@ export const enConsole = {
   'console.courier.chooser_link': 'Deliveries assigned to you',
   'console.trade.detail.courier_choose': 'Choose a courier',
   'console.trade.detail.courier_pending': '{phone} (invited, has not joined yet)',
+  'console.deferred.heading': 'Not available in this release',
+  'console.deferred.payout': 'Payouts are not part of this release. No bank details are collected or shown here.',
+  'console.deferred.payment': 'Payment handling is not part of this release. No payment action is available.',
+  'console.deferred.purchase': 'Plan purchases are not available in this release. Your current plan and what it includes are shown above.',
+  'console.deferred.handoff': 'Preparing, handing off and delivering orders is not part of this release.',
+  'console.deferred.claims': 'Claims are not part of this release.',
+  'console.deferred.courier': 'Courier delivery is not part of this release.',
+  'console.deferred.back': 'Go back',
 } as const;
 
 export type ConsoleMessageKey = keyof typeof enConsole;
