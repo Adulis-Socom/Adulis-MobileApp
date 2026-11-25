@@ -1,3 +1,9 @@
+# The ACTIVE replacement workspace (ARC-BE-01, RB25-D01). Only these are installed, built and verified.
+#
+# apps/console and apps/mobile are the ARCHIVED legacy surfaces: they stay on disk (with their CLAUDE.md
+# and .claude permission denials) until SC-FE-01 and MOB-FE-01 replace them, but they are NOT workspace
+# members, so no install, build, test or acceptance run on this branch can reach them. Their permanent
+# copy is the tag recovery/legacy-dev-20261125. Add a surface here only in the work order that rebuilds it.
 packages:
-  - 'apps/*'
+  - 'apps/api'
   - 'packages/*'
