@@ -151,10 +151,14 @@ test.describe('the console READS the tokens @safety', () => {
     expect(ring?.offset, 'the painted ring offset is not --adu-focus-ring-offset').toBe(
       tokenValue('--adu-focus-ring-offset', mode),
     );
-    // The ring COLOUR aliases the accent, so this is the assertion that fails
-    // if the console goes back to reading --adu-color-accent directly in a
-    // mode where the two ever diverge, and the one that proves D-271's dark
-    // value is actually on screen.
-    expect(ring?.color, 'the painted ring colour is not the focus token').toBe(hexToRgb(accent));
+    // The ring COLOUR is the focus token, whatever role that token names. It aliased the accent until
+    // DS-TOK-01 (B02-D03), which moved it to the primary because the lime accent cannot be seen on
+    // white; asserting the TOKEN (resolved through its var() hops, per mode) keeps this test about the
+    // contract -- the console paints what tokens.css says -- instead of about one palette. It still
+    // fails if the console reads some other role directly, and still proves each mode's value is on
+    // screen (D-271's dark ring included). It passes on the tokens before and after DS-TOK-01.
+    expect(ring?.color, 'the painted ring colour is not the focus token').toBe(
+      hexToRgb(tokenValue('--adu-focus-ring-color', mode)),
+    );
   });
 });
