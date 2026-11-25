@@ -198,6 +198,15 @@ code {
   max-width: 100%;
 }
 
+/* a heading inside a flex row (state panels) may wrap below its longest word instead of stretching the row */
+h1,
+h2,
+h3,
+.state-head,
+.ledger-title {
+  min-width: 0;
+}
+
 .page > *,
 .stack > *,
 .field,
