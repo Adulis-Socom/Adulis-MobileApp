@@ -407,7 +407,8 @@ code {
     position: sticky;
     top: var(--strip-h, 0px);
     align-self: start;
-    max-height: calc(100dvh - var(--strip-h, 0px));
+    /* the secondary layer runs the full height of the viewport, not just as far as its links */
+    height: calc(100dvh - var(--strip-h, 0px));
     overflow-y: auto;
     padding: var(--adu-space-md);
     background: var(--adu-color-secondary);

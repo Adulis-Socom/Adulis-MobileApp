@@ -75,14 +75,14 @@ function Obligations({ items, timezone }: { items: readonly BriefObligation[]; t
 
 function AreaRow({ area }: { area: BriefArea }) {
   const { sellerId, access } = useSeller();
-  const label = codeText('home.area', area.key) ?? t('home.area.unknown', { code: area.key });
+  const areaLabel = codeText('home.area', area.key) ?? t('home.area.unknown', { code: area.key });
   const target = AREA_TARGET[area.key];
   const reach: Access = target ? (target.dest === null ? 'GRANTED' : destinationAccess(access, target.dest)) : 'HIDDEN';
   const stateText = label('home.area_state', area.state);
   const body = (
     <>
       <span className="ledger-main">
-        <span className="ledger-title">{label}</span>
+        <span className="ledger-title">{areaLabel}</span>
         <Badge tone={area.state === 'AVAILABLE' ? 'success' : 'neutral'} icon={area.state === 'AVAILABLE' ? 'check' : 'clock'}>
           {stateText}
         </Badge>
