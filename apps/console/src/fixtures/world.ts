@@ -1,0 +1,528 @@
+import type {
+  AccountContext,
+  BriefAlert,
+  BriefArea,
+  BriefObligation,
+  DestinationAccess,
+  DestinationKey,
+  Eligibility,
+  HomeBrief,
+  Membership,
+  NotificationItem,
+  OpId,
+  OpInput,
+  OpOutput,
+  OtpChallenge,
+  Readiness,
+  ReadinessItem,
+  RoleView,
+  SellerAccess,
+  SellerRole,
+  SellerSummary,
+  SocialAccountState,
+} from '../contracts/gap-sc';
+import { TransportError, type CallContext } from '../transport/port';
+
+/**
+ * The fixture world: synthetic Sellers, accounts and a server-like resolver (GOV-06). DEVELOPMENT ONLY: this module
+ * is reachable solely through the build-time-guarded dynamic import in transport/select.ts.
+ *
+ * It stands in for a backend that does not exist (GAP-SC-01..07). It demonstrates intended FRONTEND behaviour; it is
+ * not backend enforcement and proves nothing about authorization. Every identifier is synthetic and carries the
+ * reserved `fx_` prefix; no credential here is real. Writes exist only for the operations a named work order
+ * (SC-FE-02) added with their own test: auth.*, seller.create, seller.social.start, seller.eligibility.recheck.
+ */
+export const FIXTURE_VERSION = 'fixture-sc-1';
+/** Release-scan markers (RN-1): none of these may appear in a release build. */
+export const FIXTURE_MARKER = 'ADULIS_FIXTURE_MODULE_MARKER_7f3a';
+export const BLOCKED_CODE = 'FIXTURE_BLOCKED';
+export const BANNER_SENTENCE = 'Demonstration data. Nothing here is real.';
+
+/** The demonstration one-time codes. They exist only here and are shown to the person using the demonstration. */
+export const DEMO_CODES = { ok: '246810', invalid: '111111', expired: '222222', rateLimited: '333333' } as const;
+const RESEND_AFTER_MS = 2000; // demonstration value only: the real duration is an open decision
+const OTP_VALID_MS = 300_000; // the AUTH-02 S16 default, used for demonstration
+const RATE_LIMIT_RETRY_MS = 30_000; // demonstration value only
+const DEFAULT_LATENCY_MS = 150;
+
+const PROHIBITED = /payment|payout|handoff|moderation|report|evidence|claim|trust|order|reservation/i;
+
+interface SellerRecord {
+  summary: SellerSummary;
+  eligibility: Omit<Eligibility, 'seller_id' | 'policy_version'>;
+  store: boolean;
+  fulfilment: boolean;
+  product: boolean;
+  companyDetails: boolean;
+  readinessFails: boolean;
+  entitlementOff: DestinationKey[];
+  alerts: Record<RoleView, BriefAlert[]>;
+  obligations: BriefObligation[];
+  notifications: NotificationItem[];
+}
+
+interface Persona {
+  id: string;
+  phone: string;
+  display_name: string;
+  memberships: { sellerId: string; relationship: 'OWNER' | 'TEAM'; roles: SellerRole[] }[];
+}
+
+export const PERSONAS: readonly { id: string; phone: string; label: string }[] = [
+  { id: 'fx_acct_owner', phone: '+251900000001', label: 'Owner of four stores (Alem, Biruk, Chaltu, Kidist)' },
+  { id: 'fx_acct_states', phone: '+251900000002', label: 'Owner of stores in other states (Dawit to Iman)' },
+  { id: 'fx_acct_admin', phone: '+251900000011', label: 'Admin at Alem Textiles' },
+  { id: 'fx_acct_sales', phone: '+251900000012', label: 'Sales Support at Alem Textiles' },
+  { id: 'fx_acct_inventory', phone: '+251900000013', label: 'Inventory at Alem Textiles' },
+  { id: 'fx_acct_analyst', phone: '+251900000014', label: 'Analyst at Alem Textiles' },
+  { id: 'fx_acct_campaign', phone: '+251900000015', label: 'Campaign Manager at Alem Textiles' },
+  { id: 'fx_acct_multirole', phone: '+251900000016', label: 'Inventory and Sales Support at Alem Textiles' },
+  { id: 'fx_acct_inv_biruk', phone: '+251900000017', label: 'Inventory at Biruk Shoes (draft store)' },
+  { id: 'fx_acct_new', phone: '+251900000003', label: 'New account (no stores yet; any other number behaves the same)' },
+];
+
+const NONE: Record<RoleView, BriefAlert[]> = { OWNER_ADMIN: [], SALES_SUPPORT: [], INVENTORY: [], ANALYST: [], CAMPAIGN_MANAGER: [] };
+const T0 = Date.UTC(2026, 10, 25, 9, 0, 0);
+const at = (minutesAgo: number): string => new Date(T0 - minutesAgo * 60_000).toISOString();
+
+function seller(
+  id: string,
+  display_name: string,
+  status: SellerSummary['status'],
+  publication: SellerSummary['publication'],
+  overrides: Partial<SellerRecord> & { type?: SellerSummary['seller_type'] } = {},
+): SellerRecord {
+  const { type, ...rest } = overrides;
+  return {
+    summary: { id, display_name, seller_type: type ?? 'INDIVIDUAL', status, publication },
+    eligibility: { outcome: 'NOT_SATISFIED', workflow_state: 'NEEDS_SELLER_ACTION', reason_codes: ['SOCIAL_ACCOUNT_REQUIRED'], social_accounts: [] },
+    store: false,
+    fulfilment: false,
+    product: false,
+    companyDetails: false,
+    readinessFails: false,
+    entitlementOff: [],
+    alerts: NONE,
+    obligations: [],
+    notifications: [
+      { id: `${id}_n1`, kind: 'ADMISSION_UPDATE', created_at: at(90), read: false },
+      { id: `${id}_n2`, kind: 'READINESS_CHANGED', created_at: at(600), read: true },
+    ],
+    ...rest,
+  };
+}
+
+const verifiedTikTok = (handle: string): SocialAccountState[] => [{ platform: 'TIKTOK', handle, control: 'VERIFIED' }];
+const SATISFIED = { outcome: 'SATISFIED', workflow_state: null, reason_codes: [] } as const;
+
+function initialSellers(): Record<string, SellerRecord> {
+  const all = [
+    seller('fx_seller_alem', 'Alem Textiles', 'ACTIVE', 'PUBLISHED', {
+      eligibility: { ...SATISFIED, social_accounts: verifiedTikTok('@alem.textiles') },
+      store: true, fulfilment: true, product: true, companyDetails: true,
+      alerts: { ...NONE, OWNER_ADMIN: [{ code: 'POLICY_RECHECK_PENDING', severity: 'INFO', occurred_at: at(300) }] },
+      obligations: [{ code: 'ACCEPT_UPDATED_POLICY', due_at: new Date(T0 + 14 * 86_400_000).toISOString() }],
+      notifications: [
+        { id: 'fx_seller_alem_n1', kind: 'ADMISSION_UPDATE', created_at: at(45), read: false },
+        { id: 'fx_seller_alem_n2', kind: 'POLICY_NOTICE', created_at: at(300), read: false },
+        { id: 'fx_seller_alem_n3', kind: 'SECURITY_NEW_SESSION', created_at: at(2000), read: true },
+      ],
+    }),
+    seller('fx_seller_biruk', 'Biruk Shoes', 'DRAFT', 'NEVER_PUBLISHED', { entitlementOff: ['insights'] }),
+    seller('fx_seller_kidist', 'Kidist Cosmetics', 'DRAFT', 'NEVER_PUBLISHED'),
+    seller('fx_seller_chaltu', 'Chaltu Crafts', 'DRAFT', 'NEVER_PUBLISHED', {
+      eligibility: { ...SATISFIED, social_accounts: verifiedTikTok('@chaltu.crafts') },
+      store: true,
+    }),
+    seller('fx_seller_dawit', 'Dawit Leather', 'DRAFT', 'NEVER_PUBLISHED', {
+      eligibility: { ...SATISFIED, social_accounts: verifiedTikTok('@dawit.leather') },
+      store: true, fulfilment: true, product: true, companyDetails: true,
+    }),
+    seller('fx_seller_eden', 'Eden Foods PLC', 'DRAFT', 'NEVER_PUBLISHED', {
+      type: 'COMPANY',
+      eligibility: { outcome: 'PENDING', workflow_state: 'WAITING_FOR_DM_REVIEW', reason_codes: [], social_accounts: [{ platform: 'INSTAGRAM', handle: '@eden.foods', control: 'PENDING' }] },
+    }),
+    seller('fx_seller_fana', 'Fana Fashion', 'DRAFT', 'NEVER_PUBLISHED', {
+      eligibility: { outcome: 'NOT_SATISFIED', workflow_state: null, reason_codes: ['SOCIAL_BUSINESS_PRESENCE_NOT_ESTABLISHED'], social_accounts: verifiedTikTok('@fana.fashion') },
+    }),
+    seller('fx_seller_gelila', 'Gelila Spices', 'SUSPENDED', 'UNPUBLISHED', {
+      eligibility: { ...SATISFIED, social_accounts: verifiedTikTok('@gelila.spices') },
+      store: true, fulfilment: true, product: true, companyDetails: true,
+      alerts: { ...NONE, OWNER_ADMIN: [{ code: 'SELLER_RESTRICTED', severity: 'WARN', occurred_at: at(120) }] },
+    }),
+    seller('fx_seller_hana', 'Hana Home Goods', 'DRAFT', 'NEVER_PUBLISHED', { readinessFails: true }),
+    seller('fx_seller_iman', 'Iman Jewellery', 'ACTIVE', 'UNPUBLISHED', {
+      eligibility: { ...SATISFIED, social_accounts: verifiedTikTok('@iman.jewellery') },
+      store: true, fulfilment: true, product: true, companyDetails: true,
+      alerts: { ...NONE, OWNER_ADMIN: [{ code: 'STOREFRONT_UNPUBLISHED', severity: 'INFO', occurred_at: at(500) }] },
+    }),
+  ];
+  return Object.fromEntries(all.map((s) => [s.summary.id, s] as const));
+}
+
+function initialPersonas(): Persona[] {
+  const own = (sellerId: string) => ({ sellerId, relationship: 'OWNER' as const, roles: ['OWNER' as SellerRole] });
+  const team = (sellerId: string, roles: SellerRole[]) => ({ sellerId, relationship: 'TEAM' as const, roles });
+  const base = (id: string, display_name: string, memberships: Persona['memberships']): Persona => ({
+    id, display_name, phone: PERSONAS.find((p) => p.id === id)?.phone ?? '', memberships,
+  });
+  return [
+    base('fx_acct_owner', 'Amina (demonstration)', [own('fx_seller_alem'), own('fx_seller_biruk'), own('fx_seller_chaltu'), own('fx_seller_kidist')]),
+    base('fx_acct_states', 'Selam (demonstration)', ['dawit', 'eden', 'fana', 'gelila', 'hana', 'iman'].map((n) => own(`fx_seller_${n}`))),
+    base('fx_acct_admin', 'Abel (demonstration)', [team('fx_seller_alem', ['ADMIN'])]),
+    base('fx_acct_sales', 'Saba (demonstration)', [team('fx_seller_alem', ['SALES_SUPPORT'])]),
+    base('fx_acct_inventory', 'Ino (demonstration)', [team('fx_seller_alem', ['INVENTORY'])]),
+    base('fx_acct_analyst', 'Anan (demonstration)', [team('fx_seller_alem', ['ANALYST'])]),
+    base('fx_acct_campaign', 'Cala (demonstration)', [team('fx_seller_alem', ['CAMPAIGN_MANAGER'])]),
+    base('fx_acct_multirole', 'Mulu (demonstration)', [team('fx_seller_alem', ['INVENTORY', 'SALES_SUPPORT'])]),
+    base('fx_acct_inv_biruk', 'Ibsa (demonstration)', [team('fx_seller_biruk', ['INVENTORY'])]),
+  ];
+}
+
+// ---- the server-like resolvers (the fixture plays the backend; the Console renders what these return) -------------
+const ALL_DEST: DestinationKey[] = ['home', 'products', 'content', 'inbox', 'insights', 'store', 'trust', 'settings'];
+const ROLE_DEST: Record<SellerRole, DestinationKey[]> = {
+  OWNER: ALL_DEST,
+  ADMIN: ALL_DEST,
+  SALES_SUPPORT: ['home', 'inbox'],
+  INVENTORY: ['home', 'products'],
+  ANALYST: ['home', 'insights'],
+  CAMPAIGN_MANAGER: ['home', 'content', 'products', 'insights'],
+};
+const MANAGER_ROLES: SellerRole[] = ['OWNER', 'ADMIN'];
+const VIEW_PRIORITY: [SellerRole, RoleView][] = [
+  ['OWNER', 'OWNER_ADMIN'], ['ADMIN', 'OWNER_ADMIN'], ['SALES_SUPPORT', 'SALES_SUPPORT'],
+  ['INVENTORY', 'INVENTORY'], ['CAMPAIGN_MANAGER', 'CAMPAIGN_MANAGER'], ['ANALYST', 'ANALYST'],
+];
+const AREAS_BY_VIEW: Record<RoleView, string[]> = {
+  OWNER_ADMIN: ['PRODUCTS', 'SCENES', 'STORIES', 'INBOX', 'INSIGHTS', 'NOTIFICATIONS', 'SETTINGS'],
+  SALES_SUPPORT: ['INBOX', 'NOTIFICATIONS'],
+  INVENTORY: ['PRODUCTS', 'INVENTORY', 'NOTIFICATIONS'],
+  ANALYST: ['INSIGHTS', 'NOTIFICATIONS'],
+  CAMPAIGN_MANAGER: ['SCENES', 'STORIES', 'INSIGHTS', 'NOTIFICATIONS'],
+};
+const AREA_DEST: Record<string, DestinationKey | null> = {
+  PRODUCTS: 'products', INVENTORY: 'products', SCENES: 'content', STORIES: 'content', INBOX: 'inbox', INSIGHTS: 'insights', SETTINGS: 'settings', NOTIFICATIONS: null,
+};
+
+export interface WorldOptions {
+  readonly now: () => number;
+  /** Per-Seller extra latency in ms, so tests can make one Seller's response arrive late. */
+  readonly delays?: Readonly<Record<string, number>>;
+  /** Base latency per call (default 150ms). Tests pass 0. */
+  readonly latencyMs?: number;
+}
+
+interface Challenge { phone: string; startedAt: number; expiresAt: number; resendAt: number; expired: boolean }
+
+export interface World {
+  handle<K extends OpId>(op: K, input: OpInput<K>, ctx: CallContext): Promise<OpOutput<K>>;
+  readonly hooks: {
+    revokeDestination(sellerId: string, key: DestinationKey): void;
+    revokeCapability(sellerId: string, capability: string): void;
+    revokeSession(): void;
+    callLog(): readonly { op: string; sellerId: string | null }[];
+  };
+}
+
+export function createWorld(options: WorldOptions): World {
+  const sellers = initialSellers();
+  const personas = initialPersonas();
+  const challenges = new Map<string, Challenge>();
+  const created = new Map<string, SellerSummary>();
+  const revokedDest = new Map<string, Set<DestinationKey>>();
+  const revokedCaps = new Map<string, Set<string>>();
+  const log: { op: string; sellerId: string | null }[] = [];
+  let session: string | null = null;
+  let pendingNew: string | null = null;
+  let sessionRevoked = false;
+  let counter = 0;
+  const iso = (ms: number): string => new Date(ms).toISOString();
+  const nowMs = options.now;
+
+  function persona(): Persona {
+    if (session === null || sessionRevoked) {
+      session = null;
+      throw new TransportError('AUTHENTICATION_REQUIRED');
+    }
+    const found = personas.find((p) => p.id === session);
+    if (!found) throw new TransportError('AUTHENTICATION_REQUIRED');
+    return found;
+  }
+
+  function membership(p: Persona, sellerId: string): { m: Persona['memberships'][number]; s: SellerRecord } {
+    const m = p.memberships.find((x) => x.sellerId === sellerId);
+    const s = sellers[sellerId];
+    // Same answer whether the Seller does not exist or is not yours: existence is never disclosed.
+    if (!m || !s) throw new TransportError('PERMISSION_DENIED');
+    return { m, s };
+  }
+
+  function accessFor(m: Persona['memberships'][number], s: SellerRecord): SellerAccess {
+    const id = s.summary.id;
+    const roles = m.roles;
+    let dests = new Set<DestinationKey>(roles.flatMap((r) => ROLE_DEST[r]));
+    let caps = new Set<string>(['notifications.view']);
+    if (roles.some((r) => MANAGER_ROLES.includes(r))) caps = new Set(['notifications.view', 'readiness.resolve', 'admission.manage']);
+    if (s.summary.status === 'SUSPENDED') {
+      dests = new Set<DestinationKey>(['home', 'settings'].filter((d) => dests.has(d as DestinationKey)) as DestinationKey[]);
+      caps = new Set(['notifications.view']);
+    }
+    for (const d of revokedDest.get(id) ?? []) dests.delete(d);
+    for (const c of revokedCaps.get(id) ?? []) caps.delete(c);
+    const destinations: DestinationAccess[] = ALL_DEST.filter((d) => dests.has(d)).map((key) => ({
+      key,
+      access: s.entitlementOff.includes(key) ? 'NO_ENTITLEMENT' : 'GRANTED',
+    }));
+    return {
+      seller_id: id,
+      seller_status: s.summary.status,
+      capabilities: [...caps],
+      destinations,
+      restriction: s.summary.status === 'SUSPENDED' ? { reason_code: 'UNDER_REVIEW' } : null,
+    };
+  }
+
+  const eligibilityOf = (s: SellerRecord): Eligibility => ({ seller_id: s.summary.id, policy_version: 'fx_policy_1', ...s.eligibility });
+
+  function readinessOf(s: SellerRecord, caps: readonly string[]): Readiness {
+    const e = s.eligibility;
+    const canResolve = caps.includes('readiness.resolve');
+    const act = (kind: string): ReadinessItem['resolving_action'] => ({ kind, denied: canResolve ? null : 'NO_PERMISSION' });
+    const items: ReadinessItem[] = [
+      { code: 'ACCOUNT_CREATED', satisfied: true, workflow_state: null, reason_codes: [], resolving_action: null },
+      { code: 'SELLER_TYPE_DECLARED', satisfied: true, workflow_state: null, reason_codes: [], resolving_action: null },
+      {
+        code: 'ELIGIBILITY_SATISFIED',
+        satisfied: e.outcome === 'SATISFIED',
+        workflow_state: e.workflow_state,
+        reason_codes: e.reason_codes,
+        resolving_action: e.outcome === 'NOT_SATISFIED' && e.workflow_state === 'NEEDS_SELLER_ACTION' ? act('CONNECT_SOCIAL_ACCOUNT') : null,
+      },
+    ];
+    if (s.summary.seller_type === 'COMPANY') {
+      items.push({
+        code: 'COMPANY_DETAILS',
+        satisfied: s.companyDetails,
+        workflow_state: null,
+        reason_codes: s.companyDetails ? [] : ['COMPANY_DETAILS_INCOMPLETE'],
+        resolving_action: s.companyDetails ? null : act('EDIT_COMPANY_DETAILS'),
+      });
+    }
+    items.push(
+      { code: 'STORE_PROFILE', satisfied: s.store, workflow_state: null, reason_codes: s.store ? [] : ['STORE_PROFILE_INCOMPLETE'], resolving_action: s.store ? null : act('EDIT_STORE_PROFILE') },
+      { code: 'FULFILMENT_CONFIG', satisfied: s.fulfilment, workflow_state: null, reason_codes: s.fulfilment ? [] : ['FULFILMENT_REQUIRED'], resolving_action: s.fulfilment ? null : act('CONFIGURE_FULFILMENT') },
+      { code: 'AT_LEAST_ONE_PRODUCT', satisfied: s.product, workflow_state: null, reason_codes: s.product ? [] : ['PRODUCT_REQUIRED'], resolving_action: s.product ? null : act('ADD_PRODUCT') },
+    );
+    return { seller_id: s.summary.id, ready: items.every((i) => i.satisfied), policy_version: 'fx_policy_1', items };
+  }
+
+  function viewFor(roles: readonly SellerRole[]): RoleView {
+    for (const [role, view] of VIEW_PRIORITY) if (roles.includes(role)) return view;
+    return 'OWNER_ADMIN';
+  }
+
+  function briefOf(m: Persona['memberships'][number], s: SellerRecord, access: SellerAccess): HomeBrief {
+    const view = viewFor(m.roles);
+    const keys = new Set<string>();
+    for (const r of m.roles) for (const k of AREAS_BY_VIEW[viewFor([r])]) keys.add(k);
+    const areas: BriefArea[] = [...keys]
+      .filter((k) => {
+        const d = AREA_DEST[k];
+        return d === null || d === undefined || access.destinations.some((x) => x.key === d);
+      })
+      .map((key) => {
+        const d = AREA_DEST[key];
+        const entitled = d === null || d === undefined || access.destinations.find((x) => x.key === d)?.access === 'GRANTED';
+        return { key, state: key === 'NOTIFICATIONS' ? 'AVAILABLE' : entitled ? 'DEFERRED' : 'NO_ENTITLEMENT' };
+      });
+    const isManager = view === 'OWNER_ADMIN';
+    return {
+      seller_id: s.summary.id,
+      mode: s.summary.status === 'ACTIVE' || s.summary.status === 'SUSPENDED' ? 'OPERATING_BRIEF' : 'READINESS_HUB',
+      role_view: view,
+      areas,
+      alerts: s.alerts[view],
+      obligations: isManager ? s.obligations : [],
+    };
+  }
+
+  async function delay(sellerId: string | null): Promise<void> {
+    const ms = (options.latencyMs ?? DEFAULT_LATENCY_MS) + (sellerId ? (options.delays?.[sellerId] ?? 0) : 0);
+    // Deliberately NOT abort-aware: a response that arrives after the caller has moved on is exactly the late
+    // response the Console's scoped data hook must discard (RN-4).
+    await new Promise<void>((resolve) => setTimeout(resolve, ms));
+  }
+
+  function newChallenge(phone: string): OtpChallenge {
+    const id = `fx_otp_${++counter}`;
+    const t = nowMs();
+    challenges.set(id, { phone, startedAt: t, expiresAt: t + OTP_VALID_MS, resendAt: t + RESEND_AFTER_MS, expired: false });
+    return { challenge_id: id, server_time: iso(t), expires_at: iso(t + OTP_VALID_MS), resend_available_at: iso(t + RESEND_AFTER_MS) };
+  }
+  function challengeOf(id: string): Challenge {
+    const c = challenges.get(id);
+    if (!c) throw new TransportError('OTP_EXPIRED');
+    return c;
+  }
+  const digits = (v: string): string => v.replace(/[^\d+]/g, '');
+
+  type H = { [K in OpId]: (input: OpInput<K>, ctx: CallContext) => OpOutput<K> };
+  const handlers: H = {
+    'auth.otp.start': ({ phone }) => {
+      if (!/^\+?\d{9,15}$/.test(digits(phone))) throw new TransportError('VALIDATION_FAILED', { fields: { phone: 'PHONE_INVALID' } });
+      return newChallenge(digits(phone));
+    },
+    'auth.otp.status': ({ challenge_id }) => {
+      const c = challengeOf(challenge_id);
+      const t = nowMs();
+      const expired = c.expired || t >= c.expiresAt;
+      return {
+        state: expired ? 'EXPIRED' : 'PENDING',
+        server_time: iso(t), expires_at: iso(c.expiresAt), resend_available_at: iso(c.resendAt),
+        resend_allowed: t >= c.resendAt,
+      };
+    },
+    'auth.otp.resend': ({ challenge_id }) => {
+      const c = challengeOf(challenge_id);
+      if (nowMs() < c.resendAt) throw new TransportError('RATE_LIMITED', { retryAt: iso(c.resendAt) });
+      challenges.delete(challenge_id);
+      return newChallenge(c.phone);
+    },
+    'auth.otp.verify': ({ challenge_id, code }) => {
+      const c = challengeOf(challenge_id);
+      if (code === DEMO_CODES.rateLimited) throw new TransportError('RATE_LIMITED', { retryAt: iso(nowMs() + RATE_LIMIT_RETRY_MS) });
+      if (c.expired || nowMs() >= c.expiresAt || code === DEMO_CODES.expired) {
+        c.expired = true;
+        throw new TransportError('OTP_EXPIRED');
+      }
+      if (code !== DEMO_CODES.ok) throw new TransportError('OTP_INVALID');
+      const known = personas.find((p) => p.phone === c.phone);
+      challenges.delete(challenge_id);
+      sessionRevoked = false;
+      if (known) {
+        session = known.id;
+        return { result: 'SIGNED_IN' };
+      }
+      pendingNew = c.phone;
+      return { result: 'DECLARATIONS_REQUIRED', policy_version: 'fx_age_policy_1' };
+    },
+    'auth.declarations.accept': ({ adult_declaration, policy_accepted }) => {
+      // Missing or false is denied uniformly (AUTH-02 S24): the response never says which one was missing.
+      if (pendingNew === null || !adult_declaration || !policy_accepted) throw new TransportError('VALIDATION_FAILED', { fields: { declarations: 'DECLARATIONS_REQUIRED' } });
+      const p: Persona = { id: `fx_acct_new_${++counter}`, phone: pendingNew, display_name: 'New account (demonstration)', memberships: [] };
+      personas.push(p);
+      pendingNew = null;
+      session = p.id;
+      return { result: 'SIGNED_IN' };
+    },
+    // Enumeration resistance (AUTH-02 S22): the same answer for every number.
+    'auth.recovery.start': () => ({ result: 'RECORDED' }),
+    'auth.session.end': () => {
+      session = null;
+      return { result: 'ENDED' };
+    },
+    'account.context.get': (): AccountContext => {
+      const p = persona();
+      const memberships: Membership[] = p.memberships.flatMap((m) => {
+        const s = sellers[m.sellerId];
+        return s ? [{ seller: s.summary, relationship: m.relationship, roles: m.roles }] : [];
+      });
+      return { account: { id: p.id, display_name: p.display_name }, memberships };
+    },
+    'seller.access.get': (_i, ctx) => {
+      const { m, s } = membership(persona(), sellerIdOf(ctx));
+      return accessFor(m, s);
+    },
+    'seller.create': (input, ctx) => {
+      const p = persona();
+      const key = ctx.idempotencyKey;
+      if (key) {
+        const prior = created.get(key);
+        if (prior) return prior;
+      }
+      const taken = Object.values(sellers).some((s) => s.summary.display_name.toLowerCase().startsWith(input.handle.toLowerCase()));
+      const fields: Record<string, string> = {};
+      if (input.display_name.trim() === '') fields['display_name'] = 'REQUIRED';
+      if (!/^[a-z0-9._]{3,30}$/.test(input.handle)) fields['handle'] = 'HANDLE_INVALID';
+      else if (taken) fields['handle'] = 'HANDLE_TAKEN';
+      if (Object.keys(fields).length > 0) throw new TransportError('VALIDATION_FAILED', { fields });
+      const id = `fx_seller_new_${++counter}`;
+      const record = seller(id, input.display_name.trim(), 'DRAFT', 'NEVER_PUBLISHED', { type: input.seller_type });
+      sellers[id] = record;
+      p.memberships.push({ sellerId: id, relationship: 'OWNER', roles: ['OWNER'] });
+      if (key) created.set(key, record.summary);
+      return record.summary;
+    },
+    'seller.eligibility.get': (_i, ctx) => eligibilityOf(membership(persona(), sellerIdOf(ctx)).s),
+    'seller.eligibility.recheck': (_i, ctx) => {
+      const { m, s } = membership(persona(), sellerIdOf(ctx));
+      if (!accessFor(m, s).capabilities.includes('admission.manage')) throw new TransportError('PERMISSION_DENIED');
+      return eligibilityOf(s);
+    },
+    'seller.social.start': ({ platform, handle }, ctx) => {
+      const { m, s } = membership(persona(), sellerIdOf(ctx));
+      if (!accessFor(m, s).capabilities.includes('admission.manage')) throw new TransportError('PERMISSION_DENIED');
+      if (!/^@?[A-Za-z0-9._]{2,30}$/.test(handle)) throw new TransportError('VALIDATION_FAILED', { fields: { handle: 'HANDLE_INVALID' } });
+      const clean = handle.startsWith('@') ? handle : `@${handle}`;
+      s.eligibility = {
+        outcome: 'PENDING',
+        workflow_state: 'WAITING_FOR_DM_REVIEW',
+        reason_codes: [],
+        social_accounts: [{ platform, handle: clean, control: 'PENDING' }],
+      };
+      return { seller_id: s.summary.id, platform, official_account_handle: platform === 'TIKTOK' ? '@adulis.official' : '@adulis.official.shop', code_sent_to: 'your verified phone', expires_at: iso(nowMs() + OTP_VALID_MS) };
+    },
+    'seller.readiness.get': (_i, ctx) => {
+      const { m, s } = membership(persona(), sellerIdOf(ctx));
+      if (s.readinessFails) throw new TransportError('UNAVAILABLE');
+      return readinessOf(s, accessFor(m, s).capabilities);
+    },
+    'seller.home.get': (_i, ctx) => {
+      const { m, s } = membership(persona(), sellerIdOf(ctx));
+      return briefOf(m, s, accessFor(m, s));
+    },
+    'notifications.list': (_i, ctx) => {
+      const { s } = membership(persona(), sellerIdOf(ctx));
+      return { seller_id: s.summary.id, unread_count: s.notifications.filter((n) => !n.read).length, items: s.notifications };
+    },
+    'market.onboarding.get': () => {
+      persona();
+      return { market_id: 'fx_market_ethiopia', country: 'Ethiopia', timezone: 'Africa/Addis_Ababa' };
+    },
+    'market.context.get': (_i, ctx) => {
+      const { s } = membership(persona(), sellerIdOf(ctx));
+      return { seller_id: s.summary.id, market_id: 'fx_market_ethiopia', country: 'Ethiopia', timezone: 'Africa/Addis_Ababa' };
+    },
+  };
+  function sellerIdOf(ctx: CallContext): string {
+    if (!ctx.sellerId) throw new TransportError('REFUSED', { detail: BLOCKED_CODE });
+    return ctx.sellerId;
+  }
+
+  return {
+    async handle<K extends OpId>(op: K, input: OpInput<K>, ctx: CallContext): Promise<OpOutput<K>> {
+      // Fail closed (RN-3): an operation the fixture does not serve, or one on the prohibited list, is refused.
+      if (PROHIBITED.test(op) || !Object.hasOwn(handlers, op)) throw new TransportError('REFUSED', { detail: BLOCKED_CODE });
+      log.push({ op, sellerId: ctx.sellerId ?? null });
+      await delay(ctx.sellerId ?? null);
+      if (sessionRevoked && !op.startsWith('auth.')) {
+        session = null;
+        throw new TransportError('AUTHENTICATION_REQUIRED');
+      }
+      return (handlers[op] as (i: OpInput<K>, c: CallContext) => OpOutput<K>)(input, ctx);
+    },
+    hooks: {
+      revokeDestination(sellerId, key) {
+        revokedDest.set(sellerId, (revokedDest.get(sellerId) ?? new Set()).add(key));
+      },
+      revokeCapability(sellerId, capability) {
+        revokedCaps.set(sellerId, (revokedCaps.get(sellerId) ?? new Set()).add(capability));
+      },
+      revokeSession() {
+        sessionRevoked = true;
+      },
+      callLog: () => log,
+    },
+  };
+}

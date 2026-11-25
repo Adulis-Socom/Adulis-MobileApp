@@ -1,0 +1,65 @@
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
+import { AuthLayout, RequireSession } from './features/auth/Gate';
+import { Declarations } from './features/auth/Declarations';
+import { Recovery } from './features/auth/Recovery';
+import { SignIn } from './features/auth/SignIn';
+import { Verify } from './features/auth/Verify';
+import { Chooser } from './features/entry/Chooser';
+import { Home } from './features/home/Home';
+import { Notifications } from './features/notifications/Notifications';
+import { Admission } from './features/onboarding/Admission';
+import { BecomeSeller } from './features/onboarding/BecomeSeller';
+import { Gate, Deferred } from './features/unavailable/Gate';
+import { NotFound, NotFoundInSeller } from './features/unavailable/NotFound';
+import { More } from './layout/More';
+import { SellerRoute } from './seller/SellerScope';
+import type { DestinationKey } from './contracts/gap-sc';
+
+/**
+ * The route map of SC-FE-00. The Seller lives in the URL (`/s/:sellerId`). Orders has no route at all (Nov 24 layer).
+ * Every area whose work order is not built renders an honest "arrives later" page behind its own permission gate.
+ */
+const deferred = (path: string, dest: DestinationKey): RouteObject => ({ path, element: <Deferred dest={dest} /> });
+
+export const routes: RouteObject[] = [
+  { path: '/', element: <Navigate to="/sellers" replace /> },
+  {
+    element: <AuthLayout />,
+    children: [
+      { path: 'sign-in', element: <SignIn /> },
+      { path: 'sign-in/verify', element: <Verify /> },
+      { path: 'sign-in/recovery', element: <Recovery /> },
+      { path: 'sign-in/declarations', element: <Declarations /> },
+    ],
+  },
+  {
+    element: <RequireSession />,
+    children: [
+      { path: 'sellers', element: <Chooser /> },
+      { path: 'become-seller', element: <BecomeSeller /> },
+      {
+        path: 's/:sellerId',
+        element: <SellerRoute />,
+        children: [
+          { index: true, element: <Home /> },
+          { path: 'admission', element: <Gate dest="home"><Admission /></Gate> },
+          { path: 'notifications', element: <Notifications /> },
+          { path: 'more', element: <More /> },
+          deferred('products/*', 'products'),
+          deferred('content/*', 'content'),
+          deferred('inbox/*', 'inbox'),
+          deferred('insights/*', 'insights'),
+          deferred('store/*', 'store'),
+          deferred('trust/*', 'trust'),
+          deferred('settings/*', 'settings'),
+          { path: '*', element: <NotFoundInSeller /> },
+        ],
+      },
+    ],
+  },
+  { path: '*', element: <NotFound /> },
+];
+
+export function createRouter() {
+  return createBrowserRouter(routes);
+}
