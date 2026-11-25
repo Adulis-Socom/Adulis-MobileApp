@@ -278,6 +278,18 @@ jobs:
           # job.services.<id>.id.
           ADULIS_PG_CONTAINER: ${{ job.services.postgres.id }}
 
+      # Failure evidence for the Console browser gates (CI-FIXTURE-01): Playwright writes traces,
+      # screenshots and error context under apps/console/test-results when a test fails. Without
+      # this a red browser gate on a runner is nearly unreadable. Only on failure, kept 7 days.
+      - name: Upload Console browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: console-browser-failure-evidence
+          path: apps/console/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
       # =====================================================================
       # STAGES REQUIRED BY SECTION 16 THAT THIS TIER CANNOT RUN YET.
       #

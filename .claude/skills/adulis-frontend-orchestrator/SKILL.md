@@ -18,7 +18,7 @@ Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` fr
 
 ## Current MVP constraints — 24 November 2026
 
-Seller Console -> Mobile (Buyer/Companion/Courier) -> Storefront -> Operator; frontend then backend per surface, Company Website excluded. Pause Mobile while Console active. Preserve conforming code; use typed, dev-only fixtures, no live fallback/release inclusion. Real checkout review; transactional, handoff and purchase-derived flows internal only. Ponytail instead of Superpowers, Impeccable for UI.
+Seller Console -> Mobile (Buyer/Companion/Courier) -> Storefront -> Operator; frontend then backend per surface, Company Website excluded. Pause Mobile while Console active. Preserve conforming code; use typed, dev-only fixtures, no live fallback/release inclusion. Real checkout review; transactional, handoff and purchase-derived flows internal only. Ponytail instead of Superpowers, Impeccable for UI (it follows Adulis requirements). Subscription purchase UI and Payout UI are disabled or deferred (B02-D01/D02); the mobile billing-CTA prohibitions are unchanged.
 
 ## Governing sources (legacy executable references unless noted)
 - `ADU-ARCH-01_Seller_Surface_Architecture_v2_0.md` — surface placement.
