@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * `pnpm verify:retired` (ARC-BE-06): proves the ACTIVE replacement workspace carries none of the retired
- * architecture. Historical documentation and the archived surfaces (apps/console, apps/mobile, docs/, the
+ * architecture. Historical documentation and the archived surface (apps/mobile, docs/, the
  * archive tags) are NOT active code and are not scanned; they are listed as classified at the end.
  * Comments are stripped before scanning code, so a sentence saying "no Reservation" is not a finding.
  * Every detector is first run against a planted sample, so a detector that cannot fire fails the gate.
@@ -42,9 +42,9 @@ check('detectors fire on planted samples', selfTests.filter(([, ok]) => !ok()).m
 // ---------- 1. the active workspace boundary ----------------------------------------------------------
 const workspace = read('pnpm-workspace.yaml');
 const members = [...workspace.matchAll(/^\s*-\s*'([^']+)'/gm)].map((m) => m[1]).sort();
-check('workspace members are exactly apps/api and packages/*', JSON.stringify(members) === JSON.stringify(['apps/api', 'packages/*']) ? [] : [`members: ${members.join(', ')}`]);
+check('workspace members are exactly apps/api, apps/console (SC-FE-01) and packages/*', JSON.stringify(members) === JSON.stringify(['apps/api', 'apps/console', 'packages/*']) ? [] : [`members: ${members.join(', ')}`]);
 
-const activePackageDirs = ['.', 'apps/api', ...readdirSync(path.join(root, 'packages')).map((p) => `packages/${p}`)].filter((d) => existsSync(path.join(root, d, 'package.json')));
+const activePackageDirs = ['.', 'apps/api', 'apps/console', ...readdirSync(path.join(root, 'packages')).map((p) => `packages/${p}`)].filter((d) => existsSync(path.join(root, d, 'package.json')));
 
 // ---------- 2. dependencies (manifests and lockfile) --------------------------------------------------
 check(
@@ -112,7 +112,8 @@ check(
 for (const p of passes) console.log(`  PASS  ${p}`);
 for (const f of failures) console.log(`  FAIL  ${f}`);
 console.log('\nClassified, not scanned (not part of the replacement build):');
-console.log('  ARCHIVED ON DISK  apps/console, apps/mobile (not workspace members; rebuilt at SC-FE-01 / MOB-FE-01)');
+console.log('  ARCHIVED ON DISK  apps/mobile (not a workspace member; rebuilt at MOB-FE-01)');
+  console.log('  CONSOLE           apps/console is a workspace member since SC-FE-01: manifests and lockfile are scanned here; its own release scan is apps/console/scripts/verify-release.mjs');
 console.log('  HISTORICAL        docs/, ops/native, ops/load, ops/provider-verify, ops/runbooks, ops/render.yaml, _staging, _superseded');
 console.log('  ARCHIVE REFS      tags recovery/legacy-dev-20261125, recovery/pr-191-482938f, recovery/pr-188-3e1d09b, dev-baseline-rebuild-20261125');
 if (failures.length) {
