@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import type { Eligibility, SocialChallenge, SocialPlatform } from '../../contracts/gap-sc';
 import { Badge } from '../../components/Badge';
+import { Icon } from '../../components/Icon';
 import { ErrorSummary, Field, Group, type FieldError } from '../../components/Form';
 import { PageTitle } from '../../components/PageTitle';
 import { Problem } from '../../components/Problem';
@@ -178,7 +179,10 @@ export function Admission() {
                 <section className="panel" aria-labelledby="method-h">
                   <h2 id="method-h">{t('admission.method_title')}</h2>
                   <p>{t('admission.loginkit_off')}</p>
-                  <p className="notice">{t('admission.anti_phishing')}</p>
+                  <p className="notice">
+                    <Icon name="shield" />
+                    <span>{t('admission.anti_phishing')}</span>
+                  </p>
                   {open ? (
                     <>
                       <ErrorSummary errors={errors} focusToken={focusToken} />

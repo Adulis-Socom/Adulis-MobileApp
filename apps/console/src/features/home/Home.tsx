@@ -155,8 +155,6 @@ function HomeContent() {
   ]
     .filter(Boolean)
     .join(' ');
-  // Before publication the readiness list is what the person came for, so the "nothing is connected" statement follows it.
-  const hubFirst = brief.state.status === 'ready' && brief.state.data.mode === 'READINESS_HUB';
   const honest = (
     <StatePanel kind="info" title={t('home.honest_title')}>
       <p>{t('home.honest_body')}</p>
@@ -169,7 +167,6 @@ function HomeContent() {
         <p className="lead">{t('home.roles', { roles: membership.roles.map((r) => label('role', r)).join(', ') })}</p>
         {meta ? <p className="hint">{meta}</p> : null}
       </div>
-      {brief.state.status !== 'loading' && !hubFirst ? honest : null}
       {brief.state.status === 'loading' ? <Skeleton rows={6} /> : null}
       {brief.state.status === 'error' ? (
         <StatePanel
@@ -188,7 +185,7 @@ function HomeContent() {
       {brief.state.status === 'ready' ? (
         <>
           {brief.state.data.role_view !== 'OWNER_ADMIN' ? <p className="hint">{t('home.limited_note')}</p> : null}
-          <Brief brief={brief.state.data} timezone={timezone} honest={hubFirst ? honest : null} />
+          <Brief brief={brief.state.data} timezone={timezone} honest={honest} />
         </>
       ) : null}
     </>

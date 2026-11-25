@@ -27,8 +27,9 @@ body {
   font-size: var(--adu-font-size-base);
   line-height: var(--adu-line-height-base);
   caret-color: var(--adu-color-primary);
-  /* An unbreakable run (a timezone name, a handle, a long Amharic word) wraps instead of pushing the page sideways. */
-  overflow-wrap: anywhere;
+  /* A word wider than its box (a timezone name, a handle, a long Amharic word) breaks only when it must, and never changes how
+     wide a column is allowed to shrink: the items below carry min-width 0 so they can. */
+  overflow-wrap: break-word;
 }
 
 ::selection {
@@ -50,7 +51,7 @@ h2,
 h3 {
   line-height: var(--adu-line-height-heading);
   text-wrap: balance;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 h1,
@@ -170,6 +171,13 @@ code {
   max-width: 38rem;
 }
 
+.page > *,
+.panel > *,
+.state > *,
+.state-body > * {
+  min-width: 0;
+}
+
 .page p {
   max-width: 70ch;
 }
@@ -255,7 +263,7 @@ code {
 .seller-name {
   font-size: var(--adu-font-size-lg);
   font-weight: var(--adu-font-weight-bold);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .topbar-actions {
@@ -370,7 +378,7 @@ code {
   text-align: center;
   font-size: var(--adu-font-size-xs);
   font-weight: var(--adu-font-weight-semibold);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .tab[aria-current='page'],
@@ -662,6 +670,10 @@ legend {
 }
 
 .notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--adu-space-smd);
+  font-weight: var(--adu-font-weight-semibold);
   padding: var(--adu-space-smd) var(--adu-space-md);
   border: 1px solid var(--adu-color-info-border);
   border-radius: var(--adu-radius-md);
@@ -935,7 +947,7 @@ legend {
 
 .ledger-title {
   font-weight: var(--adu-font-weight-semibold);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .ledger-meta {
@@ -989,7 +1001,7 @@ legend {
 }
 
 .switch-name {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 @media (prefers-reduced-motion: reduce) {

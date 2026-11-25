@@ -99,7 +99,6 @@ export function ReadinessHub() {
   return (
     <section className="panel" aria-labelledby="readiness-h">
       <h2 id="readiness-h">{t('readiness.title')}</h2>
-      <p>{t('readiness.lead')}</p>
       {state.status === 'loading' ? <Skeleton rows={5} /> : null}
       {state.status === 'error' ? (
         <StatePanel
@@ -141,6 +140,8 @@ export function ReadinessHub() {
           </ul>
         </>
       ) : null}
+      {/* Below the list, so on a phone the first open requirement and its action are what the person sees first. */}
+      <p className="hint">{t('readiness.lead')}</p>
     </section>
   );
 }
