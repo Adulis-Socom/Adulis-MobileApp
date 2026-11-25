@@ -420,14 +420,6 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
 }
 .order-total { font-weight: 600; }
 
-/* The clock. `.deadline` styles BOTH treatments identically -- which one is
-   running is said in words by `.deadline-label`, not in colour, because a
-   colour is not a label and cannot be read aloud. There is no rule for a
-   stopped clock, because a stopped clock renders nothing at all. */
-.deadline { flex: 0 0 auto; font-size: 0.875rem; }
-.deadline-label { color: var(--adu-color-text-muted); }
-.deadline-value { font-variant-numeric: tabular-nums; }
-
 .load-more { margin-top: var(--adu-space-md); min-height: var(--adu-touch-min); }
 
 /* ----------------------------------------------------------- SC-04 detail */
@@ -474,49 +466,6 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
 .history { margin: 0; padding-left: var(--adu-space-lg); }
 .history li { padding: 0.125rem 0; }
 .history-when { color: var(--adu-color-text-muted); margin-right: var(--adu-space-sm); }
-
-/* --------------------------------------------------------- SC-05 evidence */
-.modal.evidence { max-width: 40rem; }
-.evidence-frame {
-  max-height: 60vh;
-  overflow: auto;
-  background: var(--adu-color-bg);
-  border: 1px solid var(--adu-color-border);
-  border-radius: var(--adu-radius-sm);
-}
-/* No download, no print, no share, no save, and no "looks valid" affordance
-   of any kind. These two properties discourage a long-press save WITHOUT
-   pretending to prevent it -- a screenshot is always possible and this
-   screen makes no claim otherwise. There is no `download` attribute in the
-   component, no anchor around the image, and no border, tint or icon that
-   could read as a verdict on what the picture shows. */
-.evidence-image {
-  display: block;
-  max-width: 100%;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-}
-.evidence-submitted { color: var(--adu-color-text-muted); margin: var(--adu-space-xs) 0 0; }
-
-/* --------------------------------------------------------------- SC-06 QR */
-/* Large and high-contrast, and NOT theme-aware: an inverted QR fails on many
-   readers, and a doorway after dark is exactly when this is used. The fills
-   are set on the SVG itself for the same reason. */
-.handoff-qr {
-  display: block;
-  width: min(20rem, 70vw);
-  height: auto;
-  margin: 0 auto;
-  /* THE ONE DELIBERATE LITERAL IN THIS FILE, and it must survive dark mode.
-     A QR code is read by a camera, not by a person: the quiet zone and the
-     light modules have to stay white whatever the theme is, because a scanner
-     thresholds on contrast and an inverted code is a code that does not scan.
-     Do not replace this with a surface token. */
-  background: #ffffff;
-}
-.qr-explain { text-align: center; margin-top: var(--adu-space-md); }
-.modal.qr .offline { text-align: center; }
 
 /* ==========================================================================
  * The twelve ScreenState branches, given visual language (T14-C, C-5 first
@@ -718,35 +667,8 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
 .message-time { font-size: var(--adu-font-size-sm); opacity: 0.75; }
 .message-body { margin-block: var(--adu-space-xs) 0; }
 .composer { display: grid; gap: var(--adu-space-sm); max-width: 42rem; margin-top: var(--adu-space-md); }
-.pinned-order { display: flex; gap: var(--adu-space-smd); align-items: baseline; }
 
 .notifications-header { display: flex; gap: var(--adu-space-smd); align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
-.claim-evidence.readonly ul { padding-inline-start: 1.25rem; }
-.claim-remedy { display: grid; gap: var(--adu-space-sm); max-width: 28rem; }
-
-/* ==========================================================================
-   C-8 -- SC-C1 courier. Mobile-first single column; no sidebar, no seller
-   chrome. The QR block stays pure black-on-white (lib/qr.tsx says why).
-   ========================================================================== */
-
-.courier-screen { max-width: 28rem; margin-inline: auto; padding: var(--adu-space-smd); }
-.courier-header { display: flex; justify-content: space-between; align-items: baseline; gap: var(--adu-space-smd); }
-.courier-orders { list-style: none; padding: 0; margin: 0; }
-.courier-order-row {
-  display: flex;
-  gap: var(--adu-space-smd);
-  align-items: baseline;
-  flex-wrap: wrap;
-  width: 100%;
-  text-align: left;
-  padding: var(--adu-space-smd);
-  border: 1px solid var(--adu-color-border);
-  border-radius: var(--adu-radius-md);
-  margin-block: var(--adu-space-sm);
-  background: transparent;
-  min-height: 44px;
-}
-.courier-qr { max-width: 20rem; margin-block: var(--adu-space-smd); }
 
 /* T20 S4 -- media upload row */
 .media-item { display: flex; align-items: center; gap: var(--adu-space-xs); }

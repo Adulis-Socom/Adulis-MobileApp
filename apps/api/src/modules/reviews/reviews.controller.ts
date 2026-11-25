@@ -19,8 +19,6 @@ import type { LocalizedRequest } from '../../common/http/locale.middleware';
  * writable column exists on a review (a load-bearing absence).
  */
 
-const first = <T>(rows: readonly T[]): T | undefined => rows[0];
-
 @Controller()
 export class ReviewsController {
   constructor(private readonly tx: HandlerTransaction) {}

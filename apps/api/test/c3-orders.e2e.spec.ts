@@ -273,8 +273,7 @@ describe('C3 — the cart', () => {
     it('every one is 404 for an authenticated buyer and seller, and writes nothing', async () => {
       const before = await ledger();
       for (const [method, path] of buyer) {
-        const r = await request(app.getHttpServer())
-          [method as 'get' | 'post' | 'delete'](path)
+        const r = await request(app.getHttpServer())[method as 'get' | 'post' | 'delete'](path)
           .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
           .set('X-Adulis-Device', DEVICE)
           .set('Idempotency-Key', key())
@@ -282,8 +281,7 @@ describe('C3 — the cart', () => {
         expect([method, path, r.status]).toEqual([method, path, 404]);
       }
       for (const [method, path] of seller) {
-        const r = await request(app.getHttpServer())
-          [method as 'get' | 'post' | 'delete'](path)
+        const r = await request(app.getHttpServer())[method as 'get' | 'post' | 'delete'](path)
           .set('Cookie', cookie(OWNER_S))
           .set('Origin', CONSOLE_ORIGIN)
           .set('X-Adulis-Seller', SELLER)
