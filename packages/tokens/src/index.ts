@@ -31,22 +31,24 @@
  */
 
 /**
- * The neutral ramp -- REAL steps, warm (a hair of yellow reads calmer than
- * pure grey on a cheap panel). 0 is the page, 900 is body text; every step is a
- * distinguishable move, and the roles below are named positions on it.
+ * The neutral ramp, re-based on the CTO palette (B02-D03, DS-TOK-01). Cool greys, and the roles keep
+ * their positions: 0 is the PAGE (the CTO background #F5F5F7), 50 is the RAISED surface (white, an
+ * authorised variant, B02-D04), 100 is the secondary fill (#F4F5F7), 200 the border (#E5E7EB), 400 the
+ * gray (#7E8494), 900 the primary (#111111). The base colours are the CTO's, unchanged; 300 and 500 to
+ * 800 are derived and measured (verify:tokens fails if a pair stops clearing its target).
  */
 export const neutral = {
-  0: '#ffffff',
-  50: '#f7f6f4',
-  100: '#eceae6',
-  200: '#dbd8d2',
-  300: '#c1bdb4',
-  400: '#8a847b', // the edge of a control: at least 3:1 on the page and on a card
-  500: '#78726a', // lightest text permitted on white (~5.3:1)
-  600: '#57524b',
-  700: '#3d3a34',
-  800: '#272420',
-  900: '#17150f', // body text (~17:1 on white)
+  0: '#f5f5f7', // the page
+  50: '#ffffff', // the raised surface
+  100: '#f4f5f7', // secondary
+  200: '#e5e7eb', // border (decorative separation)
+  300: '#c8ccd5',
+  400: '#7e8494', // the edge of a control: 3.4:1 on the page, 3.7:1 on white (>= 3:1 non-text)
+  500: '#5b6272', // lightest text permitted (5.6:1 on the page, 6.1:1 on white)
+  600: '#454b5b',
+  700: '#333846',
+  800: '#1f232d',
+  900: '#111111', // primary and body text (17.3:1 on the page)
 } as const;
 
 export const color = {
@@ -63,9 +65,36 @@ export const color = {
   text: neutral[900],
 
   /**
-   * THE one accent -- action only. A deep blue reads as trustworthy and clears
-   * ~8:1 both as text on white and as white on the fill, so one hue serves
-   * links and buttons. hover/active darken it; subtle is the selected-row wash.
+   * THE CTO PALETTE ROLES (B02-D03, DS-TOK-01), ADDED beside the legacy accent so a consumer that has
+   * not migrated is not broken:
+   *  - primary: the main button, headings, active states (#111111). primaryText is white on it.
+   *  - secondary: secondary buttons, inputs, chips, icon buttons (#F4F5F7). Dark text on it.
+   *  - highlight: the lime accent (#C4FE29) -- ONE standout action per screen, never text and never
+   *    decoration. Its text is dark (#111111, 15.8:1); white on lime is 1.2:1 and forbidden. A lime
+   *    fill is 1.1:1 against the page, so it is always drawn with highlightBorder.
+   *  - like / dangerSolid: the CTO red (#EF4444) for destructive emphasis, hearts and indicators. It is
+   *    3.5:1 on the page, so it is NEVER body text: use `danger` (the accessible #B91C1C) for text.
+   */
+  primary: neutral[900],
+  primaryHover: neutral[800],
+  primaryActive: neutral[700],
+  primaryText: '#ffffff',
+  secondary: neutral[100],
+  secondaryHover: neutral[200],
+  secondaryActive: neutral[300],
+  secondaryText: neutral[900],
+  highlight: '#c4fe29',
+  highlightHover: '#b5ef18',
+  highlightActive: '#a5dd0a',
+  highlightText: '#111111',
+  highlightBorder: neutral[900],
+  like: '#ef4444',
+  dangerSolid: '#ef4444',
+
+  /**
+   * LEGACY ACCENT -- the action blue every surface was built on. Kept, unchanged, so the unmigrated
+   * surfaces (Mobile reads it as link and active-state colour) are not changed by a shared-token PR.
+   * New work uses primary, secondary and highlight; this role is retired when the last surface moves.
    */
   accent: '#1e40af',
   accentHover: '#1a3a9c',
@@ -78,7 +107,7 @@ export const color = {
    * NEVER the only carrier of the state. `text` clears 4.5:1 on white; the bg
    * and border build a chip that still reads with an icon in greyscale.
    */
-  danger: '#b42318',
+  danger: '#b91c1c', // the accessible danger TEXT (B02-D04): 6.5:1 on white, 5.9:1 on the page
   dangerBg: '#fef3f2',
   dangerBorder: '#fda29b',
   success: '#05603a',
@@ -147,6 +176,24 @@ export const colorDark = {
   textMuted: neutralDark[500],
   textSecondary: neutralDark[700],
   text: neutralDark[900],
+
+  // The CTO roles in the dark mode that already existed (B02-D03 adds no new dark theme; it gives each
+  // new role the twin that mode parity requires). Hover and active get lighter on a dark ground.
+  primary: neutralDark[900],
+  primaryHover: '#ffffff',
+  primaryActive: '#ffffff',
+  primaryText: '#14120f',
+  secondary: neutralDark[100],
+  secondaryHover: neutralDark[200],
+  secondaryActive: neutralDark[300],
+  secondaryText: neutralDark[900],
+  highlight: '#c4fe29',
+  highlightHover: '#d3ff5c',
+  highlightActive: '#dcff80',
+  highlightText: '#111111',
+  highlightBorder: '#c4fe29',
+  like: '#f87171',
+  dangerSolid: '#f87171',
 
   accent: '#8ab0ff',
   accentHover: '#a4c2ff',
@@ -235,14 +282,14 @@ export const touchTarget = { min: '44px' } as const;
 
 /**
  * A VISIBLE focus indicator is a11y from the first primitive, not a retrofit
- * (T14 S7.2). A 2px accent ring at 2px offset reads on every surface, and it is
- * the accent because focus is where an action is about to happen. Applied
+ * (T14 S7.2). A 2px ring at 2px offset reads on every surface; since DS-TOK-01 it is the PRIMARY
+ * (#111111: 17.3:1 on the page, 15.8:1 on lime), because the lime accent cannot be seen on white. Applied
  * keyboard-only (:focus-visible) in tokens.css so a mouse click does not ring.
  */
 export const focus = {
   ringWidth: '2px',
   ringOffset: '2px',
-  ringColor: color.accent,
+  ringColor: color.primary,
 } as const;
 
 /**
@@ -270,7 +317,7 @@ export const focus = {
 export const focusDark = {
   ringWidth: focus.ringWidth,
   ringOffset: focus.ringOffset,
-  ringColor: colorDark.accent,
+  ringColor: colorDark.primary,
 } as const;
 
 /** The two modes, addressable by name -- the `colorModes` precedent. */
