@@ -6,11 +6,10 @@
  * in both modes after the port ... A port that passes typecheck and breaks rule
  * 1 is the worst outcome available here."
  *
- * FOUR OF THE SIX WERE ALREADY ASSERTED, in trade.spec.ts: the equal weighting
- * of the two payment decisions (by comparing computed styles, which is the only
- * form that catches a "primary" variant), the verify-in-your-own-bank sentence
- * and its not being inside a <details>, R20's disabled-not-hidden region, and
- * the three clock treatments including the third being an absent region.
+ * THE OTHER FOUR (payment decisions, the bank sentence, R20's handoff region,
+ * the clock treatments) lived in trade.spec.ts and were retired with the
+ * screens they guarded (Reservation retirement, 2026-11-25). Rules 4 and 5
+ * now run on SC-07 Products, the seller list that remains.
  *
  * TWO WERE HELD BY NOTHING BUT ABSENCE:
  *
@@ -25,15 +24,13 @@
  * BEFORE the component port rather than after it, because a guard added after
  * the thing it guards has already proved nothing about the change.
  *
- * THE @safety TAG runs this file, and the four assertions in trade.spec.ts, a
- * SECOND time in dark mode -- see playwright.config.ts. Until T22 not one test
- * in this suite ran in dark mode at all, so every one of the six rules was
- * asserted in exactly the mode a developer looks at.
+ * THE @safety TAG runs this file a SECOND time in dark mode -- see
+ * playwright.config.ts. Until T22 not one test in this suite ran in dark mode
+ * at all, so every one of the six rules was asserted in exactly the mode a
+ * developer looks at.
  */
 import { test, expect } from '@playwright/test';
 import { SEEDED } from './helpers/session';
-
-const ORDER_SUBMITTED = '5eed0000-0000-4000-8000-000000000012';
 
 test.describe('the six rules @safety', () => {
   /**
@@ -45,13 +42,13 @@ test.describe('the six rules @safety', () => {
    * developer does not look at.
    */
   test('rule 4: every state badge carries a word, not just a colour', async ({ page }) => {
-    await page.goto(`/s/${SEEDED.sellerId}/orders`);
+    await page.goto(`/s/${SEEDED.sellerId}/products`);
     // Wait for the LIST, not for the badge: an empty match on a screen that
     // has not rendered yet is a test that passes for the wrong reason.
-    await expect(page.locator('[data-order]').first()).toBeVisible();
+    await expect(page.locator('[data-product]').first()).toBeVisible();
 
     // Keyed on the ATTRIBUTE the port must preserve, not on a class name.
-    const badges = page.locator('[data-order] [data-badge]');
+    const badges = page.locator('[data-product] [data-badge]');
     const n = await badges.count();
     expect(n).toBeGreaterThan(0);
 
@@ -95,10 +92,10 @@ test.describe('the six rules @safety', () => {
    * only thing that would have caught that token having no dark value.
    */
   test('rule 5: Tab shows a ring, a mouse click does not', async ({ page }) => {
-    await page.goto(`/s/${SEEDED.sellerId}/orders`);
+    await page.goto(`/s/${SEEDED.sellerId}/products`);
     // The list must be ON SCREEN before tabbing: tabbing through a skeleton
     // proves nothing about the controls the seller actually reaches.
-    await expect(page.locator('[data-order]').first()).toBeVisible();
+    await expect(page.locator('[data-product]').first()).toBeVisible();
 
     // Walk the tab order until focus lands on something focusable in the page.
     let ringed = false;
@@ -127,7 +124,7 @@ test.describe('the six rules @safety', () => {
     // THE OTHER HALF. A real mouse click must not ring: :focus-visible is what
     // makes the ring a keyboard affordance rather than a decoration, and a ring
     // on every click is the reason somebody eventually removes it.
-    const clickable = page.locator('[data-order] a, [data-order] button').first();
+    const clickable = page.locator('[data-product] a, [data-product] button').first();
     await clickable.click({ trial: false });
     const afterClick = await page.evaluate(() => {
       const el = document.activeElement as HTMLElement | null;
@@ -138,23 +135,5 @@ test.describe('the six rules @safety', () => {
       };
     });
     expect(afterClick.matches, 'a mouse click must not match :focus-visible').toBe(false);
-  });
-
-  /**
-   * RULE 6's THIRD TREATMENT, asserted here too because it is the one a port
-   * is most likely to "improve" into a stopped clock. trade.spec.ts asserts it
-   * on the list; this asserts it on the DETAIL screen, where a running timer on
-   * a paid order is, in the spec's words, the single most misleading thing the
-   * screen could display.
-   */
-  test('rule 6 (D24-01): a submitted order shows NO clock -- the Seller decides nothing, so nothing is timed', async ({
-    page,
-  }) => {
-    await page.goto(`/s/${SEEDED.sellerId}/orders/${ORDER_SUBMITTED}`);
-    await expect(page.locator('.state-region')).toBeVisible();
-    // Superseded: this asserted the 24h CONFIRMATION clock. The Seller no longer confirms payment,
-    // so a confirmation countdown would time a decision nobody here can make. Neither clock appears.
-    await expect(page.locator('[data-clock="CONFIRMATION"]')).toHaveCount(0);
-    await expect(page.locator('[data-clock="RESERVATION"]')).toHaveCount(0);
   });
 });

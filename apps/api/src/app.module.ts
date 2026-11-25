@@ -18,10 +18,6 @@ import {
 } from './modules/onboarding/social-platform.adapter';
 import { CatalogueController } from './modules/catalogue/catalogue.controller';
 import { OrdersController } from './modules/orders/orders.controller';
-import { FinancialController } from './modules/financial/financial.controller';
-import { HandoffController } from './modules/handoff/handoff.controller';
-import { HandoffService } from './modules/handoff/handoff.service';
-import { FinancialService } from './modules/financial/financial.service';
 import {
   FakeFinancialStorageAdapter,
   FINANCIAL_STORAGE_ADAPTER,
@@ -61,8 +57,6 @@ import { OwnershipController } from './modules/ownership/ownership.controller';
 import { ChatController } from './modules/chat/chat.controller';
 import { ChatService } from './modules/chat/chat.service';
 import { INFERENCE_ADAPTER, NullInferenceAdapter } from './modules/chat/inference.adapter';
-import { ClaimsController } from './modules/claims/claims.controller';
-import { ClaimsService } from './modules/claims/claims.service';
 import { ReviewsController } from './modules/reviews/reviews.controller';
 import { AnalyticsController } from './modules/analytics/analytics.controller';
 import { NotificationsController } from './modules/notifications/notifications.controller';
@@ -98,7 +92,7 @@ export const LOGGER = Symbol('LOGGER');
  */
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController, AuthController, DeletionController, TeamController, OwnershipController, CouriersController, BillingController, ChatController, ClaimsController, ReviewsController, AnalyticsController, NotificationsController, ReportsController, StorefrontController, ObligationsController, ScenesController, FypController, SearchController, CollectionsController],
+  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, AuthController, DeletionController, TeamController, OwnershipController, CouriersController, BillingController, ChatController, ReviewsController, AnalyticsController, NotificationsController, ReportsController, StorefrontController, ObligationsController, ScenesController, FypController, SearchController, CollectionsController],
   providers: [
     { provide: LOGGER, useFactory: (): Logger => createLogger() },
     SessionService,
@@ -113,8 +107,6 @@ export const LOGGER = Symbol('LOGGER');
     FypService,
     CollectionsService,
     OrdersService,
-    FinancialService,
-    HandoffService,
     OtpService,
     AuthService,
     DeletionService,
@@ -144,7 +136,6 @@ export const LOGGER = Symbol('LOGGER');
     OtpDeliveryService,
     OtpIssuancePolicy,
     ChatService,
-    ClaimsService,
     // Layers 3-4 of the cascade are a deployment integration; Null answers
     // nothing and everything above layer 2 escalates (S15.1's degradation).
     { provide: INFERENCE_ADAPTER, useValue: new NullInferenceAdapter() },

@@ -1,17 +1,18 @@
 import type { Job } from './context';
-import { E1_JOBS } from './e1-clock';
 import { E2_JOBS } from './e2-notification';
 import { E3_JOBS } from './e3-trust-stock';
 import { E4_JOBS } from './e4-retention';
 import { E5_JOBS } from './e5-transport-ledger';
 import { E6_JOBS } from './e6-billing-nlu';
-import { payoutActivateDue } from './e5-transport-ledger';
 
 /**
- * The twenty jobs of ADU-DB-01 S24, in one list.
+ * The jobs of ADU-DB-01 S24, in one list, LESS the five retired with the legacy Reservation
+ * model and its financial flows (migration 0063, founder pre-launch authorization 2026-11-25):
+ * order.expire_sweep, order.close_confirmation_window, buyer_cooldown.decay and
+ * subscription.collect_reminder from S24, and the separately ruled payout.activate_due.
  *
  * S24's table IS the specification, so this file is a transcription and the
- * test beside it asserts the set against the document: exactly twenty, named
+ * test beside it asserts the set against the document: exactly the names below,
  * exactly as S24 names them, none added and none missing. A job set that
  * drifts from the document is a set where nobody can say what runs.
  *
@@ -24,7 +25,6 @@ import { payoutActivateDue } from './e5-transport-ledger';
  * it now would be a job that detaches partitions no one has a reader for.
  */
 export const S24_JOBS: readonly Job[] = [
-  ...E1_JOBS,
   ...E2_JOBS,
   ...E3_JOBS,
   ...E4_JOBS,
@@ -33,35 +33,12 @@ export const S24_JOBS: readonly Job[] = [
 ];
 
 /**
- * JOBS A DOCUMENT OTHER THAN ADU-DB-01 S24 REQUIRES.
- *
- * S24_JOBS above is a TRANSCRIPTION and its test asserts it both ways, so a
- * job from another document cannot live in it without making that assertion
- * meaningless -- which is exactly what happened when payout activation was
- * first added to E5_JOBS: the twenty became twenty-one and the failure read
- * as a broken test rather than as a job filed under the wrong document.
- *
- * The precedent is the heartbeat (ADU-CON-02 S20.2), which has always been
- * registered outside this list. The difference is only that the heartbeat
- * needs the worker's identity and these do not, so these can be named here.
- *
- * Each entry cites the document and section that requires it, and the test
- * beside this file asserts that citation is NOT S24.
- */
-export const RULED_JOBS: readonly Job[] = [
-  // ADU-AUTH-01 v2.8 S20.1 -- without it the twenty-four hour payout delay
-  // means "until the seller next opens the payout screen".
-  payoutActivateDue,
-];
-
-/**
  * What the worker actually schedules, minus the heartbeat it builds itself.
  */
-export const SCHEDULED_JOBS: readonly Job[] = [...S24_JOBS, ...RULED_JOBS];
+export const SCHEDULED_JOBS: readonly Job[] = S24_JOBS;
 
-/** S24's twenty names, transcribed from the document's table, in its order. */
+/** S24's names, transcribed from the document's table in its order, less the four retired by 0063. */
 export const S24_JOB_NAMES: readonly string[] = [
-  'order.expire_sweep',
   'notification.send',
   'notification.morning_reminder',
   'stock.confidence_nudge',
@@ -69,16 +46,13 @@ export const S24_JOB_NAMES: readonly string[] = [
   'financial.purge_payment_evidence',
   'media.lifecycle',
   'subscription.warn',
-  'subscription.collect_reminder',
   'waitlist.retention_purge',
   'nlu.harvest_unmatched',
   'analytics.create_partition',
   'ledger.assert_zero',
   'social_post.availability_check',
-  'buyer_cooldown.decay',
   'idempotency.purge_expired',
   'rate_limit.purge_stale',
-  'order.close_confirmation_window',
   'notification.push_seller',
   'device.purge_unbound',
 ];

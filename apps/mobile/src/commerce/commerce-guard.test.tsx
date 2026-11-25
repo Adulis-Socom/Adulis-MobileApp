@@ -503,8 +503,6 @@ describe('G13: no route, tab or return path reaches it', () => {
     'seller/messages/[conversationId].tsx',
     'seller/messages/index.tsx',
     'seller/notifications.tsx',
-    'seller/orders/[orderId].tsx',
-    'seller/orders/index.tsx',
   ];
   const routeFiles = allSources()
     .filter((s) => s.file.startsWith('app/'))

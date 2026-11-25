@@ -15,8 +15,9 @@ import { armFixtureSessions, sessionToken } from './session-fixture';
  * outstanding), permission-denied when the caller is a member without the permission, is no longer in good standing,
  * or presents a mobile session. The refusal carries no items, counts or store identifiers, and writes nothing.
  *
- * The store used throughout carries several deletion obligations at once, so a refused answer that described any of
- * them would be visible in the test.
+ * The store used throughout carries a deletion obligation, so a refused answer that described it would be visible
+ * in the test. Since migration 0063 retired the order-flow blockers, SUBSCRIPTION_PAST_DUE is the only one there is;
+ * the retired codes stay in the never-disclosed list below.
  */
 
 const CONSOLE_ORIGIN = 'http://localhost:5173';
@@ -31,20 +32,17 @@ const SUSPENDED_M = randomUUID(); // an ADMIN of SELLER_A, suspended
 const STRANGER = randomUUID(); // no relationship with any store here
 const OTHER_OWNER = randomUUID(); // owns SELLER_B and receives SELLER_T
 const CLEAN_OWNER = randomUUID(); // owns SELLER_C, which owes nothing
-const BUYER = randomUUID(); // buyer of every order
 const DEVICE = randomUUID();
-const SELLER_A = randomUUID(); // four obligations
-const SELLER_B = randomUUID(); // one different obligation
+const SELLER_A = randomUUID(); // a past-due subscription
+const SELLER_B = randomUUID(); // its own past-due subscription
 const SELLER_C = randomUUID(); // none
-const SELLER_T = randomUUID(); // one obligation; ownership moves from OWNER to OTHER_OWNER during the run
+const SELLER_T = randomUUID(); // a past-due subscription; ownership moves from OWNER to OTHER_OWNER during the run
 const SELLER_Z = randomUUID(); // does not exist
-const ORDERS = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()];
-const CLAIM = randomUUID();
 const PS = randomUUID();
 const TRANSFER = randomUUID();
 
-const FOUR = ['EVIDENCE_AWAITING_CONFIRMATION', 'OPEN_CLAIMS', 'ORDERS_AWAITING_HANDOFF', 'SUBSCRIPTION_PAST_DUE'];
-const ALL_CODES = [...FOUR, 'DELETION_BLOCKED'];
+const RETIRED = ['EVIDENCE_AWAITING_CONFIRMATION', 'OPEN_CLAIMS', 'ORDERS_AWAITING_HANDOFF'];
+const ALL_CODES = [...RETIRED, 'SUBSCRIPTION_PAST_DUE', 'DELETION_BLOCKED'];
 
 const ACCOUNTS: Record<string, [string, string]> = {
   OWNER: [OWNER, '+251911600201'],
@@ -55,7 +53,6 @@ const ACCOUNTS: Record<string, [string, string]> = {
   STRANGER: [STRANGER, '+251911600206'],
   OTHER_OWNER: [OTHER_OWNER, '+251911600207'],
   CLEAN_OWNER: [CLEAN_OWNER, '+251911600208'],
-  BUYER: [BUYER, '+251911600209'],
 };
 const ACCOUNT_IDS = Object.values(ACCOUNTS).map(([id]) => id);
 const SELLERS = [SELLER_A, SELLER_B, SELLER_C, SELLER_T];
@@ -118,8 +115,7 @@ describe('seller deletion access', () => {
       [M],
     );
     await admin.query(
-      `INSERT INTO core.timing_config (id, market_id, reservation_window,
-         payment_confirmation_window, fulfilment_window, offline_sync_horizon,
+      `INSERT INTO core.timing_config (id, market_id, payment_confirmation_window, fulfilment_window, offline_sync_horizon,
          payout_activation_delay, recovery_cooling_period,
          deleted_number_cooling_period, refund_ack_window, media_retention,
          level_credit_grace, mobile_session_lifetime, console_session_lifetime,
@@ -128,7 +124,7 @@ describe('seller deletion access', () => {
          new_device_payout_lock, same_seller_cancellation_threshold,
          same_seller_cooldown, cross_seller_cooldown_ladder,
          cancellation_counter_decay)
-       VALUES (gen_random_uuid(), $1, '48 hours','24 hours','72 hours','7 days',
+       VALUES (gen_random_uuid(), $1,'24 hours','72 hours','7 days',
          '24 hours','7 days','30 days','48 hours','90 days','24 hours',
          '30 days','12 hours','30 minutes','7 days','8 hours','5 minutes',5,
          '5 minutes','24 hours',3,'1 hour',
@@ -173,30 +169,7 @@ describe('seller deletion access', () => {
     }
     await armFixtureSessions(admin, sessions.map(([n]) => sess(n)));
 
-    // SELLER_A: 2 payment-confirmed orders, 1 payment-submitted order, 1 open claim, a past-due subscription.
-    await admin.query(
-      `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id, state, expires_at, clock_stopped_at,
-                                 total_minor, total_currency, display_currency)
-       VALUES ($1,$3,$4,$5,'PAYMENT_CONFIRMED', now() + interval '2 days', now(), 50000,'ETB','ETB'),
-              ($2,$3,$4,$5,'PAYMENT_CONFIRMED', now() + interval '2 days', now(), 50000,'ETB','ETB')`,
-      [ORDERS[0], ORDERS[1], M, SELLER_A, BUYER],
-    );
-    await admin.query(
-      `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id, state, expires_at, total_minor, total_currency, display_currency)
-       VALUES ($1,$3,$4,$6,'PAYMENT_SUBMITTED', now() + interval '2 days', 50000,'ETB','ETB'),
-              ($2,$3,$5,$6,'PAYMENT_SUBMITTED', now() + interval '2 days', 50000,'ETB','ETB')`,
-      [ORDERS[2], ORDERS[3], M, SELLER_A, SELLER_B, BUYER],
-    );
-    await admin.query(
-      `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id, state, expires_at, total_minor, total_currency, display_currency)
-       VALUES ($1,$2,$3,$4,'PAYMENT_SUBMITTED', now() + interval '2 days', 50000,'ETB','ETB')`,
-      [ORDERS[4], M, SELLER_T, BUYER],
-    );
-    await admin.query(
-      `INSERT INTO core.claim (id, order_id, opened_by_kind, opened_by_account_id, trigger, state)
-       VALUES ($1,$2,'BUYER',$3,'GOODS_NOT_RECEIVED','UNDER_REVIEW')`,
-      [CLAIM, ORDERS[0], BUYER],
-    );
+    // A, B and T each owe a past-due subscription; C owes nothing.
     await admin.query(
       `INSERT INTO billing.price_schedule (id, market_id, tier, price_minor, currency, usd_reference_minor, fx_rate, derived_at, effective)
        VALUES ($1,$2,'LISTED',100000,'ETB',1800,55.0, now(), tstzrange(now() - interval '1 day', NULL))`,
@@ -205,8 +178,9 @@ describe('seller deletion access', () => {
     await admin.query(
       `INSERT INTO billing.subscription (seller_id, state, tier, term, current_period_start, current_period_end,
          locked_rate_minor, locked_rate_currency, price_schedule_version_id)
-       VALUES ($1,'PAST_DUE','LISTED','MONTHLY', now() - interval '40 days', now() - interval '10 days', 100000,'ETB',$2)`,
-      [SELLER_A, PS],
+       SELECT s,'PAST_DUE','LISTED','MONTHLY', now() - interval '40 days', now() - interval '10 days', 100000,'ETB',$2
+         FROM unnest($1::uuid[]) AS s`,
+      [[SELLER_A, SELLER_B, SELLER_T], PS],
     );
 
     const moduleRef = await Test.createTestingModule({ imports: [SellerDeletionOrderModule] }).compile();
@@ -224,9 +198,6 @@ describe('seller deletion access', () => {
     await admin.query(`DELETE FROM billing.subscription_state_transition WHERE subscription_id IN (SELECT id FROM billing.subscription WHERE seller_id IN (${sellers}))`);
     await admin.query(`DELETE FROM billing.subscription WHERE seller_id IN (${sellers})`);
     await admin.query(`DELETE FROM billing.price_schedule WHERE id = $1`, [PS]);
-    await admin.query(`DELETE FROM core.claim_evidence_item WHERE claim_id = $1`, [CLAIM]);
-    await admin.query(`DELETE FROM core.claim WHERE id = $1`, [CLAIM]);
-    await admin.query(`DELETE FROM core."order" WHERE seller_id IN (${sellers})`);
     await admin.query(`DELETE FROM core.seller_ownership_transfer WHERE seller_id IN (${sellers})`);
     await admin.query(`DELETE FROM core.step_up_challenge WHERE account_id IN (${accounts})`);
     await admin.query(`DELETE FROM core.otp_challenge WHERE phone_e164 LIKE '+2519116002__'`);
@@ -265,7 +236,7 @@ describe('seller deletion access', () => {
 
     it('the Owner of another store gets the not-found answer, and the other store is not described either', async () => {
       expectNothingAboutTheStore(await del(cookie('other_owner_c'), SELLER_A), 404, 'NOT_FOUND');
-      // The Owner of SELLER_A naming SELLER_B: B owes one obligation of a different kind.
+      // The Owner of SELLER_A naming SELLER_B: B owes an obligation of its own.
       expectNothingAboutTheStore(await del(cookie('owner_c'), SELLER_B, randomUUID()), 404, 'NOT_FOUND', SELLER_B);
     });
 
@@ -325,11 +296,7 @@ describe('seller deletion access', () => {
       expect(r.status).toBe(409);
       expect(r.body.code).toBe('DELETION_BLOCKED');
       const items = r.body.items as Array<{ code: string; slots: { count: number } }>;
-      expect(items.map((i) => i.code).sort()).toEqual(FOUR);
       expect(Object.fromEntries(items.map((i) => [i.code, i.slots.count]))).toEqual({
-        EVIDENCE_AWAITING_CONFIRMATION: 1,
-        ORDERS_AWAITING_HANDOFF: 2,
-        OPEN_CLAIMS: 1,
         SUBSCRIPTION_PAST_DUE: 1,
       });
     });
@@ -361,7 +328,7 @@ describe('seller deletion access', () => {
       const incoming = await del(cookie('other_owner_c'), SELLER_T);
       expect(incoming.status).toBe(409);
       expect(incoming.body.code).toBe('DELETION_BLOCKED');
-      expect((incoming.body.items as Array<{ code: string }>).map((i) => i.code)).toEqual(['EVIDENCE_AWAITING_CONFIRMATION']);
+      expect((incoming.body.items as Array<{ code: string }>).map((i) => i.code)).toEqual(['SUBSCRIPTION_PAST_DUE']);
       // ...and the former Owner is still refused on a second try.
       expectNothingAboutTheStore(await del(cookie('owner_c'), SELLER_T), 403, 'PERMISSION_DENIED', SELLER_T);
     });

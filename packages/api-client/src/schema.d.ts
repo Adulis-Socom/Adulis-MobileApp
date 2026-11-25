@@ -196,40 +196,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/billing/mark-transferred": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** The seller's own assertion; reconciliation is operator work. */
-        post: operations["BillingController_markTransferred"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/billing/purchase-intent": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Opens a 24-hour intent at the locked rate; step-up SUBSCRIPTION_CHANGE. */
-        post: operations["BillingController_purchaseIntent"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/billing/subscription": {
         parameters: {
             query?: never;
@@ -325,73 +291,6 @@ export interface paths {
         get: operations["StorefrontController_categories"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/claims": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ClaimsController_listBuyer"];
-        put?: never;
-        /** Buyer opens; the evidence bundle attaches by trigger at open. */
-        post: operations["ClaimsController_open"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/claims/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ClaimsController_read"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/claims/{id}/evidence": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** The bank record: a single transaction, not a statement (X15). */
-        post: operations["ClaimsController_evidence"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/claims/{id}/evidence-export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** The buyer's own transaction; nothing about who the seller is (X15). */
-        post: operations["ClaimsController_export"];
         delete?: never;
         options?: never;
         head?: never;
@@ -555,57 +454,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/courier/orders": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Currently assigned orders only — by row-level security. */
-        get: operations["HandoffController_courierOrders"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/courier/orders/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The QR is present only once custody has been accepted (R25). */
-        get: operations["HandoffController_courierOrder"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/courier/orders/{id}/custody-accept": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Event A, courier side. */
-        post: operations["HandoffController_custodyAccept"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/deletion/confirm": {
         parameters: {
             query?: never;
@@ -741,23 +589,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/handoffs/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Batch, per-item outcomes, never fails as a unit. 200 whenever well-formed. */
-        post: operations["HandoffController_sync"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/notifications": {
         parameters: {
             query?: never;
@@ -802,158 +633,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["NotificationsController_readAll"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/orders": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["OrdersController_listOrders"];
-        put?: never;
-        /** Whole-cart revalidation in one transaction; 409 with complete items[]. */
-        post: operations["OrdersController_createOrder"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/orders/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The authoritative order card; expires_at is a time, never a duration. */
-        get: operations["OrdersController_getOrder"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/orders/{id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Convenience: cancels every remaining line. */
-        post: operations["OrdersController_cancelOrder"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/orders/{id}/confirm-receipt": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** The tapped tier — medium weight, no level. */
-        post: operations["OrdersController_confirmReceipt"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/orders/{id}/payment-evidence": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Upload via signed URL, then commit — R18 frames at rest. */
-        post: operations["FinancialController_evidence"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/orders/{id}/payment-instructions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The C3 disclosure path: one function call, decrypted here, never cached. */
-        get: operations["FinancialController_paymentInstructions"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/orders/{id}/refunds/{rid}/acknowledge": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Explicit buyer action, never inferred. */
-        post: operations["OrdersController_acknowledgeRefund"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/orders/{id}/reservations/{rid}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["OrdersController_cancelLine"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/orders/{id}/review": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** One per order, terminal orders only; the badge is derived, never sent. */
-        post: operations["ReviewsController_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1070,7 +749,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Views, reservations, conversion, funnel over a window — entitlement-gated. product_views counts server-recorded Product openings (a read the client declares a revalidation is not recorded); it is NOT de-duplicated and NOT unique visitors.
+         * Storefront and Product views over a window — entitlement-gated. product_views counts server-recorded Product openings (a read the client declares a revalidation is not recorded); it is NOT de-duplicated and NOT unique visitors.
          * @description Requires `seller.analytics.full:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
          */
         get: operations["AnalyticsController_full"];
@@ -1167,40 +846,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/seller/claims": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Seller-scoped; GET /v1/claims is buyer-shaped. */
-        get: operations["ClaimsController_listSeller"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/seller/claims/{id}/remedy": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** REFUND or FULFIL — the seller's choice (X15). */
-        post: operations["ClaimsController_remedy"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/seller/closure": {
         parameters: {
             query?: never;
@@ -1211,7 +856,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enters CLOSING: new reservations stop, existing orders operable.
+         * Enters CLOSING (ACTIVE -> CLOSING); reversible by DELETE seller/closure.
          * @description Requires `seller.store:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
          */
         post: operations["DeletionController_enterClosure"];
@@ -1409,208 +1054,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/seller/orders": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** bucket membership is the SERVER's (D-154). */
-        get: operations["OrdersController_listSellerOrders"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/seller/orders/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["OrdersController_getSellerOrder"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/seller/orders/{id}/courier-assignment": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["HandoffController_assignCourier"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/seller/orders/{id}/custody-transfer": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Event A, seller side. Never completes an order. */
-        post: operations["HandoffController_custodyTransfer"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/seller/orders/{id}/payment-evidence": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Logged access, derived role, streamed with constant memory, never cached. */
-        get: operations["FinancialController_sellerEvidence"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/seller/orders/{id}/payment/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** "Confirm Payment Received", never "Accept Payment". */
-        post: operations["OrdersController_confirmPayment"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/seller/orders/{id}/payment/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** First rejection opens a 12-hour retry window; the second ends the order. */
-        post: operations["OrdersController_rejectPayment"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/seller/orders/{id}/qr": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 409 ORDER_NOT_READYABLE before PAYMENT_CONFIRMED (R20). */
-        get: operations["HandoffController_qr"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/seller/orders/{id}/ready": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Idempotent by state, not only by key. 409 before PAYMENT_CONFIRMED. */
-        post: operations["OrdersController_markReady"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/seller/orders/{id}/refunds": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Seller reports; buyer acknowledges separately. */
-        post: operations["OrdersController_reportRefund"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/seller/orders/{id}/reissue-instructions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Single order only. No bulk endpoint exists (S8.5). */
-        post: operations["FinancialController_reissue"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/seller/orders/{id}/reservations/{rid}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** "Can't Fulfil". There is no accept action. */
-        post: operations["OrdersController_cancelLineAsSeller"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/seller/ownership-transfer": {
         parameters: {
             query?: never;
@@ -1628,56 +1071,6 @@ export interface paths {
         post: operations["OwnershipController_request"];
         /** Either party ends it: the owner cancels, the recipient declines. */
         delete: operations["OwnershipController_cancel"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/seller/payout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["FinancialController_getPayout"];
-        put?: never;
-        /** Enters PENDING; activates after the delay. Step-up in the body. */
-        post: operations["FinancialController_requestPayoutChange"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/seller/payout/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["FinancialController_payoutHistory"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/seller/payout/pending": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** No step-up — reverting is easier than changing. */
-        delete: operations["FinancialController_cancelPayoutChange"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1719,7 +1112,7 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * 409 PRODUCT_HAS_ACTIVE_ORDERS where any reservation is live.
+         * Deletes an owned Product and schedules its media; 404 for a foreign Product.
          * @description Requires `seller.products:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
          */
         delete: operations["CatalogueController_deleteProduct"];
@@ -2371,14 +1764,8 @@ export interface components {
             scene_ref: string;
         };
         AnalyticsOverviewDto: {
-            /** @description Reservations active now. */
-            active_reservations: number;
-            /** @description Handoffs completed, in total. */
-            completed_handoffs: number;
             /** @description Buyers following the store now. */
             followers: number;
-            /** @description Orders created inside the window. */
-            orders: number;
             /** @description Products published now: point-in-time, independent of the window. */
             products_published: number;
             window: components["schemas"]["AnalyticsWindowDto"];
@@ -2659,7 +2046,7 @@ export interface components {
             product_ids?: string[];
         };
         DeletionBlockerDto: {
-            /** @description The blocker, e.g. NON_TERMINAL_RESERVATIONS. */
+            /** @description The blocker, e.g. SUBSCRIPTION_PAST_DUE. */
             code: string;
             message_key: string;
             resolving_action: components["schemas"]["DeletionResolvingActionDto"];
@@ -2968,7 +2355,7 @@ export interface components {
         };
         ProblemDto: {
             /** @enum {string} */
-            code: "OTP_INVALID" | "OTP_EXPIRED" | "OTP_ATTEMPTS_EXCEEDED" | "OTP_PURPOSE_NOT_PERMITTED" | "AGE_DECLARATION_REQUIRED" | "SESSION_EXPIRED" | "SESSION_REVOKED" | "AUDIENCE_NOT_PERMITTED" | "RECOVERY_REQUIRED" | "STEP_UP_REQUIRED" | "STEP_UP_EXPIRED" | "STEP_UP_ACTION_MISMATCH" | "PERMISSION_DENIED" | "OWNER_ONLY" | "CART_EMPTY" | "CART_SELLER_CONFLICT" | "CART_REVALIDATION_FAILED" | "INSUFFICIENT_STOCK" | "SOLD_OUT" | "PRICE_CHANGED" | "NO_LONGER_PUBLISHED" | "VARIANT_WITHDRAWN" | "SELLER_UNAVAILABLE" | "TRANSACTION_CAP_EXCEEDED" | "ILLEGAL_TRANSITION" | "ORDER_NOT_PAYABLE" | "ORDER_ALREADY_TERMINAL" | "DUPLICATE_RESERVATION" | "BUYER_COOLDOWN_ACTIVE" | "ORDER_NOT_READYABLE" | "EVIDENCE_REQUIRED" | "EVIDENCE_TOO_LARGE" | "PAYMENT_ALREADY_DECIDED" | "NOT_ORDER_BUYER" | "SCAN_SIGNATURE_INVALID" | "SCAN_PREDATES_TOKEN" | "SCAN_NOT_ORDER_BUYER" | "COURIER_CANNOT_SCAN" | "PUBLICATION_BLOCKED" | "ELIGIBILITY_NOT_SATISFIED" | "TIER_LIMIT_REACHED" | "LEVEL_LIMIT_REACHED" | "HANDLE_TAKEN" | "FULFILMENT_METHOD_REQUIRED" | "PRODUCT_HAS_ACTIVE_ORDERS" | "VARIANT_HAS_ACTIVE_ORDERS" | "PAYOUT_LOCKED" | "PAYOUT_CHANGE_PENDING" | "PAYOUT_PERMISSION_DENIED" | "DELETION_BLOCKED" | "DELETION_OWNER_ONLY" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_MISSING" | "IDEMPOTENCY_KEY_REUSED" | "RATE_LIMITED" | "CLIENT_UPGRADE_REQUIRED" | "PAYLOAD_TOO_LARGE" | "SELLER_CONTEXT_REQUIRED" | "SCOPE_PARAMETER_REQUIRED" | "NOT_FOUND" | "GONE" | "INTERNAL";
+            code: "OTP_INVALID" | "OTP_EXPIRED" | "OTP_ATTEMPTS_EXCEEDED" | "OTP_PURPOSE_NOT_PERMITTED" | "AGE_DECLARATION_REQUIRED" | "SESSION_EXPIRED" | "SESSION_REVOKED" | "AUDIENCE_NOT_PERMITTED" | "RECOVERY_REQUIRED" | "STEP_UP_REQUIRED" | "STEP_UP_EXPIRED" | "STEP_UP_ACTION_MISMATCH" | "PERMISSION_DENIED" | "OWNER_ONLY" | "CART_EMPTY" | "CART_SELLER_CONFLICT" | "CART_REVALIDATION_FAILED" | "INSUFFICIENT_STOCK" | "SOLD_OUT" | "PRICE_CHANGED" | "NO_LONGER_PUBLISHED" | "VARIANT_WITHDRAWN" | "SELLER_UNAVAILABLE" | "TRANSACTION_CAP_EXCEEDED" | "ILLEGAL_TRANSITION" | "PUBLICATION_BLOCKED" | "ELIGIBILITY_NOT_SATISFIED" | "TIER_LIMIT_REACHED" | "LEVEL_LIMIT_REACHED" | "HANDLE_TAKEN" | "FULFILMENT_METHOD_REQUIRED" | "PRODUCT_HAS_ACTIVE_ORDERS" | "PAYOUT_LOCKED" | "PAYOUT_CHANGE_PENDING" | "PAYOUT_PERMISSION_DENIED" | "DELETION_BLOCKED" | "DELETION_OWNER_ONLY" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_MISSING" | "IDEMPOTENCY_KEY_REUSED" | "RATE_LIMITED" | "CLIENT_UPGRADE_REQUIRED" | "PAYLOAD_TOO_LARGE" | "SELLER_CONTEXT_REQUIRED" | "SCOPE_PARAMETER_REQUIRED" | "NOT_FOUND" | "GONE" | "INTERNAL";
             items?: components["schemas"]["ProblemItemDto"][];
             request_id: string;
             retryable: boolean;
@@ -4442,40 +3829,6 @@ export interface operations {
             };
         };
     };
-    BillingController_markTransferred: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    BillingController_purchaseIntent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     BillingController_subscription: {
         parameters: {
             query?: never;
@@ -4664,99 +4017,6 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
-            };
-        };
-    };
-    ClaimsController_listBuyer: {
-        parameters: {
-            query: {
-                cursor: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ClaimsController_open: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ClaimsController_read: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ClaimsController_evidence: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ClaimsController_export: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -5568,61 +4828,6 @@ export interface operations {
             };
         };
     };
-    HandoffController_courierOrders: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    HandoffController_courierOrder: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    HandoffController_custodyAccept: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     DeletionController_confirm: {
         parameters: {
             query?: never;
@@ -6086,23 +5291,6 @@ export interface operations {
             };
         };
     };
-    HandoffController_sync: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     NotificationsController_list: {
         parameters: {
             query: {
@@ -6289,197 +5477,6 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
-            };
-        };
-    };
-    OrdersController_listOrders: {
-        parameters: {
-            query: {
-                cursor: string;
-                limit: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    OrdersController_createOrder: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    OrdersController_getOrder: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    OrdersController_cancelOrder: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    OrdersController_confirmReceipt: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    FinancialController_evidence: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    FinancialController_paymentInstructions: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    OrdersController_acknowledgeRefund: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                rid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    OrdersController_cancelLine: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                rid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ReviewsController_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -7272,44 +6269,6 @@ export interface operations {
             };
         };
     };
-    ClaimsController_listSeller: {
-        parameters: {
-            query: {
-                cursor: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ClaimsController_remedy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     DeletionController_enterClosure: {
         parameters: {
             query?: never;
@@ -8032,237 +6991,6 @@ export interface operations {
             };
         };
     };
-    OrdersController_listSellerOrders: {
-        parameters: {
-            query: {
-                bucket: string;
-                cursor: string;
-                limit: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    OrdersController_getSellerOrder: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    HandoffController_assignCourier: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    HandoffController_custodyTransfer: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    FinancialController_sellerEvidence: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    OrdersController_confirmPayment: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    OrdersController_rejectPayment: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    HandoffController_qr: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    OrdersController_markReady: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    OrdersController_reportRefund: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    FinancialController_reissue: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    OrdersController_cancelLineAsSeller: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                rid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     OwnershipController_pending: {
         parameters: {
             query?: never;
@@ -8442,74 +7170,6 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
-            };
-        };
-    };
-    FinancialController_getPayout: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    FinancialController_requestPayoutChange: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    FinancialController_payoutHistory: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    FinancialController_cancelPayoutChange: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };

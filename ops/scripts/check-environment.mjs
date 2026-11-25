@@ -134,8 +134,8 @@ if (!beat) {
   if (stale?.stale) {
     warn(
       `the worker heartbeat is stale (last beat ${beat.beat_at.toISOString()})`,
-      'The reservation clock is held by the worker. Its silence has no other symptom ' +
-        'until a seller notices an order that never expired. /healthz says degraded.',
+      'Scheduled retention, notification and trust jobs run in the worker. Its silence has no ' +
+        'other symptom until their effects are missed. /healthz says degraded.',
     );
   } else {
     ok(`the worker beat ${String(beat.age).split('.')[0]} ago`);

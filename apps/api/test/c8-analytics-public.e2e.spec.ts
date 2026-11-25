@@ -62,8 +62,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
       [M],
     );
     await admin.query(
-      `INSERT INTO core.timing_config (id, market_id, reservation_window,
-         payment_confirmation_window, fulfilment_window, offline_sync_horizon,
+      `INSERT INTO core.timing_config (id, market_id, payment_confirmation_window, fulfilment_window, offline_sync_horizon,
          payout_activation_delay, recovery_cooling_period,
          deleted_number_cooling_period, refund_ack_window, media_retention,
          level_credit_grace, mobile_session_lifetime, console_session_lifetime,
@@ -72,7 +71,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
          new_device_payout_lock, same_seller_cancellation_threshold,
          same_seller_cooldown, cross_seller_cooldown_ladder,
          cancellation_counter_decay)
-       VALUES (gen_random_uuid(), $1, '48 hours','24 hours','72 hours','7 days',
+       VALUES (gen_random_uuid(), $1,'24 hours','72 hours','7 days',
          '24 hours','7 days','30 days','48 hours','90 days','24 hours',
          '30 days','12 hours','30 minutes','7 days','8 hours','5 minutes',5,
          '5 minutes','24 hours',3,'1 hour',
@@ -356,8 +355,13 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         .set('Authorization', `Bearer ${sessionToken(OWNER_MOB_S)}`)
         .set('X-Adulis-Seller', SELLER)
         .expect(200);
-      expect(r.body).toMatchObject({ products_published: 1, completed_handoffs: 37 });
+      expect(r.body).toMatchObject({ products_published: 1 });
+      expect(r.body).toHaveProperty('followers');
       expect(r.body).not.toHaveProperty('events');
+      // Retired with the Reservation model (0063): absent, never a zero that reads as performance.
+      for (const gone of ['orders', 'active_reservations', 'completed_handoffs']) {
+        expect(r.body).not.toHaveProperty(gone);
+      }
     });
 
     it('products_published counts Products published NOW (OVN-085): unpublish, republish, restriction, Seller status', async () => {
@@ -403,6 +407,18 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
       expect(Number(r.body.storefront_views)).toBeGreaterThan(0);
       expect(Number(r.body.product_views)).toBeGreaterThan(0);
       expect(r.body.scope).toBe('VIEWS_RESERVATIONS_CONVERSION');
+      // Retired with the Reservation model (0063): no reservation, order or commerce-rate field.
+      for (const gone of [
+        'reservations',
+        'completed',
+        'view_to_reservation_rate',
+        'confirmation_rate',
+        'cancellation_rate',
+        'scan_completion_rate',
+        'unresolved_claim_count',
+      ]) {
+        expect(r.body).not.toHaveProperty(gone);
+      }
 
       const bare = await http()
         .get('/v1/seller/analytics/full')
@@ -478,7 +494,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
       // named for a window it need not cover is a name that lies (D-232).
       expect(r.body).not.toHaveProperty('orders_30d');
       expect(r.body).not.toHaveProperty('window_from');
-      expect(r.body).toHaveProperty('orders');
+      expect(r.body).toHaveProperty('followers');
     });
   });
 

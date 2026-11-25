@@ -87,8 +87,7 @@ describe('T6 / G1.8 -- the courier invite is not a registration oracle', () => {
       [M],
     );
     await admin.query(
-      `INSERT INTO core.timing_config (id, market_id, reservation_window,
-         payment_confirmation_window, fulfilment_window, offline_sync_horizon,
+      `INSERT INTO core.timing_config (id, market_id, payment_confirmation_window, fulfilment_window, offline_sync_horizon,
          payout_activation_delay, recovery_cooling_period,
          deleted_number_cooling_period, refund_ack_window, media_retention,
          level_credit_grace, mobile_session_lifetime, console_session_lifetime,
@@ -97,7 +96,7 @@ describe('T6 / G1.8 -- the courier invite is not a registration oracle', () => {
          new_device_payout_lock, same_seller_cancellation_threshold,
          same_seller_cooldown, cross_seller_cooldown_ladder,
          cancellation_counter_decay)
-       VALUES (gen_random_uuid(), $1, '48 hours','24 hours','72 hours','7 days',
+       VALUES (gen_random_uuid(), $1,'24 hours','72 hours','7 days',
          '24 hours','7 days','30 days','48 hours','90 days','24 hours',
          '30 days','12 hours','30 minutes','7 days','8 hours','5 minutes',5,
          '5 minutes','24 hours',3,'1 hour',

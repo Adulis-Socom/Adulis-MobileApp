@@ -66,76 +66,44 @@ test('navigation: More offers no Payout, Claims or courier delivery; Subscriptio
   await expectNoProhibitedCall(page);
 });
 
-for (const [path, what] of [
-  ['/s/fx_seller_a/payouts', 'payout'],
-  ['/s/fx_seller_a/claims', 'claims'],
-  ['/s/fx_seller_a/claims/fx_claim_1', 'claims'],
-  ['/courier', 'courier'],
+// Reservation retirement (2026-11-25): these routes are removed, not deferred. Each URL ends at
+// a live screen through a catch-all (fixture mode has two stores, so `/` stays on the chooser).
+for (const [path, landed] of [
+  ['/s/fx_seller_a/orders', /\/s\/fx_seller_a$/],
+  ['/s/fx_seller_a/orders/fx_order_a1', /\/s\/fx_seller_a$/],
+  ['/s/fx_seller_a/payouts', /\/s\/fx_seller_a$/],
+  ['/s/fx_seller_a/claims', /\/s\/fx_seller_a$/],
+  ['/s/fx_seller_a/claims/fx_claim_1', /\/s\/fx_seller_a$/],
+  ['/courier', /\/$/],
 ] as const) {
-  test(`direct route ${path} meets the deferred state, with nothing to fill in or submit`, async ({ page }) => {
+  test(`retired route ${path} is gone: it ends at a live screen and attempts nothing prohibited`, async ({ page }) => {
     await page.goto(path);
-    const screen = page.locator(`[data-deferred-screen="${what}"]`);
-    await expect(screen).toBeVisible();
-    await expect(screen).toContainText('Not available in this release');
-    // No form, no field, no bank-detail control of any kind.
-    expect(await screen.locator('input, textarea, select, form').count()).toBe(0);
-    expect(await screen.getByRole('button').count()).toBe(0);
+    await expect(page).toHaveURL(landed);
+    expect(await page.locator('form, input, textarea, select').count()).toBe(0);
     await expectNoProhibitedCall(page);
   });
 }
-
-test('an order with an OPEN payment submission offers no payment or handoff action', async ({ page }) => {
-  await page.goto('/s/fx_seller_a/orders');
-  await expect(page.locator('[data-order="fx_order_a3"]')).toBeVisible();
-  // The legacy "review payment" door on the list is gone.
-  expect(await page.locator('[data-primary="review_payment"]').count()).toBe(0);
-
-  await page.goto('/s/fx_seller_a/orders/fx_order_a3');
-  await expect(page.locator('.payment-region [data-deferred="payment"]')).toBeVisible();
-  await expect(page.locator('.handoff-region [data-deferred="handoff"]')).toBeVisible();
-
-  for (const sel of [
-    '[data-decision]',
-    '[data-action="view-evidence"]',
-    '[data-action="reissue-instructions"]',
-    '[data-action="mark-ready"]',
-    '[data-action="assign-courier"]',
-    '[data-action="custody-transfer"]',
-    '[data-action="show-qr"]',
-    '#courier-select',
-  ]) {
-    expect(await page.locator(sel).count(), sel).toBe(0);
-  }
-  const text = await page.locator('#main').innerText();
-  expect(text).not.toMatch(
-    /Confirm Payment Received|Payment Not Received|View evidence|Reissue payment instructions|Mark Ready|Show QR|Hand to the courier|Assign a courier/,
-  );
-  // No payment-confirmation countdown for a decision nobody here can make.
-  expect(await page.locator('.deadline, [data-clock]').count()).toBe(0);
-  await expectNoProhibitedCall(page);
-});
 
 test('subscription keeps status and plan comparison but offers no purchase, instructions or transfer', async ({ page }) => {
   await page.goto('/s/fx_seller_a/subscription');
   await expect(page.locator('.current-plan')).toBeVisible();
   await expect(page.locator('.compare-plans table')).toBeVisible();
-  await expect(page.locator('.purchase [data-deferred="purchase"]')).toBeVisible();
 
-  // No tier or term picker, no button, and none of the stale open intent's content.
+  // No purchase region, no tier or term picker, no button.
+  expect(await page.locator('.purchase').count()).toBe(0);
   expect(await page.locator('.subscription select, .subscription button').count()).toBe(0);
   const text = await page.locator('.subscription').innerText();
-  expect(text).not.toContain('FX-REFERENCE-123');
-  expect(text).not.toMatch(/999|transferred|bank|instructions/i);
+  expect(text).not.toMatch(/transferred|bank|instructions/i);
 
   const calls = await attempted(page);
   expect(calls).toContain('GET /billing/subscription');
   await expectNoProhibitedCall(page);
 });
 
-test('home asks for no payout details and shows no obligation of a deferred workflow', async ({ page }) => {
+test('home asks for no payout details and draws no obligation for an empty list', async ({ page }) => {
   await page.goto('/s/fx_seller_a');
-  await expect(page.locator('[data-deferred="payout"]')).toBeVisible();
-  expect(await page.locator('a[href$="/payouts"]').count()).toBe(0);
+  await expect(page.locator('[data-item="AT_LEAST_ONE_PRODUCT"]')).toBeVisible();
+  expect(await page.locator('[data-item="PAYOUT_DETAILS"], a[href$="/payouts"]').count()).toBe(0);
   expect(await page.locator('[data-obligation]').count()).toBe(0);
   await expectNoProhibitedCall(page);
 });

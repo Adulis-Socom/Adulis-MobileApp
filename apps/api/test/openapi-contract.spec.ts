@@ -13,7 +13,7 @@ import { SELLER_SIDE_ONLY, deriveGate, scanGates } from './gate-support';
  * left out of every comparison below.
  */
 
-const COMMERCE_MODULES = new Set(['billing', 'claims', 'couriers', 'financial', 'handoff', 'obligations', 'orders', 'reviews']);
+const COMMERCE_MODULES = new Set(['billing', 'couriers', 'obligations', 'orders', 'reviews']);
 
 const contract = loadContract();
 const routes = scanRoutes();
@@ -42,6 +42,14 @@ describe('contracts/openapi.json against the controllers', () => {
   it('lists exactly the controller routes', () => {
     const declared = Object.entries(contract.paths).flatMap(([p, item]) => Object.keys(item).map((m) => `${m} ${p}`));
     expect(routes.map((r) => `${r.http} ${r.path}`).sort()).toEqual(declared.sort());
+  });
+
+  it('carries no operation of the model retired by migration 0063', () => {
+    // The route table in c3 cannot prove absence for id-carrying paths (an unknown id is 404
+    // either way); the generated contract can, because it is derived from the controllers.
+    const RETIRED = /^\/v1\/(orders|seller\/orders|courier\/orders|handoffs|claims|seller\/claims|seller\/payout|billing\/purchase-intent|billing\/mark-transferred)(\/|$)/;
+    expect(Object.keys(contract.paths).filter((p) => RETIRED.test(p))).toEqual([]);
+    expect(JSON.stringify(contract)).not.toMatch(/reservation/i);
   });
 
   it('leaves exactly the commerce controllers to the derivation skip list', () => {

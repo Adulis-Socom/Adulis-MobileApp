@@ -40,7 +40,7 @@ export const statusLabel = (t: T, status: string) =>
 
 /**
  * Seller Companion Home (WO-020): the store chooser when the Account holds several stores, else the
- * active store, its basic overview, and the way to its notifications and Orders. Everything shown
+ * active store, its basic overview, and the way to its messages and notifications. Everything shown
  * comes from GET /v1/seller/list and the overview; nothing is computed or filled in.
  */
 export function SellerHome() {
@@ -105,7 +105,6 @@ export function SellerHome() {
       <SellerOverview seller={active} />
       <Button label={t('seller.messages.title')} onPress={() => router.push('/seller/messages')} />
       <Button label={t('seller.notifications.title')} onPress={() => router.push('/seller/notifications')} />
-      <Button label={t('seller.orders.title')} onPress={() => router.push('/seller/orders')} />
       {toBuyer}
     </Screen>
   );
@@ -143,9 +142,8 @@ function StoreRow({ seller, onPress }: { seller: SellerRow; onPress: () => void 
 
 /**
  * The basic overview (GET /v1/seller/analytics/overview, seller.analytics.basic:read, MOBILE). Only
- * the counts the server returned. Published Products is a current total and is labelled "now";
- * Orders follows the reporting window and is labelled with it. The API does not say whether the
- * other three follow the window, so none of them claims a range (contract gap, WO-020).
+ * the counts the server returned. Published Products is a current total and is labelled "now"; the
+ * API does not say whether Followers follows the window, so it claims no range (contract gap, WO-020).
  */
 function SellerOverview({ seller }: { seller: SellerRow }) {
   const t = useT();
@@ -164,20 +162,16 @@ function SellerOverview({ seller }: { seller: SellerRow }) {
     if (overview.error) refused(overview.error);
   }, [overview.error, refused]);
   const number = (n: number) => new Intl.NumberFormat(locale).format(n);
-  const day = (iso: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`));
 
   let body: ReactNode;
   const data = overview.data;
   if (data) {
     const metrics: Array<[string, number | null]> = [
       [t('seller.overview.products_published'), data.productsPublished],
-      [data.window ? (fillSlots(t('seller.overview.orders'), { from: day(data.window.from), to: day(data.window.to) }) ?? '') : '', data.window ? data.orders : null],
-      [t('seller.overview.active_reservations'), data.activeReservations],
-      [t('seller.overview.completed_handoffs'), data.completedHandoffs],
       [t('seller.overview.followers'), data.followers],
     ];
     body = metrics
-      .filter((m): m is [string, number] => m[1] !== null && m[0] !== '')
+      .filter((m): m is [string, number] => m[1] !== null)
       .map(([label, value]) => <AppText key={label}>{fillSlots(t('seller.overview.metric'), { label, value: number(value) })}</AppText>);
   } else if (overview.fetchStatus === 'paused') {
     // Waiting for a connection: said as offline, ahead of an earlier error it may be retrying.

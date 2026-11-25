@@ -88,7 +88,6 @@ export class DeletionService {
       'RECORDS_ANONYMISED',
       'REVIEWS_ANONYMISED_NOT_DELETED',
       'VERIFICATION_RETAINED',
-      'RESERVATIONS_RELEASED',
     ].map((code) => ({
       code,
       message_key: `deletion.effect.${code.toLowerCase()}`,
@@ -220,8 +219,8 @@ export class DeletionService {
         ${sql.val(detailsIds)}::uuid[])`.execute(this.financialDb);
   }
 
-  /** POST /v1/seller/closure — ACTIVE -> CLOSING. New reservations stop
-   *  because fn_create_order requires ACTIVE; existing orders are untouched. */
+  /** POST /v1/seller/closure — ACTIVE -> CLOSING. (No Order can be created
+   *  at all since migration 0063, so closure gates no transaction here.) */
   async enterClosure(trx: Transaction<Database>, req: AuthedRequest): Promise<unknown> {
     const accountId = req.ctx?.accountId as string;
     const sellerId = req.ctx?.sellerId as string;

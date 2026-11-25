@@ -35,9 +35,9 @@ test('N1: fixture mode draws the fixtures, labels them, and sends nothing to any
   const requested: string[] = [];
   page.on('request', (r) => requested.push(r.url()));
 
-  await page.goto('/s/fx_seller_a/orders');
-  await expect(page.locator('[data-order="fx_order_a1"]')).toBeVisible();
-  await expect(page.locator('[data-order="fx_order_a2"]')).toBeVisible();
+  await page.goto('/s/fx_seller_a/products');
+  await expect(page.locator('[data-product="fx_product_a1"]')).toBeVisible();
+  await expect(page.locator('[data-product="fx_product_a2"]')).toBeVisible();
   await expect(page.locator('[data-fixture="on"]')).toContainText('Demonstration data');
 
   expect(await liveCalls(page)).toEqual([]);
@@ -48,13 +48,12 @@ test('N1: fixture mode draws the fixtures, labels them, and sends nothing to any
 });
 
 test('N2: financial, evidence, handoff and unserved paths are refused, and nothing reaches fetch', async ({ page }) => {
-  await page.goto('/s/fx_seller_a/orders');
-  await expect(page.locator('[data-order="fx_order_a1"]')).toBeVisible();
+  await page.goto('/s/fx_seller_a/products');
+  await expect(page.locator('[data-product="fx_product_a1"]')).toBeVisible();
 
   const codes = await page.evaluate(async () => {
     const m = (await (0, eval)("import('/src/api/client.ts')")) as {
       api: (p: string, o?: Record<string, unknown>) => Promise<unknown>;
-      apiBlob: (p: string, o?: Record<string, unknown>) => Promise<Blob>;
     };
     const out: Record<string, string> = {};
     const attempt = async (key: string, run: () => Promise<unknown>) => {
@@ -67,12 +66,12 @@ test('N2: financial, evidence, handoff and unserved paths are refused, and nothi
     };
     await attempt('confirm', () => m.api('/seller/orders/fx_order_a1/payment/confirm', { method: 'POST', sellerId: 'fx_seller_a' }));
     await attempt('reject', () => m.api('/seller/orders/fx_order_a1/payment/reject', { method: 'POST', sellerId: 'fx_seller_a' }));
-    await attempt('evidence', () => m.apiBlob('/seller/orders/fx_order_a1/payment-evidence', { sellerId: 'fx_seller_a' }));
+    await attempt('evidence', () => m.api('/seller/orders/fx_order_a1/payment-evidence', { sellerId: 'fx_seller_a' }));
     await attempt('billing', () => m.api('/billing/purchase-intent', { method: 'POST' }));
     await attempt('payout', () => m.api('/seller/payout', { sellerId: 'fx_seller_a' }));
     await attempt('qr', () => m.api('/seller/orders/fx_order_a1/qr', { sellerId: 'fx_seller_a' }));
     await attempt('report', () => m.api('/reports', { method: 'POST' }));
-    await attempt('unserved read', () => m.api('/seller/products', { sellerId: 'fx_seller_a' }));
+    await attempt('unserved read', () => m.api('/seller/team', { sellerId: 'fx_seller_a' }));
     await attempt('unserved write', () => m.api('/seller/profile', { method: 'PATCH', sellerId: 'fx_seller_a' }));
     return out;
   });
@@ -84,37 +83,37 @@ test('N2: financial, evidence, handoff and unserved paths are refused, and nothi
 });
 
 test('N3: moving from store B back to store A shows none of B while A is loading', async ({ page }) => {
-  await page.goto('/s/fx_seller_a/orders');
-  await expect(page.locator('[data-order="fx_order_a1"]')).toBeVisible();
+  await page.goto('/s/fx_seller_a/products');
+  await expect(page.locator('[data-product="fx_product_a1"]')).toBeVisible();
 
-  // A client-side route to B, then B's orders (history: A/orders, B, B/orders).
+  // A client-side route to B, then B's products (history: A/products, B, B/products).
   await page.locator('[data-switcher-toggle]').click();
   await page.locator('[data-switcher-seller="fx_seller_b"] a').click();
   await expect(page).toHaveURL(/\/s\/fx_seller_b$/);
-  await page.locator('nav.sidenav a[href$="/orders"]').click();
-  await expect(page).toHaveURL(/\/s\/fx_seller_b\/orders$/);
-  await expect(page.locator('[data-order="fx_order_b1"]')).toBeVisible();
+  await page.locator('nav.sidenav a[href$="/products"]').click();
+  await expect(page).toHaveURL(/\/s\/fx_seller_b\/products$/);
+  await expect(page.locator('[data-product="fx_product_b1"]')).toBeVisible();
 
-  // One history jump straight to A's orders: the same route, another store. A's answer
+  // One history jump straight to A's products: the same route, another store. A's answer
   // is held back, so any B row still on screen is stale B data under A's URL.
   await page.evaluate(() => {
     window.__ADULIS_FIXTURE_DELAY_MS = { fx_seller_a: 1500 };
     history.go(-2);
   });
-  await expect(page).toHaveURL(/\/s\/fx_seller_a\/orders$/);
+  await expect(page).toHaveURL(/\/s\/fx_seller_a\/products$/);
   await page.waitForTimeout(400);
   // ONE read, not a retrying assertion: toHaveCount(0) polls, and would pass the moment A's
   // answer lands and replaces B's row by itself, which is exactly the defect hiding.
-  expect(await page.locator('[data-order="fx_order_b1"]').count(), "store B's order is on screen under store A's URL").toBe(0);
+  expect(await page.locator('[data-product="fx_product_b1"]').count(), "store B's product is on screen under store A's URL").toBe(0);
 
-  await expect(page.locator('[data-order="fx_order_a1"]')).toBeVisible();
-  await expect(page.locator('[data-order="fx_order_b1"]')).toHaveCount(0);
+  await expect(page.locator('[data-product="fx_product_a1"]')).toBeVisible();
+  await expect(page.locator('[data-product="fx_product_b1"]')).toHaveCount(0);
 });
 
 test('N4: a store the account may not use renders no rows and never reaches a live API', async ({ page }) => {
-  await page.goto('/s/fx_seller_zzz/orders');
+  await page.goto('/s/fx_seller_zzz/products');
   await expect(page.locator('[data-state="LOADING"]')).toHaveCount(0);
-  await expect(page.locator('[data-order]')).toHaveCount(0);
-  await expect(page.locator('#main')).not.toContainText('fx_order');
+  await expect(page.locator('[data-product]')).toHaveCount(0);
+  await expect(page.locator('#main')).not.toContainText('fx_product');
   expect(await liveCalls(page)).toEqual([]);
 });

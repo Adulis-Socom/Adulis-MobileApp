@@ -346,20 +346,9 @@ export class CatalogueService {
      * so the rule for this whole class is the order of the two statements,
      * not the wording of either.
      */
+    // The live-Reservation guard that followed was retired with the Reservation model
+    // (migration 0063): nothing can hold this Product's stock any more.
     const pid = await this.lockOwnedProduct(trx, req, productId);
-
-    // The seller predicate stays on the count as well. It is redundant now
-    // that ownership is resolved above, and it is the redundancy that makes
-    // a future edit to either statement alone unable to reopen this.
-    const live = await sql<{ n: number }>`
-      SELECT count(*)::int AS n
-        FROM core.reservation r
-        JOIN core.product_variant v ON v.id = r.variant_id
-       WHERE v.product_id = ${productId} AND v.seller_id = ${req.ctx?.sellerId}
-         AND r.state = 'ACTIVE'`.execute(trx);
-    if ((live.rows[0]?.n ?? 0) > 0) {
-      throw new AdulisException('PRODUCT_HAS_ACTIVE_ORDERS');
-    }
     // The media rows go with the Product, so their objects are scheduled in this transaction.
     const media = await sql<{ key: string }>`
       SELECT unnest(ARRAY[thumb_key, card_key, full_key]) AS key
@@ -434,7 +423,7 @@ export class CatalogueService {
   ): Promise<unknown> {
     await assertPermission(trx, req, 'seller.products:write');
     // Withdrawing by PATCH meets the same live-order guard as DELETE.
-    if (body.status === 'WITHDRAWN') await this.assertNoLiveReservation(trx, req, variantId);
+    if (body.status === 'WITHDRAWN') await this.lockOwnedVariant(trx, req, variantId);
     const r = await sql<{ id: string }>`
       UPDATE core.product_variant
          SET price_minor = coalesce(${body.price_minor ?? null}, price_minor),
@@ -458,7 +447,7 @@ export class CatalogueService {
     // OWNERSHIP FIRST -- the variant twin of D-320, identical in shape and
     // found in the same pass. See deleteProduct above for why the order of
     // these two statements is the rule and the 409 is not.
-    await this.assertNoLiveReservation(trx, req, variantId);
+    await this.lockOwnedVariant(trx, req, variantId);
     const r = await sql<{ id: string }>`
       UPDATE core.product_variant SET status = 'WITHDRAWN'
        WHERE id = ${variantId} AND seller_id = ${req.ctx?.sellerId}
@@ -467,8 +456,8 @@ export class CatalogueService {
     return { withdrawn: true };
   }
 
-  /** Ownership first (404 for a foreign Variant), then no ACTIVE reservation may hold it (409). */
-  private async assertNoLiveReservation(
+  /** Ownership (404 for a foreign Variant), on a locked row. The live-Reservation 409 was retired by 0063. */
+  private async lockOwnedVariant(
     trx: Transaction<Database>,
     req: AuthedRequest,
     variantId: string,
@@ -479,15 +468,6 @@ export class CatalogueService {
        WHERE id = ${variantId} AND seller_id = ${req.ctx?.sellerId}
          FOR UPDATE`.execute(trx);
     if (!owner.rows[0]) throw new AdulisException('NOT_FOUND');
-
-    const live = await sql<{ n: number }>`
-      SELECT count(*)::int AS n FROM core.reservation r
-        JOIN core.product_variant v ON v.id = r.variant_id
-       WHERE r.variant_id = ${variantId} AND v.seller_id = ${req.ctx?.sellerId}
-         AND r.state = 'ACTIVE'`.execute(trx);
-    if ((live.rows[0]?.n ?? 0) > 0) {
-      throw new AdulisException('VARIANT_HAS_ACTIVE_ORDERS');
-    }
   }
 
   // ------------------------------------------------------------------- media

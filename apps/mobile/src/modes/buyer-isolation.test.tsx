@@ -27,7 +27,6 @@ jest.mock('expo-secure-store', () => jest.requireActual('../testing/secure-store
 jest.setTimeout(60_000);
 
 const REF = '0b6f1a3e-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-const ORDER = 'f5b00000-0000-4000-8000-000000000001';
 const OTHER_TOKEN = 'Other_credential_for_tests_0123456789abcdef';
 const A = `Bearer ${GOOD_TOKEN}`;
 const B = `Bearer ${OTHER_TOKEN}`;
@@ -126,7 +125,6 @@ function installAccount({ seller, courier = false }: { seller: boolean; courier?
     return ok(bootstrapBody({ account_context: { ...SIGNED_IN_CONTEXT, seller_companion: { available: seller }, courier: { available: courier } } }));
   });
   api.on('GET /v1/seller/list', () => ok({ data: [STORE] }));
-  api.on('GET /v1/seller/orders', () => ok({ data: [], has_more: false, next_cursor: null }));
   api.on('GET /v1/conversations', () => ok({ data: [], next_cursor: null }));
   api.on('GET /v1/notifications', () => ok({ data: [], next_cursor: null }));
 }
@@ -139,7 +137,7 @@ function expectNoSellerTraffic() {
   expect(useUiStore.getState().activeMode).not.toBe('seller');
 }
 
-const SELLER_ROUTES = ['/seller', '/seller/orders', `/seller/orders/${ORDER}`, '/seller/messages', `/seller/messages/${REF}`, '/seller/notifications'];
+const SELLER_ROUTES = ['/seller', '/seller/messages', `/seller/messages/${REF}`, '/seller/notifications'];
 const HIDDEN_ROUTES = ['/courier', '/dev', '/_sitemap'];
 
 describe('a guest on a Seller, Courier or diagnostics route, on a release build', () => {
@@ -212,7 +210,7 @@ describe('a signed-in Buyer without Seller access, on a release build', () => {
 
   it('leaves the gate to Buyer Home with Switch to Buyer, and the Buyer tabs keep working', () =>
     asRelease(async () => {
-      await renderRouter(APP_DIR, { initialUrl: '/seller/orders' });
+      await renderRouter(APP_DIR, { initialUrl: '/seller/messages' });
       await fireEvent.press(await screen.findByRole('button', { name: en['seller.mode.switch_to_buyer'] }));
       expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
       expect(screen).toHavePathname('/home/for-you');
@@ -258,15 +256,10 @@ describe('a signed-in Buyer with Seller access, on a release build', () => {
 
   it('still reaches the nested Seller routes, every request scoped to its store, and never Courier or diagnostics', () =>
     asRelease(async () => {
-      await renderRouter(APP_DIR, { initialUrl: '/seller/orders' });
-      expect(await screen.findByText(en['seller.orders.read_only'])).toBeOnTheScreen();
-
-      await open('/seller/messages');
+      await renderRouter(APP_DIR, { initialUrl: '/seller/messages' });
       expect(await screen.findByText(en['seller.messages.note'])).toBeOnTheScreen();
       await open('/seller/notifications');
       await waitFor(() => expect(api.callsTo('GET /v1/notifications').length).toBeGreaterThan(0));
-      await open(`/seller/orders/${ORDER}`);
-      expect(await screen.findByText(en['seller.order.gone'])).toBeOnTheScreen();
 
       expect(useUiStore.getState().activeMode).toBe('seller');
       // The list asks which stores there are; every other Seller read names the one store it was read for.
@@ -430,16 +423,15 @@ function installTwoAccounts({ firstHasStore = false, secondHasStore = false }: {
   api.on('GET /v1/collections/saves', asAccount(() => ok({ data: [], next_cursor: null })));
   api.on(
     'GET /v1/conversations',
-    asAccount((account) =>
-      ok({
+    // Like the server: a store the Account does not hold is a 404.
+    asAccount((account, call) =>
+      call.query.as === 'seller' && call.headers['X-Adulis-Seller'] !== account.sellerStore.id ? problem(404, 'NOT_FOUND', 'request') : ok({
         data: [{ id: CONVERSATION_ID, seller_id: SELLER_ID, store_name: account.store, handle: 'seller-1', started_at: '2026-11-11T08:00:00.000Z', last_message_at: '2026-11-11T09:00:00.000Z' }],
         next_cursor: null,
       }),
     ),
   );
   api.on('GET /v1/seller/list', asAccount((account) => (account.seller ? ok({ data: [account.sellerStore] }) : problem(403, 'PERMISSION_DENIED', 'auth'))));
-  // Like the server: a store the Account does not hold is a 404.
-  api.on('GET /v1/seller/orders', asAccount((account, call) => (call.headers['X-Adulis-Seller'] === account.sellerStore.id ? ok({ data: [], has_more: false, next_cursor: null }) : problem(404, 'NOT_FOUND', 'request'))));
   api.on('GET /v1/notifications', asAccount(() => ok({ data: [], next_cursor: null })));
   api.on('POST /v1/auth/otp/verify', (call) =>
     call.body?.code === SIGN_IN_CODE
@@ -555,8 +547,8 @@ describe('a different Account on the same device', () => {
     asRelease(async () => {
       signedIn();
       installTwoAccounts({ firstHasStore: true });
-      await renderRouter(APP_DIR, { initialUrl: '/seller/orders' });
-      expect(await screen.findByText(en['seller.orders.read_only'])).toBeOnTheScreen();
+      await renderRouter(APP_DIR, { initialUrl: '/seller/messages' });
+      expect(await screen.findByText(en['seller.messages.note'])).toBeOnTheScreen();
       expect(useUiStore.getState().activeMode).toBe('seller');
       await open('/account');
       await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
@@ -569,10 +561,10 @@ describe('a different Account on the same device', () => {
       expect(screen.queryByRole('button', { name: en['seller.mode.switch_to_seller'] })).not.toBeOnTheScreen();
       expect(useUiStore.getState().activeMode).not.toBe('seller');
 
-      await open('/seller/orders');
+      await open('/seller/messages');
       expect(await screen.findByText(en['seller.gate.unavailable'])).toBeOnTheScreen();
       await quiet();
-      expect(screen.queryByText(en['seller.orders.read_only'])).not.toBeOnTheScreen();
+      expect(screen.queryByText(en['seller.messages.note'])).not.toBeOnTheScreen();
       expect(screen.queryByText(STORE.store_name)).not.toBeOnTheScreen();
       expect(sellerCalls().length).toBe(sellerBefore);
       expect(afterSignOut().filter(sellerScoped)).toEqual([]);
@@ -582,8 +574,8 @@ describe('a different Account on the same device', () => {
     asRelease(async () => {
       signedIn();
       installTwoAccounts({ firstHasStore: true, secondHasStore: true });
-      await renderRouter(APP_DIR, { initialUrl: '/seller/orders' });
-      expect(await screen.findByText(en['seller.orders.read_only'])).toBeOnTheScreen();
+      await renderRouter(APP_DIR, { initialUrl: '/seller/messages' });
+      expect(await screen.findByText(en['seller.messages.note'])).toBeOnTheScreen();
       // The first Account really did read its own store, so the check below can see a leak.
       expect(api.calls.some((c) => c.headers['X-Adulis-Seller'] === STORE.id)).toBe(true);
       await open('/account');
@@ -592,8 +584,8 @@ describe('a different Account on the same device', () => {
 
       await signInAsSecondAccount();
       expect(await screen.findByRole('button', { name: en['seller.mode.switch_to_seller'] })).toBeOnTheScreen();
-      await open('/seller/orders');
-      expect(await screen.findByText(en['seller.orders.read_only'])).toBeOnTheScreen();
+      await open('/seller/messages');
+      expect(await screen.findByText(en['seller.messages.note'])).toBeOnTheScreen();
       await open('/seller/notifications');
       await quiet();
 
@@ -619,8 +611,8 @@ describe('a session the server ended', () => {
       try {
         signedIn();
         const server = installTwoAccounts({ firstHasStore: true });
-        await renderRouter(APP_DIR, { initialUrl: '/seller/orders' });
-        expect(await screen.findByText(en['seller.orders.read_only'])).toBeOnTheScreen();
+        await renderRouter(APP_DIR, { initialUrl: '/seller/messages' });
+        expect(await screen.findByText(en['seller.messages.note'])).toBeOnTheScreen();
 
         // Revoked elsewhere while the app was in the background; it asks again when it returns.
         server.endSessions();
@@ -631,7 +623,7 @@ describe('a session the server ended', () => {
         expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
         expect(screen).toHavePathname('/home/for-you');
         expect(memory.has(TOKEN_KEY)).toBe(false);
-        expect(screen.queryByText(en['seller.orders.read_only'])).not.toBeOnTheScreen();
+        expect(screen.queryByText(en['seller.messages.note'])).not.toBeOnTheScreen();
         expect(useUiStore.getState().activeMode).not.toBe('seller');
         const sellerAfter = sellerCalls().length;
         await quiet();
@@ -666,7 +658,7 @@ describe('a session the server ended', () => {
     asRelease(async () => {
       signedIn();
       installTwoAccounts({ firstHasStore: true }).endSessions();
-      await renderRouter(APP_DIR, { initialUrl: '/seller/orders' });
+      await renderRouter(APP_DIR, { initialUrl: '/seller/messages' });
       expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
       await quiet();
       expect(sellerCalls()).toEqual([]);

@@ -1,7 +1,7 @@
 /**
  * features/trust/Analytics.tsx -- SC-12 Analytics (ADU-CON-03 v1.2 S10).
  *
- * GET /v1/seller/analytics/overview -- EVERY tier, five counts, over the
+ * GET /v1/seller/analytics/overview -- EVERY tier, two counts, over the
  * chosen [from, to] window (default: the trailing 30 days). GET .../full --
  * entitlement-gated: the server
  * answers 409 TIER_LIMIT_REACHED when the tier's analytics_scope is null (or
@@ -115,14 +115,9 @@ export function Analytics() {
   }
 
   // The account-empty teach fires only on the DEFAULT window (the Phase 3
-  // empty-bucket lesson): a 7-day view zeroing the one windowed tile must not
-  // tell a seller with history "No analytics yet".
-  const noData =
-    overview.products_published === 0 &&
-    overview.orders === 0 &&
-    overview.active_reservations === 0 &&
-    overview.completed_handoffs === 0 &&
-    overview.followers === 0;
+  // empty-bucket lesson): a short view must not tell a seller with history
+  // "No analytics yet".
+  const noData = overview.products_published === 0 && overview.followers === 0;
 
   return (
     <section aria-labelledby="analytics-heading" data-screen="SC-12" className="analytics">
@@ -176,18 +171,6 @@ export function Analytics() {
           <span className="kpi-value">{overview.products_published}</span>
         </div>
         <div className="kpi-tile">
-          <span className="kpi-label">{en['console.insights.analytics.orders']}</span>
-          <span className="kpi-value">{overview.orders}</span>
-        </div>
-        <div className="kpi-tile">
-          <span className="kpi-label">{en['console.insights.analytics.active_reservations']}</span>
-          <span className="kpi-value">{overview.active_reservations}</span>
-        </div>
-        <div className="kpi-tile">
-          <span className="kpi-label">{en['console.insights.analytics.completed_handoffs']}</span>
-          <span className="kpi-value">{overview.completed_handoffs}</span>
-        </div>
-        <div className="kpi-tile">
           <span className="kpi-label">{en['console.insights.analytics.followers']}</span>
           <span className="kpi-value">{overview.followers}</span>
         </div>
@@ -204,18 +187,6 @@ export function Analytics() {
             <div className="kpi-tile">
               <span className="kpi-label">{en['console.insights.analytics.product_views']}</span>
               <span className="kpi-value">{full.product_views}</span>
-            </div>
-            <div className="kpi-tile">
-              <span className="kpi-label">{en['console.insights.analytics.reservations']}</span>
-              <span className="kpi-value">{full.reservations}</span>
-            </div>
-            <div className="kpi-tile">
-              <span className="kpi-label">{en['console.insights.analytics.conversion']}</span>
-              <span className="kpi-value">
-                {full.view_to_reservation_rate === null
-                  ? en['console.insights.analytics.rate_unavailable']
-                  : `${(full.view_to_reservation_rate * 100).toFixed(1)}%`}
-              </span>
             </div>
           </div>
         </section>

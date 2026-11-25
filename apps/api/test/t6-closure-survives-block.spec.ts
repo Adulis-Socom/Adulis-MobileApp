@@ -24,10 +24,13 @@ import { armFixtureSessions, sessionToken } from './session-fixture';
  * looking change, since deletion does -- would take the escape hatch away
  * and no other test would notice.
  *
- * FOUR simultaneous blockers, not one. C6 already proves a single blocker
- * surfaces; a single blocker cannot tell "all of them" from "the first",
- * which is exactly the failure the ruling names. The seller below owes on
- * four independent counts at once.
+ * Until migration 0063 this file staged FOUR simultaneous blockers to tell
+ * "all of them" from "the first". Three of them (EVIDENCE_AWAITING_CONFIRMATION,
+ * ORDERS_AWAITING_HANDOFF, OPEN_CLAIMS) counted rows of the legacy order flow,
+ * which was retired before launch (founder pre-launch authorization, 2026-11-25)
+ * and can no longer be created. Their rows are still planted below, as inert
+ * legacy data, so the file now also proves they block nothing: only the past-due
+ * subscription stands, and closure stays open around it.
  */
 
 const CONSOLE_ORIGIN = 'http://localhost:5173';
@@ -44,12 +47,7 @@ const O_CONFIRMED = randomUUID();
 const CLAIM = randomUUID();
 const PS = randomUUID();
 
-const FOUR = [
-  'EVIDENCE_AWAITING_CONFIRMATION',
-  'OPEN_CLAIMS',
-  'ORDERS_AWAITING_HANDOFF',
-  'SUBSCRIPTION_PAST_DUE',
-];
+const STANDING = ['SUBSCRIPTION_PAST_DUE'];
 
 interface Item {
   code: string;
@@ -99,8 +97,7 @@ describe('T6 / G1.3 -- closure stays open while deletion is blocked', () => {
       [M],
     );
     await admin.query(
-      `INSERT INTO core.timing_config (id, market_id, reservation_window,
-         payment_confirmation_window, fulfilment_window, offline_sync_horizon,
+      `INSERT INTO core.timing_config (id, market_id, payment_confirmation_window, fulfilment_window, offline_sync_horizon,
          payout_activation_delay, recovery_cooling_period,
          deleted_number_cooling_period, refund_ack_window, media_retention,
          level_credit_grace, mobile_session_lifetime, console_session_lifetime,
@@ -109,7 +106,7 @@ describe('T6 / G1.3 -- closure stays open while deletion is blocked', () => {
          new_device_payout_lock, same_seller_cancellation_threshold,
          same_seller_cooldown, cross_seller_cooldown_ladder,
          cancellation_counter_decay)
-       VALUES (gen_random_uuid(), $1, '48 hours','24 hours','72 hours','7 days',
+       VALUES (gen_random_uuid(), $1,'24 hours','72 hours','7 days',
          '24 hours','7 days','30 days','48 hours','90 days','24 hours',
          '30 days','12 hours','30 minutes','7 days','8 hours','5 minutes',5,
          '5 minutes','24 hours',3,'1 hour',
@@ -135,7 +132,7 @@ describe('T6 / G1.3 -- closure stays open while deletion is blocked', () => {
       [SELLER, M, OWNER],
     );
 
-    // ---- blocker 1: EVIDENCE_AWAITING_CONFIRMATION -------------------------
+    // ---- inert legacy rows: a submitted order, a confirmed order, an open claim ----
     await admin.query(
       `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id,
          state, expires_at, total_minor, total_currency, display_currency)
@@ -143,7 +140,6 @@ describe('T6 / G1.3 -- closure stays open while deletion is blocked', () => {
                50000,'ETB','ETB')`,
       [O_SUBMITTED, M, SELLER, BUYER],
     );
-    // ---- blocker 2: ORDERS_AWAITING_HANDOFF --------------------------------
     await admin.query(
       `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id,
          state, expires_at, clock_stopped_at, total_minor, total_currency,
@@ -152,14 +148,13 @@ describe('T6 / G1.3 -- closure stays open while deletion is blocked', () => {
                now(), 50000,'ETB','ETB')`,
       [O_CONFIRMED, M, SELLER, BUYER],
     );
-    // ---- blocker 3: OPEN_CLAIMS -------------------------------------------
     await admin.query(
       `INSERT INTO core.claim (id, order_id, opened_by_kind, opened_by_account_id,
          trigger, state)
        VALUES ($1,$2,'BUYER',$3,'GOODS_NOT_RECEIVED','UNDER_REVIEW')`,
       [CLAIM, O_CONFIRMED, BUYER],
     );
-    // ---- blocker 4: SUBSCRIPTION_PAST_DUE ----------------------------------
+    // ---- the one standing blocker: SUBSCRIPTION_PAST_DUE ---------------------
     await admin.query(
       `INSERT INTO billing.price_schedule (id, market_id, tier, price_minor,
          currency, usd_reference_minor, fx_rate, derived_at, effective)
@@ -205,12 +200,12 @@ describe('T6 / G1.3 -- closure stays open while deletion is blocked', () => {
     await admin.end();
   });
 
-  it('the database returns every standing blocker, not the first', async () => {
+  it('the database returns the standing blocker and ignores the inert legacy rows', async () => {
     const r = await admin.query<{ blocker: string; count: number; resolving_action: string }>(
       `SELECT * FROM core.fn_deletion_blockers($1)`,
       [SELLER],
     );
-    expect(r.rows.map((x) => x.blocker).sort()).toEqual(FOUR);
+    expect(r.rows.map((x) => x.blocker).sort()).toEqual(STANDING);
     // Every one of them names its clearing action, and it is a stable key
     // the client localises -- never assembled prose (S7).
     for (const row of r.rows) {
@@ -219,7 +214,7 @@ describe('T6 / G1.3 -- closure stays open while deletion is blocked', () => {
     }
   });
 
-  it('POST /v1/seller/deletion refuses with ALL of them in items[]', async () => {
+  it('POST /v1/seller/deletion refuses with the standing blocker in items[]', async () => {
     const su = await freshStepUp('SELLER_DELETION');
     const refused = await asOwner('post', '/v1/seller/deletion')
       .set('Idempotency-Key', randomUUID())
@@ -228,24 +223,23 @@ describe('T6 / G1.3 -- closure stays open while deletion is blocked', () => {
 
     expect(refused.body.code).toBe('DELETION_BLOCKED');
     const items = refused.body.items as Item[];
-    // THE ASSERTION THE RULING IS ABOUT. Four, not one -- a refusal that
-    // names one obligation sends the seller round the loop three more
-    // times, and that is the app-store failure the paragraph describes.
-    expect(items).toHaveLength(4);
-    expect(items.map((i) => i.code).sort()).toEqual(FOUR);
+    // Every standing obligation is named, with its clearing action; the retired
+    // legacy rows planted above are not obligations any more.
+    expect(items).toHaveLength(STANDING.length);
+    expect(items.map((i) => i.code).sort()).toEqual(STANDING);
     for (const i of items) {
       expect(i.resolving_action?.kind).toBeTruthy();
       expect(Number(i.slots?.count)).toBeGreaterThan(0);
     }
   });
 
-  it('GET /v1/seller/deletion/blockers is a 200 state carrying the same four', async () => {
+  it('GET /v1/seller/deletion/blockers is a 200 state carrying the same blocker', async () => {
     const r = await asOwner('get', '/v1/seller/deletion/blockers').expect(200);
     const items = r.body.items as Item[];
-    expect(items.map((i) => i.code).sort()).toEqual(FOUR);
+    expect(items.map((i) => i.code).sort()).toEqual(STANDING);
   });
 
-  it('closure is available anyway, and reversible, with all four still standing', async () => {
+  it('closure is available anyway, and reversible, with the blocker still standing', async () => {
     const entered = await asOwner('post', '/v1/seller/closure')
       .set('Idempotency-Key', randomUUID())
       .send({})
@@ -257,7 +251,7 @@ describe('T6 / G1.3 -- closure stays open while deletion is blocked', () => {
       `SELECT count(*)::int AS n FROM core.fn_deletion_blockers($1)`,
       [SELLER],
     );
-    expect(Number(still.rows[0]?.n)).toBe(4);
+    expect(Number(still.rows[0]?.n)).toBe(STANDING.length);
 
     // And deletion is still refused -- the two decisions are independent,
     // which is the point.

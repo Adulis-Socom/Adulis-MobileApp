@@ -16,7 +16,7 @@ import { ok, bad } from './_lib.mjs';
  *
  *   - verification.* and financial.* — adulis_app holds NO table privilege at
  *     all (check 10's invariant), so UPDATE and DELETE both read as absent;
- *   - core.order_state_transition_legal / reservation_state_transition_legal —
+ *   - core.order_state_transition_legal (its Reservation twin retired by 0063) —
  *     writable only by adulis_migrate (§12.2), so the app lacks everything;
  *   - core.seller_level_state — written only by fn_recompute_seller_level
  *     (§8.1 mechanism 1: "no UPDATE grant to adulis_app").

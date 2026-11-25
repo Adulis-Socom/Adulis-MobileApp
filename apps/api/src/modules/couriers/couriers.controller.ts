@@ -251,22 +251,13 @@ export class CouriersController {
       if (!row) throw new AdulisException('NOT_FOUND');
       // Whatever the invite produced goes with it. A pending invite has no
       // courier row, and then this updates nothing — the same statement.
-      const ended = await sql<{ account_id: string }>`
+      // (Order courier assignments were retired with live delivery in migration 0063: none
+      // can exist, so there is no assignment to end here.)
+      await sql`
         UPDATE core.seller_courier sc SET revoked_at = now()
           FROM core.account a
          WHERE a.phone_e164 = ${row.phone} AND sc.account_id = a.id
-           AND sc.seller_id = ${sellerId} AND sc.revoked_at IS NULL
-        RETURNING sc.account_id`.execute(trx);
-      // Same transaction: no live assignment survives the revocation.
-      const accounts = ended.rows.map((r) => r.account_id);
-      if (accounts.length > 0) {
-        await sql`
-          UPDATE core.order_courier_assignment a SET ended_at = now()
-            FROM core."order" o
-           WHERE o.id = a.order_id AND o.seller_id = ${sellerId}
-             AND a.courier_account_id = ANY(${sql.val(accounts)}::uuid[])
-             AND a.ended_at IS NULL`.execute(trx);
-      }
+           AND sc.seller_id = ${sellerId} AND sc.revoked_at IS NULL`.execute(trx);
     });
   }
 }

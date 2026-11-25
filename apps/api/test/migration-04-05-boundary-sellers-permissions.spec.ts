@@ -22,13 +22,14 @@ const ACCOUNT = '22222222-0000-4000-8000-000000000002';
 const SELLER = '22222222-0000-4000-8000-000000000003';
 const PERSON = '22222222-0000-4000-8000-000000000004';
 
-/** ADU-AUTH-01 v2.2 section 16.3 — canonical, and the seed is verified against it. */
+/**
+ * ADU-AUTH-01 v2.2 section 16.3 — canonical, and the seed is verified against it.
+ * Less seller.orders:reissue_instructions and seller.payout:update, retired by 0063.
+ */
 const STEP_UP_CODES = [
   'seller.account:delete',
   'seller.identity:manage',
-  'seller.orders:reissue_instructions',
   'seller.ownership:transfer',
-  'seller.payout:update',
   'seller.sessions:revoke_all',
   'seller.staff:admin',
   'seller.subscription:update',
@@ -44,19 +45,31 @@ const STEP_UP_CODES = [
  * seller.analytics.basic:read and seller.notifications.preferences:write are
  * mobile-reachable. The earlier reading is discarded.
  */
+// Six of the twelve were order, payment and handoff codes, retired by migration 0063.
 const MOBILE_CODES = [
   'seller.analytics.basic:read',
-  'seller.handoff:read',
   'seller.messages:read',
   'seller.messages:send',
   'seller.notifications.preferences:write',
   'seller.notifications:read',
+  'seller.reviews:read',
+];
+
+/** The thirteen codes only the retired order, payment, refund, claim, handoff and payout flows checked. */
+const RETIRED_CODES = [
+  'seller.claims:read',
+  'seller.claims:respond',
+  'seller.handoff:custody_transfer',
+  'seller.handoff:read',
   'seller.order_ready:update',
   'seller.orders:read',
+  'seller.orders:reissue_instructions',
   'seller.orders:respond',
   'seller.payment:confirm',
   'seller.payment_evidence:read',
-  'seller.reviews:read',
+  'seller.payout:read',
+  'seller.payout:update',
+  'seller.refunds:report',
 ];
 
 describe('migrations 04-05 — boundary, sellers, permissions', () => {
@@ -603,9 +616,15 @@ describe('migrations 04-05 — boundary, sellers, permissions', () => {
 
   // =========================================================================
   describe('the permission catalogue (section 6.9a, ADU-AUTH-01 v2.2 s15.1/16.3)', () => {
-    it('holds exactly the 42 codes of section 15.1', async () => {
+    it('holds exactly the 29 codes of section 15.1 that survive 0063, and none of the retired 13', async () => {
       const { rows } = await pool.query(`SELECT count(*)::int AS n FROM core.permission`);
-      expect(rows[0].n).toBe(42);
+      expect(rows[0].n).toBe(29);
+      const retired = await pool.query(
+        `SELECT code FROM core.permission WHERE code = ANY($1::text[])
+         UNION ALL SELECT permission_code FROM core.role_permission WHERE permission_code = ANY($1::text[])`,
+        [RETIRED_CODES],
+      );
+      expect(retired.rows).toEqual([]);
     });
 
     /**
@@ -614,7 +633,7 @@ describe('migrations 04-05 — boundary, sellers, permissions', () => {
      * permission that should not require step-up; it says nothing about one
      * that should and does not — and that is the direction D1 failed in."
      */
-    it('marks exactly the eight step-up codes of section 16.3, both directions', async () => {
+    it('marks exactly the six surviving step-up codes of section 16.3, both directions', async () => {
       const { rows } = await pool.query(
         `SELECT code FROM core.permission WHERE requires_step_up ORDER BY code`,
       );
@@ -629,7 +648,7 @@ describe('migrations 04-05 — boundary, sellers, permissions', () => {
       expect(rows).toEqual([]);
     });
 
-    it('gives mobile reach to exactly the twelve codes of section 16.2a', async () => {
+    it('gives mobile reach to exactly the six surviving codes of section 16.2a', async () => {
       const { rows } = await pool.query(
         `SELECT code FROM core.permission WHERE 'MOBILE' = ANY(surfaces) ORDER BY code`,
       );
@@ -667,8 +686,7 @@ describe('migrations 04-05 — boundary, sellers, permissions', () => {
     it.each([
       'seller.ownership:transfer',
       'seller.identity:manage',
-      'seller.orders:reissue_instructions',
-    ])('refuses widening %s to mobile — the three v1.8 left unconstrained', async (code) => {
+    ])('refuses widening %s to mobile — of the three v1.8 left unconstrained, the two that survive 0063', async (code) => {
       await tx(async (c) => {
         await expect(
           c.query(
@@ -685,7 +703,7 @@ describe('migrations 04-05 — boundary, sellers, permissions', () => {
       await tx(async (c) => {
         await expect(
           c.query(
-            `UPDATE core.permission SET requires_step_up = true WHERE code='seller.orders:read'`,
+            `UPDATE core.permission SET requires_step_up = true WHERE code='seller.messages:read'`,
           ),
         ).rejects.toThrow(/step_up_is_console_only/);
       });
@@ -728,12 +746,12 @@ describe('migrations 04-05 — boundary, sellers, permissions', () => {
      * permission-matrix.spec.ts, against the authority .sql file rather than
      * against this database.
      */
-    it('holds the 139 grants of section 16.2, across all six roles', async () => {
+    it('holds the 96 grants of section 16.2 that survive 0063 (139 less 43), across all six roles', async () => {
       const { rows } = await pool.query(
         `SELECT count(*)::int AS n, count(DISTINCT role)::int AS roles
            FROM core.role_permission`,
       );
-      expect(rows[0]).toEqual({ n: 139, roles: 6 });
+      expect(rows[0]).toEqual({ n: 96, roles: 6 });
     });
   });
 });

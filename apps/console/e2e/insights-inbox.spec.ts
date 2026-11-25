@@ -3,12 +3,13 @@
  * D (conversations) and E (trust) plus SC-30, ADU-CON-03 v1.2 S9/S10/S12.
  *
  * The determinism this file leans on, all real:
- *  - the seeded seller's analytics overview is exactly {1 published, 5
- *    orders, 4 active reservations, 0 handoffs, 0 followers}, and its
+ *  - the seeded seller's analytics overview is exactly {1 published, 0
+ *    followers} (the order, reservation and handoff counts were retired
+ *    with the Reservation model, 2026-11-25), and its
  *    analytics/full is a 409 TIER_LIMIT_REACHED (no subscription -> LISTED
  *    -> no tier definition -> fail closed) -- the NO_ENTITLEMENT branch;
- *  - reviews and claims are empty (no seeded rows) -- the two empty states
- *    whose COPY is the point;
+ *  - reviews are empty (no seeded rows) -- the empty state whose COPY is
+ *    the point;
  *  - the seller's own sign-in (globalSetup, always a fresh device on a reset
  *    database) mints a real NEW_DEVICE_SIGNIN notification -- SC-30 always
  *    has at least one unread row to mark read FOR REAL;
@@ -16,12 +17,6 @@
  *    conversation and message through the buyer wire, and the seller
  *    console reads and REPLIES through its own -- Companion parity driven,
  *    not asserted from a render.
- *
- * One plant (the upgrade-required pattern): SC-16's claim detail, because no
- * claim can exist in this harness without violating an order's state
- * machine. The remedy POST is then driven into the REAL server's 404 --
- * which can only arrive PAST the idempotency-key gate, so the one assertion
- * proves the key plumbing and the error rendering at once (the C-6 lesson).
  */
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
@@ -40,9 +35,10 @@ test.describe('SC-12 Analytics -- the wire, not the wireframe', () => {
     // The seed's exact numbers -- a wrong join breaks these.
     const tile = (label: string) => page.locator('.kpi-tile', { hasText: label });
     await expect(tile('Published products').locator('.kpi-value')).toHaveText('1');
-    await expect(tile('Orders in this period').locator('.kpi-value')).toHaveText('5');
-    await expect(tile('Active reservations').locator('.kpi-value')).toHaveText('4');
-    await expect(tile('Completed handoffs').locator('.kpi-value')).toHaveText('0');
+    // The retired commerce tiles are gone, not zeroed.
+    for (const gone of ['Orders in this period', 'Active reservations', 'Completed handoffs']) {
+      await expect(tile(gone)).toHaveCount(0);
+    }
 
     // The picker is REAL now (T15 Phase 4): the old fixed-window sentence is
     // gone, the caption is the SERVER's echo of the window it resolved...
@@ -121,33 +117,8 @@ test.describe('SC-14 Reviews -- read-only, and the empty state teaches the gate'
   });
 });
 
-/*
- * SC-15 Claims and SC-16 Claim detail -- SUPERSEDED by D24-01 (payment authority unresolved; claims
- * and their payment-evidence trail are purchase-derived and deferred). The four tests that stood
- * here drove the empty-list good-news copy, a planted claim's regions, the real server's refusal of
- * a remedy POST, and the TERMINAL render. The screens are removed from the MVP console, so those
- * positive expectations are replaced by this negative one rather than deleted; originals are in git
- * history. The backend claim controls are untouched.
- */
-test.describe('SC-15/SC-16 Claims -- deferred (D24-01) @safety', () => {
-  test('the list and detail URLs meet an honest deferred state, with no claim control and no claim call', async ({
-    page,
-  }) => {
-    const claimCalls: string[] = [];
-    page.on('request', (r) => {
-      const u = new URL(r.url());
-      if (u.pathname.startsWith('/v1/') && /claim/i.test(u.pathname)) claimCalls.push(`${r.method()} ${u.pathname}`);
-    });
-    for (const url of [`${base}/claims`, `${base}/claims/99999999-9999-4999-8999-999999999999`]) {
-      await page.goto(url);
-      const screen = page.locator('[data-deferred-screen="claims"]');
-      await expect(screen, url).toBeVisible();
-      expect(await screen.locator('input, textarea, select, form').count(), url).toBe(0);
-      await expect(page.locator('[data-screen="SC-15"], [data-screen="SC-16"]')).toHaveCount(0);
-    }
-    expect(claimCalls, claimCalls.join(' | ')).toEqual([]);
-  });
-});
+// SC-15/SC-16 Claims were retired with the Reservation model (2026-11-25); chooser.spec.ts
+// asserts their URLs are gone.
 
 test.describe('SC-20/SC-21 -- a real conversation, both sides driven', () => {
   test('a buyer writes through the buyer wire; the seller reads, is told what is absent, and replies', async ({ browser, page, baseURL }) => {
@@ -187,18 +158,6 @@ test.describe('SC-20/SC-21 -- a real conversation, both sides driven', () => {
       );
       expect(sent.status()).toBe(201);
 
-      // A SECOND buyer message carries an ORDER ANCHOR (D-73: the anchor
-      // rides the message; the seed's confirmed order belongs to this
-      // buyer-seller pair, so the ownership probe passes).
-      const anchored = await buyerCtx.request.post(
-        `http://localhost:3000/v1/conversations/${conversation_id}/messages`,
-        {
-          headers: { 'Idempotency-Key': crypto.randomUUID(), 'X-Adulis-Client': 'web/0.0.0', ...origin },
-          data: { text: 'Is my paid order ready?', order_id: '5eed0000-0000-4000-8000-000000000013' },
-        },
-      );
-      expect(anchored.status()).toBe(201);
-
       // The seller console: the list shows the thread (and says what the
       // wire does not carry), the thread shows the buyer's words, and the
       // reply is DRIVEN -- a real POST through the real key gate.
@@ -213,13 +172,10 @@ test.describe('SC-20/SC-21 -- a real conversation, both sides driven', () => {
 
       await expect(page.locator('[data-screen="SC-21"]')).toBeVisible();
       await expect(page.getByText('Can I collect after 5 PM?')).toBeVisible();
+      // The pinned order card went with the order screens: it linked to nothing left.
+      await expect(page.locator('.pinned-order')).toHaveCount(0);
 
-      // The pin derives from the MESSAGES (D-73): the anchored message put
-      // an order in the thread, so the pinned card renders with its link.
-      await expect(page.locator('.pinned-order')).toBeVisible();
-      await expect(page.locator('.pinned-order').getByRole('link', { name: 'Open order' })).toBeVisible();
-
-      // Oldest first: the first message renders ABOVE the second.
+      // Oldest first: the buyer's message renders above the reply sent below.
       const bodies = page.locator('.message-body');
       await expect(bodies.first()).toHaveText('Can I collect after 5 PM?');
 

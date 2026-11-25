@@ -155,6 +155,16 @@ describe('T6 / G1.2 -- NEW leaves only on tenure AND orders', () => {
         to_level: 'ESTABLISHED',
         source: 'COMPUTED',
       });
+
+      // The cancellation rate counted Reservations; since 0063 it is NOT
+      // MEASURED -- JSON null in the evidence, never a fabricated zero.
+      const snap = await c.query(
+        `SELECT evidence_snapshot ? 'cancellation_rate' AS present,
+                jsonb_typeof(evidence_snapshot->'cancellation_rate') AS kind
+           FROM core.seller_level_state WHERE seller_id = $1`,
+        [seller],
+      );
+      expect(snap.rows[0]).toEqual({ present: true, kind: 'null' });
     }));
 
   it('59 days and 100 orders is NEW -- THE AND IS THE WHOLE RULING', () =>

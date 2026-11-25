@@ -71,8 +71,7 @@ describe('C2 — catalogue, media and stock', () => {
       [M],
     );
     await admin.query(
-      `INSERT INTO core.timing_config (id, market_id, reservation_window,
-         payment_confirmation_window, fulfilment_window, offline_sync_horizon,
+      `INSERT INTO core.timing_config (id, market_id, payment_confirmation_window, fulfilment_window, offline_sync_horizon,
          payout_activation_delay, recovery_cooling_period,
          deleted_number_cooling_period, refund_ack_window, media_retention,
          level_credit_grace, mobile_session_lifetime, console_session_lifetime,
@@ -81,7 +80,7 @@ describe('C2 — catalogue, media and stock', () => {
          new_device_payout_lock, same_seller_cancellation_threshold,
          same_seller_cooldown, cross_seller_cooldown_ladder,
          cancellation_counter_decay)
-       VALUES (gen_random_uuid(), $1, '48 hours','24 hours','72 hours','7 days',
+       VALUES (gen_random_uuid(), $1,'24 hours','72 hours','7 days',
          '24 hours','7 days','30 days','48 hours','90 days','24 hours',
          '30 days','12 hours','30 minutes','7 days','8 hours','5 minutes',5,
          '5 minutes','24 hours',3,'1 hour',
@@ -189,7 +188,6 @@ describe('C2 — catalogue, media and stock', () => {
       `DELETE FROM core.idempotency_record WHERE actor_id IN ('${OWNER}','${ANALYST}','${STRANGER}')`,
       `DELETE FROM analytics.event WHERE market_id='${M}'`,
       `DELETE FROM core.moderation_queue_item WHERE target_id IN (SELECT id FROM core.product WHERE market_id='${M}')`,
-      `DELETE FROM core.reservation WHERE seller_id='${SELLER}'`,
       `DELETE FROM core.order_state_transition WHERE order_id IN (SELECT id FROM core."order" WHERE market_id='${M}')`,
       `DELETE FROM core.order_payout_snapshot WHERE seller_id='${SELLER}'`,
       `DELETE FROM core."order" WHERE market_id='${M}'`,
@@ -398,28 +396,24 @@ describe('C2 — catalogue, media and stock', () => {
       expect(r.body.data[0].reason).toBeDefined();
     });
 
-    it('a variant with a live reservation cannot be deleted (409)', async () => {
-      const orderId = '77777777-6666-4000-8000-0000000000f0';
-      await admin.query(
-        `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id,
-           state, expires_at, total_currency, display_currency)
-         VALUES ($1,$2,$3,$4,'CREATED', now()+interval '48 hours','ETB','ETB')`,
-        [orderId, M, SELLER, BUYER],
-      );
-      await admin.query(
-        `INSERT INTO core.reservation (id, order_id, variant_id, seller_id,
-           buyer_account_id, quantity, unit_price_minor, unit_price_currency)
-         VALUES (gen_random_uuid(), $1, $2, $3, $4, 1, 250000, 'ETB')`,
-        [orderId, variantId, SELLER, BUYER],
-      );
-      const r = await write('delete', `/v1/seller/variants/${variantId}`).expect(409);
-      expect(r.body.code).toBe('VARIANT_HAS_ACTIVE_ORDERS');
-      // WO-CAT-001A: withdrawing by PATCH meets the same guard; free-text statuses are refused.
-      const viaPatch = await write('patch', `/v1/seller/variants/${variantId}`).send({ status: 'WITHDRAWN' }).expect(409);
-      expect(viaPatch.body.code).toBe('VARIANT_HAS_ACTIVE_ORDERS');
+    it('delete and withdraw resolve ownership first: 404 for a variant or product owned by another Seller', async () => {
+      // A non-member and an unknown id get the same 404; the real rows are untouched,
+      // because the media tests below still need them.
+      const missing = '77777777-6666-4000-8000-0000000000f0';
+      await write('delete', `/v1/seller/variants/${variantId}`, STRANGER_S).expect(404);
+      await write('delete', `/v1/seller/products/${productId}`, STRANGER_S).expect(404);
+      await write('delete', `/v1/seller/variants/${missing}`).expect(404);
+      await write('patch', `/v1/seller/variants/${missing}`).send({ status: 'WITHDRAWN' }).expect(404);
+      await write('delete', `/v1/seller/products/${missing}`).expect(404);
+      // WO-CAT-001A: free-text statuses are refused.
       await write('patch', `/v1/seller/variants/${variantId}`).send({ status: 'PAUSED' }).expect(400);
-      const p = await write('delete', `/v1/seller/products/${productId}`).expect(409);
-      expect(p.body.code).toBe('PRODUCT_HAS_ACTIVE_ORDERS');
+      const rows = await admin.query(
+        `SELECT (SELECT status FROM core.product_variant WHERE id = $1) AS variant_status,
+                (SELECT count(*)::int FROM core.product WHERE id = $2) AS products`,
+        [variantId, productId],
+      );
+      expect(rows.rows[0].variant_status).not.toBe('WITHDRAWN');
+      expect(rows.rows[0].products).toBe(1);
     });
   });
 

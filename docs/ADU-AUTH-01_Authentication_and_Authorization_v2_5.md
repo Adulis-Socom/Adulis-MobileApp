@@ -105,7 +105,6 @@ CHECK (code NOT IN ( ... six codes ... ) OR surfaces = ARRAY['CONSOLE'])
 | **S5.1** | Credential presentation | *"a change to ADU-API-01 that it has not absorbed"* | **Absorbed.** ADU-API-01 v1.4 S5.1 |
 | **S17** | The step-up `CHECK` | Stated `surfaces = '{CONSOLE}'` while ADU-DB-01 v1.6 said `ARRAY['SELLER_WEB']` | **Reconciled.** v2.0 was right and v1.7 now matches it |
 | **S6** | SMS fallback | Required, no provider named | **Structure decided** (ADU-CON-02 S18): local aggregator primary, Twilio Verify secondary with voice fallback. **Vendor still pending Phase 0 measurement** |
-| **S15.1** | Permission catalogue | -- | **`seller.fulfilment:write` added.** `seller.order_ready:update` gains the column and endpoint it lacked |
 | **F1, F2** | SMS and SIM swap | Open | **Still open.** Neither is closed by anything in this revision, and S6 and S7 stand unaltered |
 
 **The one new ruling is R17, and it came from a cost model rather than a threat model** -- which is unusual enough to be worth flagging. ADU-CON-02-A1 found that the 30-minute idle timeout, combined with OTP as the only sign-in factor, spends **$648/month on sign-in messages at 1,000 sellers and $6,500 at 10,000**, against a $50 infrastructure target. S6 already warned that *"session lifetime is partly an SMS-cost decision, not only a security one."* A1 put a number on it, and the number changed the ruling.
@@ -554,32 +553,24 @@ Conversely, an Analyst cannot change a price on a Business-tier seller. Entitlem
 
 ### 15.1 Seller domain
 
+**Retired by migration 0063 (founder pre-launch authorization, 2026-11-25):** the thirteen codes of the legacy order, payment, refund, claim, handoff and payout flows (`seller.orders:read`, `seller.orders:respond`, `seller.orders:reissue_instructions`, `seller.order_ready:update`, `seller.payment:confirm`, `seller.payment_evidence:read`, `seller.refunds:report`, `seller.claims:read`, `seller.claims:respond`, `seller.handoff:read`, `seller.handoff:custody_transfer`, `seller.payout:read`, `seller.payout:update`). Two of them carried step-up, so the eight of S16.3 are now six.
+
 **M** = reachable from the Seller Companion on mobile. **S** = requires step-up. Everything unmarked is console-only.
 
 | Group | Permission | | |
 |---|---|---|---|
-| **Orders** | `seller.orders:read` | **M** | |
-| | `seller.orders:respond` | **M** | Cancel a line -- surfaced as *Can't Fulfil* |
-| | `seller.order_ready:update` | **M** | Discharged in v2.1 -- `ready_at` and `fn_mark_order_ready` (ADU-DB-01 S12.6a), `POST /v1/seller/orders/{id}/ready` |
-| | `seller.orders:reissue_instructions` | | **S** |
-| **Payment** | `seller.payment_evidence:read` | **M** | |
-| | `seller.payment:confirm` | **M** | *Confirm Payment Received* / *Payment Not Received* |
-| | `seller.refunds:report` | | |
 | **Catalogue** | `seller.products:read`  -  `seller.products:write`  -  `seller.products:publish`  -  `seller.media:write` | | |
 | **Stock** | `seller.stock:read`  -  `seller.stock:write`  -  `seller.stock:bulk_write` | | |
 | **Store** | `seller.store:read`  -  `seller.store:write`  -  `seller.availability:write`  -  **`seller.fulfilment:write`** | | New in v2.1 |
 | **Messaging** | `seller.messages:read`  -  `seller.messages:send` | **M** | Free on every tier |
-| **Handoff** | `seller.handoff:read` | **M** | Includes the QR |
-| | `seller.handoff:custody_transfer`  -  `seller.couriers:manage` | | |
+| **Handoff** | `seller.couriers:manage` | | |
 | **Feedback** | `seller.reviews:read` | **M**2 | |
-| | `seller.claims:read`  -  `seller.claims:respond` | | |
 | **Analytics** | `seller.analytics.basic:read` | **M**2 | |
 | | `seller.analytics.full:read`  -  `seller.analytics:export` | | |
 | **Notifications** | `seller.notifications:read` | **M** | |
 | | `seller.notifications.preferences:write` | **M**2 | |
 | **Automation** | `seller.chatbot:configure`  -  `seller.chatbot.flows:write`  -  `seller.broadcasts:send` | | |
-| **Administrative** | `seller.payout:read`  -  `seller.payout:update` | | **S** |
-| | `seller.staff:admin`  -  `seller.ownership:transfer` | | **S** |
+| **Administrative** | `seller.staff:admin`  -  `seller.ownership:transfer` | | **S** |
 | | `seller.subscription:update`  -  `seller.identity:manage` | | **S** |
 | | `seller.account:delete`  -  `seller.sessions:revoke_all` | | **S** |
 
@@ -619,19 +610,14 @@ The expansion below applies three rules, stated so that any row can be checked r
 2. **Where a group holds only writes, `o` resolves to the narrowest code** -- the one whose consequences stop inside the role's own work.
 3. **Reads that every role needs to do its job are granted to all six** -- `orders:read`, `products:read`, `stock:read`, `store:read`, `reviews:read`, `notifications:read`, `analytics.basic:read`. Withholding them produces a role that cannot see the thing it is meant to act on, and none of them exposes money, identity or a buyer's contact details.
 
-### 16.2 The matrix -- 42 codes, 6 roles, 139 grants
+### 16.2 The matrix -- 29 codes, 6 roles, 96 grants
+
+**Retired by migration 0063 (founder pre-launch authorization, 2026-11-25):** the thirteen codes of the legacy order, payment, refund, claim, handoff and payout flows (`seller.orders:read`, `seller.orders:respond`, `seller.orders:reissue_instructions`, `seller.order_ready:update`, `seller.payment:confirm`, `seller.payment_evidence:read`, `seller.refunds:report`, `seller.claims:read`, `seller.claims:respond`, `seller.handoff:read`, `seller.handoff:custody_transfer`, `seller.payout:read`, `seller.payout:update`). Two of them carried step-up, so the eight of S16.3 are now six.
 
 **ASCII only.** `Y` granted  -  `.` not granted  -  `YES` in the Step-up column marks the eight of S16.3. Columns are Owner, Admin, Sales/Support, Inventory, Analyst, Campaign -- whose `core.team_role` values are `OWNER`, `ADMIN`, `SALES_SUPPORT`, `INVENTORY`, `ANALYST`, **`CAMPAIGN_MANAGER`**.
 
 | Group | Permission code | Step-up | Own | Adm | Sal | Inv | Ana | Cam |
 |---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| Orders | `seller.orders:read` |  | Y | Y | Y | Y | Y | Y |
-|  | `seller.orders:respond` |  | Y | Y | Y | . | . | . |
-|  | `seller.order_ready:update` |  | Y | Y | Y | Y | . | . |
-|  | `seller.orders:reissue_instructions` | YES | Y | Y | . | . | . | . |
-| Payment | `seller.payment_evidence:read` |  | Y | Y | Y | . | . | . |
-|  | `seller.payment:confirm` |  | Y | Y | Y | . | . | . |
-|  | `seller.refunds:report` |  | Y | Y | Y | . | . | . |
 | Catalogue | `seller.products:read` |  | Y | Y | Y | Y | Y | Y |
 |  | `seller.products:write` |  | Y | Y | . | Y | . | . |
 |  | `seller.products:publish` |  | Y | Y | . | Y | . | . |
@@ -645,12 +631,8 @@ The expansion below applies three rules, stated so that any row can be checked r
 |  | `seller.fulfilment:write` |  | Y | Y | . | Y | . | . |
 | Messaging | `seller.messages:read` |  | Y | Y | Y | . | . | . |
 |  | `seller.messages:send` |  | Y | Y | Y | . | . | . |
-| Handoff | `seller.handoff:read` |  | Y | Y | Y | Y | . | . |
-|  | `seller.handoff:custody_transfer` |  | Y | Y | Y | Y | . | . |
-|  | `seller.couriers:manage` |  | Y | Y | Y | . | . | . |
+| Handoff | `seller.couriers:manage` |  | Y | Y | Y | . | . | . |
 | Feedback | `seller.reviews:read` |  | Y | Y | Y | Y | Y | Y |
-|  | `seller.claims:read` |  | Y | Y | Y | . | Y | . |
-|  | `seller.claims:respond` |  | Y | Y | Y | . | . | . |
 | Analytics | `seller.analytics.basic:read` |  | Y | Y | Y | Y | Y | Y |
 |  | `seller.analytics.full:read` |  | Y | Y | . | . | Y | Y |
 |  | `seller.analytics:export` |  | Y | Y | . | . | Y | . |
@@ -659,9 +641,7 @@ The expansion below applies three rules, stated so that any row can be checked r
 | Automation | `seller.chatbot:configure` |  | Y | Y | . | . | . | Y |
 |  | `seller.chatbot.flows:write` |  | Y | Y | . | . | . | Y |
 |  | `seller.broadcasts:send` |  | Y | Y | . | . | . | Y |
-| Administrative | `seller.payout:read` |  | Y | Y | . | . | . | . |
-|  | `seller.payout:update` | YES | Y | Y | . | . | . | . |
-|  | `seller.staff:admin` | YES | Y | Y | . | . | . | . |
+| Administrative | `seller.staff:admin` | YES | Y | Y | . | . | . | . |
 |  | `seller.ownership:transfer` | YES | Y | . | . | . | . | . |
 |  | `seller.subscription:update` | YES | Y | Y | . | . | . | . |
 |  | `seller.identity:manage` | YES | Y | Y | . | . | . | . |
@@ -689,16 +669,10 @@ Generated from the same source as S16.2, so the two cannot disagree. **ASCII onl
 
 ```sql
 -- ADU-AUTH-01 v2.3 SS16.2a -- generated, ASCII only.
--- 42 permissions, 139 grants. Role values are core.team_role literals.
+-- 29 permissions, 96 grants (42 / 139 less the 13 codes retired by migration 0063).
+-- Role values are core.team_role literals.
 
 INSERT INTO core.permission (code, surfaces, requires_step_up) VALUES
-  ('seller.orders:read', ARRAY['MOBILE','CONSOLE']::core.session_audience[], false),
-  ('seller.orders:respond', ARRAY['MOBILE','CONSOLE']::core.session_audience[], false),
-  ('seller.order_ready:update', ARRAY['MOBILE','CONSOLE']::core.session_audience[], false),
-  ('seller.orders:reissue_instructions', ARRAY['CONSOLE']::core.session_audience[], true),
-  ('seller.payment_evidence:read', ARRAY['MOBILE','CONSOLE']::core.session_audience[], false),
-  ('seller.payment:confirm', ARRAY['MOBILE','CONSOLE']::core.session_audience[], false),
-  ('seller.refunds:report', ARRAY['CONSOLE']::core.session_audience[], false),
   ('seller.products:read', ARRAY['CONSOLE']::core.session_audience[], false),
   ('seller.products:write', ARRAY['CONSOLE']::core.session_audience[], false),
   ('seller.products:publish', ARRAY['CONSOLE']::core.session_audience[], false),
@@ -712,12 +686,8 @@ INSERT INTO core.permission (code, surfaces, requires_step_up) VALUES
   ('seller.fulfilment:write', ARRAY['CONSOLE']::core.session_audience[], false),
   ('seller.messages:read', ARRAY['MOBILE','CONSOLE']::core.session_audience[], false),
   ('seller.messages:send', ARRAY['MOBILE','CONSOLE']::core.session_audience[], false),
-  ('seller.handoff:read', ARRAY['MOBILE','CONSOLE']::core.session_audience[], false),
-  ('seller.handoff:custody_transfer', ARRAY['CONSOLE']::core.session_audience[], false),
   ('seller.couriers:manage', ARRAY['CONSOLE']::core.session_audience[], false),
   ('seller.reviews:read', ARRAY['MOBILE','CONSOLE']::core.session_audience[], false),
-  ('seller.claims:read', ARRAY['CONSOLE']::core.session_audience[], false),
-  ('seller.claims:respond', ARRAY['CONSOLE']::core.session_audience[], false),
   ('seller.analytics.basic:read', ARRAY['MOBILE','CONSOLE']::core.session_audience[], false),
   ('seller.analytics.full:read', ARRAY['CONSOLE']::core.session_audience[], false),
   ('seller.analytics:export', ARRAY['CONSOLE']::core.session_audience[], false),
@@ -726,8 +696,6 @@ INSERT INTO core.permission (code, surfaces, requires_step_up) VALUES
   ('seller.chatbot:configure', ARRAY['CONSOLE']::core.session_audience[], false),
   ('seller.chatbot.flows:write', ARRAY['CONSOLE']::core.session_audience[], false),
   ('seller.broadcasts:send', ARRAY['CONSOLE']::core.session_audience[], false),
-  ('seller.payout:read', ARRAY['CONSOLE']::core.session_audience[], false),
-  ('seller.payout:update', ARRAY['CONSOLE']::core.session_audience[], true),
   ('seller.staff:admin', ARRAY['CONSOLE']::core.session_audience[], true),
   ('seller.ownership:transfer', ARRAY['CONSOLE']::core.session_audience[], true),
   ('seller.subscription:update', ARRAY['CONSOLE']::core.session_audience[], true),
@@ -736,30 +704,6 @@ INSERT INTO core.permission (code, surfaces, requires_step_up) VALUES
   ('seller.sessions:revoke_all', ARRAY['CONSOLE']::core.session_audience[], true);
 
 INSERT INTO core.role_permission (role, permission_code) VALUES
-  ('OWNER', 'seller.orders:read'),
-  ('ADMIN', 'seller.orders:read'),
-  ('SALES_SUPPORT', 'seller.orders:read'),
-  ('INVENTORY', 'seller.orders:read'),
-  ('ANALYST', 'seller.orders:read'),
-  ('CAMPAIGN_MANAGER', 'seller.orders:read'),
-  ('OWNER', 'seller.orders:respond'),
-  ('ADMIN', 'seller.orders:respond'),
-  ('SALES_SUPPORT', 'seller.orders:respond'),
-  ('OWNER', 'seller.order_ready:update'),
-  ('ADMIN', 'seller.order_ready:update'),
-  ('SALES_SUPPORT', 'seller.order_ready:update'),
-  ('INVENTORY', 'seller.order_ready:update'),
-  ('OWNER', 'seller.orders:reissue_instructions'),
-  ('ADMIN', 'seller.orders:reissue_instructions'),
-  ('OWNER', 'seller.payment_evidence:read'),
-  ('ADMIN', 'seller.payment_evidence:read'),
-  ('SALES_SUPPORT', 'seller.payment_evidence:read'),
-  ('OWNER', 'seller.payment:confirm'),
-  ('ADMIN', 'seller.payment:confirm'),
-  ('SALES_SUPPORT', 'seller.payment:confirm'),
-  ('OWNER', 'seller.refunds:report'),
-  ('ADMIN', 'seller.refunds:report'),
-  ('SALES_SUPPORT', 'seller.refunds:report'),
   ('OWNER', 'seller.products:read'),
   ('ADMIN', 'seller.products:read'),
   ('SALES_SUPPORT', 'seller.products:read'),
@@ -807,14 +751,6 @@ INSERT INTO core.role_permission (role, permission_code) VALUES
   ('OWNER', 'seller.messages:send'),
   ('ADMIN', 'seller.messages:send'),
   ('SALES_SUPPORT', 'seller.messages:send'),
-  ('OWNER', 'seller.handoff:read'),
-  ('ADMIN', 'seller.handoff:read'),
-  ('SALES_SUPPORT', 'seller.handoff:read'),
-  ('INVENTORY', 'seller.handoff:read'),
-  ('OWNER', 'seller.handoff:custody_transfer'),
-  ('ADMIN', 'seller.handoff:custody_transfer'),
-  ('SALES_SUPPORT', 'seller.handoff:custody_transfer'),
-  ('INVENTORY', 'seller.handoff:custody_transfer'),
   ('OWNER', 'seller.couriers:manage'),
   ('ADMIN', 'seller.couriers:manage'),
   ('SALES_SUPPORT', 'seller.couriers:manage'),
@@ -824,13 +760,6 @@ INSERT INTO core.role_permission (role, permission_code) VALUES
   ('INVENTORY', 'seller.reviews:read'),
   ('ANALYST', 'seller.reviews:read'),
   ('CAMPAIGN_MANAGER', 'seller.reviews:read'),
-  ('OWNER', 'seller.claims:read'),
-  ('ADMIN', 'seller.claims:read'),
-  ('SALES_SUPPORT', 'seller.claims:read'),
-  ('ANALYST', 'seller.claims:read'),
-  ('OWNER', 'seller.claims:respond'),
-  ('ADMIN', 'seller.claims:respond'),
-  ('SALES_SUPPORT', 'seller.claims:respond'),
   ('OWNER', 'seller.analytics.basic:read'),
   ('ADMIN', 'seller.analytics.basic:read'),
   ('SALES_SUPPORT', 'seller.analytics.basic:read'),
@@ -861,10 +790,6 @@ INSERT INTO core.role_permission (role, permission_code) VALUES
   ('OWNER', 'seller.broadcasts:send'),
   ('ADMIN', 'seller.broadcasts:send'),
   ('CAMPAIGN_MANAGER', 'seller.broadcasts:send'),
-  ('OWNER', 'seller.payout:read'),
-  ('ADMIN', 'seller.payout:read'),
-  ('OWNER', 'seller.payout:update'),
-  ('ADMIN', 'seller.payout:update'),
   ('OWNER', 'seller.staff:admin'),
   ('ADMIN', 'seller.staff:admin'),
   ('OWNER', 'seller.ownership:transfer'),

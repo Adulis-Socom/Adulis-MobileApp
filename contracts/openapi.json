@@ -871,36 +871,6 @@
         ]
       }
     },
-    "/v1/billing/mark-transferred": {
-      "post": {
-        "operationId": "BillingController_markTransferred",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "The seller's own assertion; reconciliation is operator work.",
-        "tags": [
-          "Billing"
-        ]
-      }
-    },
-    "/v1/billing/purchase-intent": {
-      "post": {
-        "operationId": "BillingController_purchaseIntent",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Opens a 24-hour intent at the locked rate; step-up SUBSCRIPTION_CHANGE.",
-        "tags": [
-          "Billing"
-        ]
-      }
-    },
     "/v1/billing/subscription": {
       "get": {
         "operationId": "BillingController_subscription",
@@ -1149,113 +1119,6 @@
           {
             "bearer": []
           }
-        ]
-      }
-    },
-    "/v1/claims": {
-      "post": {
-        "operationId": "ClaimsController_open",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Buyer opens; the evidence bundle attaches by trigger at open.",
-        "tags": [
-          "Claims"
-        ]
-      },
-      "get": {
-        "operationId": "ClaimsController_listBuyer",
-        "parameters": [
-          {
-            "name": "cursor",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Claims"
-        ]
-      }
-    },
-    "/v1/claims/{id}": {
-      "get": {
-        "operationId": "ClaimsController_read",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Claims"
-        ]
-      }
-    },
-    "/v1/claims/{id}/evidence": {
-      "post": {
-        "operationId": "ClaimsController_evidence",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "The bank record: a single transaction, not a statement (X15).",
-        "tags": [
-          "Claims"
-        ]
-      }
-    },
-    "/v1/claims/{id}/evidence-export": {
-      "post": {
-        "operationId": "ClaimsController_export",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "The buyer's own transaction; nothing about who the seller is (X15).",
-        "tags": [
-          "Claims"
         ]
       }
     },
@@ -2483,69 +2346,6 @@
         ]
       }
     },
-    "/v1/courier/orders": {
-      "get": {
-        "operationId": "HandoffController_courierOrders",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Currently assigned orders only — by row-level security.",
-        "tags": [
-          "Handoff"
-        ]
-      }
-    },
-    "/v1/courier/orders/{id}": {
-      "get": {
-        "operationId": "HandoffController_courierOrder",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "The QR is present only once custody has been accepted (R25).",
-        "tags": [
-          "Handoff"
-        ]
-      }
-    },
-    "/v1/courier/orders/{id}/custody-accept": {
-      "post": {
-        "operationId": "HandoffController_custodyAccept",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Event A, courier side.",
-        "tags": [
-          "Handoff"
-        ]
-      }
-    },
     "/v1/deletion/confirm": {
       "post": {
         "operationId": "DeletionController_confirm",
@@ -3251,21 +3051,6 @@
         ]
       }
     },
-    "/v1/handoffs/sync": {
-      "post": {
-        "operationId": "HandoffController_sync",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Batch, per-item outcomes, never fails as a unit. 200 whenever well-formed.",
-        "tags": [
-          "Handoff"
-        ]
-      }
-    },
     "/v1/notifications": {
       "get": {
         "operationId": "NotificationsController_list",
@@ -3547,257 +3332,6 @@
           {
             "bearer": []
           }
-        ]
-      }
-    },
-    "/v1/orders": {
-      "post": {
-        "operationId": "OrdersController_createOrder",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Whole-cart revalidation in one transaction; 409 with complete items[].",
-        "tags": [
-          "Orders"
-        ]
-      },
-      "get": {
-        "operationId": "OrdersController_listOrders",
-        "parameters": [
-          {
-            "name": "limit",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cursor",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/v1/orders/{id}": {
-      "get": {
-        "operationId": "OrdersController_getOrder",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "The authoritative order card; expires_at is a time, never a duration.",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/v1/orders/{id}/cancel": {
-      "post": {
-        "operationId": "OrdersController_cancelOrder",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Convenience: cancels every remaining line.",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/v1/orders/{id}/confirm-receipt": {
-      "post": {
-        "operationId": "OrdersController_confirmReceipt",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "The tapped tier — medium weight, no level.",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/v1/orders/{id}/payment-evidence": {
-      "post": {
-        "operationId": "FinancialController_evidence",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Upload via signed URL, then commit — R18 frames at rest.",
-        "tags": [
-          "Financial"
-        ]
-      }
-    },
-    "/v1/orders/{id}/payment-instructions": {
-      "get": {
-        "operationId": "FinancialController_paymentInstructions",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "The C3 disclosure path: one function call, decrypted here, never cached.",
-        "tags": [
-          "Financial"
-        ]
-      }
-    },
-    "/v1/orders/{id}/refunds/{rid}/acknowledge": {
-      "post": {
-        "operationId": "OrdersController_acknowledgeRefund",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "rid",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Explicit buyer action, never inferred.",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/v1/orders/{id}/reservations/{rid}/cancel": {
-      "post": {
-        "operationId": "OrdersController_cancelLine",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "rid",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/v1/orders/{id}/review": {
-      "post": {
-        "operationId": "ReviewsController_create",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "One per order, terminal orders only; the badge is derived, never sent.",
-        "tags": [
-          "Reviews"
         ]
       }
     },
@@ -4466,7 +4000,7 @@
             "cookie": []
           }
         ],
-        "summary": "Views, reservations, conversion, funnel over a window — entitlement-gated. product_views counts server-recorded Product openings (a read the client declares a revalidation is not recorded); it is NOT de-duplicated and NOT unique visitors.",
+        "summary": "Storefront and Product views over a window — entitlement-gated. product_views counts server-recorded Product openings (a read the client declares a revalidation is not recorded); it is NOT de-duplicated and NOT unique visitors.",
         "tags": [
           "Analytics"
         ],
@@ -5033,54 +4567,6 @@
         "description": "Requires `seller.availability:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
-    "/v1/seller/claims": {
-      "get": {
-        "operationId": "ClaimsController_listSeller",
-        "parameters": [
-          {
-            "name": "cursor",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Seller-scoped; GET /v1/claims is buyer-shaped.",
-        "tags": [
-          "Claims"
-        ]
-      }
-    },
-    "/v1/seller/claims/{id}/remedy": {
-      "post": {
-        "operationId": "ClaimsController_remedy",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "REFUND or FULFIL — the seller's choice (X15).",
-        "tags": [
-          "Claims"
-        ]
-      }
-    },
     "/v1/seller/closure": {
       "post": {
         "operationId": "DeletionController_enterClosure",
@@ -5172,7 +4658,7 @@
             "cookie": []
           }
         ],
-        "summary": "Enters CLOSING: new reservations stop, existing orders operable.",
+        "summary": "Enters CLOSING (ACTIVE -> CLOSING); reversible by DELETE seller/closure.",
         "tags": [
           "Deletion"
         ],
@@ -6092,316 +5578,6 @@
         ]
       }
     },
-    "/v1/seller/orders": {
-      "get": {
-        "operationId": "OrdersController_listSellerOrders",
-        "parameters": [
-          {
-            "name": "limit",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cursor",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "bucket",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "bucket membership is the SERVER's (D-154).",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/v1/seller/orders/{id}": {
-      "get": {
-        "operationId": "OrdersController_getSellerOrder",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/v1/seller/orders/{id}/courier-assignment": {
-      "post": {
-        "operationId": "HandoffController_assignCourier",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Handoff"
-        ]
-      }
-    },
-    "/v1/seller/orders/{id}/custody-transfer": {
-      "post": {
-        "operationId": "HandoffController_custodyTransfer",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Event A, seller side. Never completes an order.",
-        "tags": [
-          "Handoff"
-        ]
-      }
-    },
-    "/v1/seller/orders/{id}/payment-evidence": {
-      "get": {
-        "operationId": "FinancialController_sellerEvidence",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Logged access, derived role, streamed with constant memory, never cached.",
-        "tags": [
-          "Financial"
-        ]
-      }
-    },
-    "/v1/seller/orders/{id}/payment/confirm": {
-      "post": {
-        "operationId": "OrdersController_confirmPayment",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "\"Confirm Payment Received\", never \"Accept Payment\".",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/v1/seller/orders/{id}/payment/reject": {
-      "post": {
-        "operationId": "OrdersController_rejectPayment",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "First rejection opens a 12-hour retry window; the second ends the order.",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/v1/seller/orders/{id}/qr": {
-      "get": {
-        "operationId": "HandoffController_qr",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "409 ORDER_NOT_READYABLE before PAYMENT_CONFIRMED (R20).",
-        "tags": [
-          "Handoff"
-        ]
-      }
-    },
-    "/v1/seller/orders/{id}/ready": {
-      "post": {
-        "operationId": "OrdersController_markReady",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Idempotent by state, not only by key. 409 before PAYMENT_CONFIRMED.",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/v1/seller/orders/{id}/refunds": {
-      "post": {
-        "operationId": "OrdersController_reportRefund",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Seller reports; buyer acknowledges separately.",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/v1/seller/orders/{id}/reissue-instructions": {
-      "post": {
-        "operationId": "FinancialController_reissue",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Single order only. No bulk endpoint exists (S8.5).",
-        "tags": [
-          "Financial"
-        ]
-      }
-    },
-    "/v1/seller/orders/{id}/reservations/{rid}/cancel": {
-      "post": {
-        "operationId": "OrdersController_cancelLineAsSeller",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "rid",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "\"Can't Fulfil\". There is no accept action.",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
     "/v1/seller/ownership-transfer": {
       "get": {
         "operationId": "OwnershipController_pending",
@@ -6654,62 +5830,6 @@
           {
             "bearer": []
           }
-        ]
-      }
-    },
-    "/v1/seller/payout": {
-      "get": {
-        "operationId": "FinancialController_getPayout",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Financial"
-        ]
-      },
-      "post": {
-        "operationId": "FinancialController_requestPayoutChange",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Enters PENDING; activates after the delay. Step-up in the body.",
-        "tags": [
-          "Financial"
-        ]
-      }
-    },
-    "/v1/seller/payout/history": {
-      "get": {
-        "operationId": "FinancialController_payoutHistory",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Financial"
-        ]
-      }
-    },
-    "/v1/seller/payout/pending": {
-      "delete": {
-        "operationId": "FinancialController_cancelPayoutChange",
-        "parameters": [],
-        "responses": {
-          "204": {
-            "description": ""
-          }
-        },
-        "summary": "No step-up — reverting is easier than changing.",
-        "tags": [
-          "Financial"
         ]
       }
     },
@@ -7287,7 +6407,7 @@
             "cookie": []
           }
         ],
-        "summary": "409 PRODUCT_HAS_ACTIVE_ORDERS where any reservation is live.",
+        "summary": "Deletes an owned Product and schedules its media; 404 for a foreign Product.",
         "tags": [
           "Catalogue"
         ],
@@ -12219,19 +11339,6 @@
               "SELLER_UNAVAILABLE",
               "TRANSACTION_CAP_EXCEEDED",
               "ILLEGAL_TRANSITION",
-              "ORDER_NOT_PAYABLE",
-              "ORDER_ALREADY_TERMINAL",
-              "DUPLICATE_RESERVATION",
-              "BUYER_COOLDOWN_ACTIVE",
-              "ORDER_NOT_READYABLE",
-              "EVIDENCE_REQUIRED",
-              "EVIDENCE_TOO_LARGE",
-              "PAYMENT_ALREADY_DECIDED",
-              "NOT_ORDER_BUYER",
-              "SCAN_SIGNATURE_INVALID",
-              "SCAN_PREDATES_TOKEN",
-              "SCAN_NOT_ORDER_BUYER",
-              "COURIER_CANNOT_SCAN",
               "PUBLICATION_BLOCKED",
               "ELIGIBILITY_NOT_SATISFIED",
               "TIER_LIMIT_REACHED",
@@ -12239,7 +11346,6 @@
               "HANDLE_TAKEN",
               "FULFILMENT_METHOD_REQUIRED",
               "PRODUCT_HAS_ACTIVE_ORDERS",
-              "VARIANT_HAS_ACTIVE_ORDERS",
               "PAYOUT_LOCKED",
               "PAYOUT_CHANGE_PENDING",
               "PAYOUT_PERMISSION_DENIED",
@@ -12673,7 +11779,7 @@
         "properties": {
           "code": {
             "type": "string",
-            "description": "The blocker, e.g. NON_TERMINAL_RESERVATIONS."
+            "description": "The blocker, e.g. SUBSCRIPTION_PAST_DUE."
           },
           "message_key": {
             "type": "string"
@@ -13297,18 +12403,6 @@
             "type": "integer",
             "description": "Products published now: point-in-time, independent of the window."
           },
-          "orders": {
-            "type": "integer",
-            "description": "Orders created inside the window."
-          },
-          "active_reservations": {
-            "type": "integer",
-            "description": "Reservations active now."
-          },
-          "completed_handoffs": {
-            "type": "integer",
-            "description": "Handoffs completed, in total."
-          },
           "followers": {
             "type": "integer",
             "description": "Buyers following the store now."
@@ -13319,9 +12413,6 @@
         },
         "required": [
           "products_published",
-          "orders",
-          "active_reservations",
-          "completed_handoffs",
           "followers",
           "window"
         ]

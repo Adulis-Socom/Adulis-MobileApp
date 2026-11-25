@@ -60,12 +60,15 @@ describe('the worker runtime', () => {
 
   it('schedules every job on a cron, with backfill disabled', () => {
     const items = cronItemsForTest();
-    // EVERY scheduled job, not just S24's twenty. A job registered as a task
-    // but absent from the cron list is a job that exists, typechecks, is
-    // covered by a unit test, and never once runs.
+    // EVERY scheduled job. A job registered as a task but absent from the
+    // cron list is a job that exists, typechecks, is covered by a unit test,
+    // and never once runs.
     expect(items).toHaveLength(SCHEDULED_JOBS.length);
-    expect(SCHEDULED_JOBS.length).toBeGreaterThan(S24_JOBS.length);
-    expect(items.map((i) => i.task)).toContain('payout.activate_due');
+    expect(SCHEDULED_JOBS).toBe(S24_JOBS);
+    // Retired with the Reservation model and its financial flows (migration 0063).
+    for (const gone of ['payout.activate_due', 'order.expire_sweep', 'subscription.collect_reminder']) {
+      expect(items.map((i) => i.task)).not.toContain(gone);
+    }
     for (const item of items) {
       expect(item.match).toBeTruthy();
       // A worker down for an hour must not wake and run sixty expiry
@@ -84,9 +87,9 @@ describe('the worker runtime', () => {
     // A heartbeat table that can hold two rows is a heartbeat that reads
     // green because SOME worker beat recently.
     expect(rows.rows).toHaveLength(1);
-    // Twenty-one SCHEDULED (S24's twenty plus payout activation from
-    // ADU-AUTH-01 v2.8 S20.1), not counting the heartbeat itself.
-    expect(rows.rows[0]).toMatchObject({ worker_id: 'test-worker', jobs_registered: 21 });
+    // Sixteen SCHEDULED (S24 less the five retired by 0063), not counting
+    // the heartbeat itself.
+    expect(rows.rows[0]).toMatchObject({ worker_id: 'test-worker', jobs_registered: 16 });
   });
 
   describe('/healthz reflects the worker, and never 503s because of it', () => {
@@ -144,18 +147,17 @@ describe('the worker runtime', () => {
     });
   });
 
-  it('boots, registers 22 tasks, ACTUALLY RUNS one through the queue, and stops cleanly', async () => {
+  it('boots, registers 17 tasks, ACTUALLY RUNS one through the queue, and stops cleanly', async () => {
     const log = pino({ level: 'silent' });
     await admin.query(`DELETE FROM jobs.worker_heartbeat`);
     const handle = await startWorker(log);
     try {
-      // Twenty from S24, the heartbeat (ADU-CON-02 S20.2), and payout
-      // activation (T20 S6.1 / ADU-AUTH-01 v2.8 S20.1 -- the job that makes
-      // the twenty-four hour delay mean twenty-four hours rather than "until
-      // the seller next opens the payout screen").
-      expect(handle.jobNames).toHaveLength(22);
-      expect(handle.jobNames).toContain('payout.activate_due');
-      expect(handle.jobNames).toContain('order.expire_sweep');
+      // Sixteen from S24 (five retired by migration 0063) and the heartbeat
+      // (ADU-CON-02 S20.2).
+      expect(handle.jobNames).toHaveLength(17);
+      expect(handle.jobNames).not.toContain('payout.activate_due');
+      expect(handle.jobNames).not.toContain('order.expire_sweep');
+      expect(handle.jobNames).toContain('notification.send');
       expect(handle.jobNames).toContain('worker.heartbeat');
 
       // THE ASSERTION THAT EARNS ITS KEEP. Registration alone proved

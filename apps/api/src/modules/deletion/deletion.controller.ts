@@ -255,7 +255,7 @@ export class DeletionController {
   @ApiOkResponse({ type: SellerClosureDto })
   @Post('seller/closure')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Enters CLOSING: new reservations stop, existing orders operable.' })
+  @ApiOperation({ summary: 'Enters CLOSING (ACTIVE -> CLOSING); reversible by DELETE seller/closure.' })
   async enterClosure(
     @Req() req: AuthedRequest,
     @Res({ passthrough: true }) res: Response,

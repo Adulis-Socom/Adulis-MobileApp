@@ -1,9 +1,10 @@
 /**
  * layout/Shell.tsx -- ADU-CON-03 v1.1 S2. Five primary destinations, NO
- * MORE. Desktop (>=1024px): persistent left sidebar, all five with More's
- * sections expanded. Tablet/mobile (<1024px): bottom bar with the four
- * primary destinations plus More, which opens a FULL-PAGE menu -- not a
- * drawer that traps focus.
+ * MORE -- four since the Reservation retirement removed Orders (2026-11-25).
+ * Desktop (>=1024px): persistent left sidebar, all of them with More's
+ * sections expanded. Tablet/mobile (<1024px): bottom bar with the primary
+ * destinations plus More, which opens a FULL-PAGE menu -- not a drawer that
+ * traps focus.
  *
  * Top bar, every route: the seller switcher (store name, other stores, and
  * "Create a store"), notification bell placeholder, account menu placeholder.
@@ -29,7 +30,6 @@ import { MORE_GROUPS } from './More';
 
 const NAV = [
   { key: 'home', to: '', label: en['console.nav.home'], end: true },
-  { key: 'orders', to: 'orders', label: en['console.nav.orders'] },
   { key: 'products', to: 'products', label: en['console.nav.products'] },
   { key: 'inbox', to: 'inbox', label: en['console.nav.inbox'] },
   { key: 'more', to: 'more', label: en['console.nav.more'] },

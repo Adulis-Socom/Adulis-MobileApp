@@ -6,9 +6,8 @@
  * S2.3's table carries v1.0-era screen NUMBERS (SC-20 Identity, SC-25
  * Sessions...); the group F/G table and the section headers carry the v1.2
  * numbering, and names win over stale numbers -- the entries here are the
- * NAMES, mapped to the routes this router serves. Payout appears under no
- * S2.3 section at all (a doc gap, register D-224); it sits under Billing
- * beside Subscription as the minimal reading, recorded rather than silent.
+ * NAMES, mapped to the routes this router serves. Payout (register D-224)
+ * and Claims were retired with the Reservation model (2026-11-25).
  *
  * Insights' three screens are C-7 and route to placeholders -- the D-146
  * lesson: a menu entry that silently returns you to Home teaches that the

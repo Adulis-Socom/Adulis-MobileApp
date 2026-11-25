@@ -50,13 +50,10 @@ describe('the error catalogue (section 7.1, 7.2)', () => {
       'CART_EMPTY', 'CART_SELLER_CONFLICT', 'CART_REVALIDATION_FAILED',
       'INSUFFICIENT_STOCK', 'SOLD_OUT', 'PRICE_CHANGED', 'NO_LONGER_PUBLISHED',
       'VARIANT_WITHDRAWN', 'SELLER_UNAVAILABLE', 'TRANSACTION_CAP_EXCEEDED',
-      'ILLEGAL_TRANSITION', 'ORDER_NOT_PAYABLE', 'ORDER_ALREADY_TERMINAL',
-      'DUPLICATE_RESERVATION', 'BUYER_COOLDOWN_ACTIVE', 'ORDER_NOT_READYABLE',
-      'EVIDENCE_REQUIRED', 'EVIDENCE_TOO_LARGE', 'PAYMENT_ALREADY_DECIDED', 'NOT_ORDER_BUYER',
-      'SCAN_SIGNATURE_INVALID', 'SCAN_PREDATES_TOKEN', 'SCAN_NOT_ORDER_BUYER', 'COURIER_CANNOT_SCAN',
+      'ILLEGAL_TRANSITION',
       'PUBLICATION_BLOCKED', 'ELIGIBILITY_NOT_SATISFIED', 'TIER_LIMIT_REACHED',
       'LEVEL_LIMIT_REACHED', 'HANDLE_TAKEN', 'FULFILMENT_METHOD_REQUIRED',
-      'PRODUCT_HAS_ACTIVE_ORDERS', 'VARIANT_HAS_ACTIVE_ORDERS',
+      'PRODUCT_HAS_ACTIVE_ORDERS',
       'PAYOUT_LOCKED', 'PAYOUT_CHANGE_PENDING', 'PAYOUT_PERMISSION_DENIED',
       'DELETION_BLOCKED', 'DELETION_OWNER_ONLY',
       'VALIDATION_FAILED', 'IDEMPOTENCY_KEY_MISSING', 'IDEMPOTENCY_KEY_REUSED',
@@ -111,15 +108,6 @@ describe('the pg translator (section 6.3, R29)', () => {
       status: 409,
       slots: { from_state: 'CREATED', to_state: 'COMPLETED' },
     });
-  });
-
-  it('the duplicate-reservation exclusion -> 409 DUPLICATE_RESERVATION', () => {
-    const e = translatePgError({
-      code: '23P01',
-      message: 'conflicting key value',
-      constraint: 'reservation_no_duplicate_active',
-    });
-    expect(e?.code).toBe('DUPLICATE_RESERVATION');
   });
 
   it('the stock check -> 409 INSUFFICIENT_STOCK; any other check -> unmapped (500)', () => {

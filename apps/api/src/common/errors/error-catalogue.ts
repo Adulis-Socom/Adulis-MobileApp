@@ -88,27 +88,10 @@ export const ERROR_CATALOGUE = {
   SELLER_UNAVAILABLE: { group: 'cart_line', status: 409, retryable: false },
   TRANSACTION_CAP_EXCEEDED: { group: 'cart_line', status: 409, retryable: false },
 
-  // Order
+  // Order (the Reservation, cooldown, readiness and payability codes retired by 0063)
   ILLEGAL_TRANSITION: { group: 'order', status: 409, retryable: false },
-  ORDER_NOT_PAYABLE: { group: 'order', status: 409, retryable: false },
-  ORDER_ALREADY_TERMINAL: { group: 'order', status: 409, retryable: false },
-  DUPLICATE_RESERVATION: { group: 'order', status: 409, retryable: false },
-  BUYER_COOLDOWN_ACTIVE: { group: 'order', status: 409, retryable: false },
-  ORDER_NOT_READYABLE: { group: 'order', status: 409, retryable: false },
 
-  // Payment
-  EVIDENCE_REQUIRED: { group: 'payment', status: 409, retryable: false },
-  // 413 is transport reality (the body limit speaks before any handler);
-  // section 7's list omits it only because the limit sits below the API.
-  EVIDENCE_TOO_LARGE: { group: 'payment', status: 413, retryable: false },
-  PAYMENT_ALREADY_DECIDED: { group: 'payment', status: 409, retryable: false },
-  NOT_ORDER_BUYER: { group: 'payment', status: 404, retryable: false },
-
-  // Handoff
-  SCAN_SIGNATURE_INVALID: { group: 'handoff', status: 409, retryable: false },
-  SCAN_PREDATES_TOKEN: { group: 'handoff', status: 409, retryable: false },
-  SCAN_NOT_ORDER_BUYER: { group: 'handoff', status: 404, retryable: false },
-  COURIER_CANNOT_SCAN: { group: 'handoff', status: 403, retryable: false },
+  // Payment and Handoff: every code retired with the legacy order flow (migration 0063).
 
   // Seller
   PUBLICATION_BLOCKED: { group: 'seller', status: 409, retryable: false },
@@ -119,7 +102,6 @@ export const ERROR_CATALOGUE = {
   // 422, not 409: section 12.9 rules it ("at least one active or 422").
   FULFILMENT_METHOD_REQUIRED: { group: 'seller', status: 422, retryable: false },
   PRODUCT_HAS_ACTIVE_ORDERS: { group: 'seller', status: 409, retryable: false },
-  VARIANT_HAS_ACTIVE_ORDERS: { group: 'seller', status: 409, retryable: false },
 
   // Payout
   // ADU-API-01 v1.9 S15.0c / D-224.6: ONE code, cause-neutral, with the cause

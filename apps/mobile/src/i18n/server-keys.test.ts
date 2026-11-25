@@ -15,8 +15,8 @@ import { repoFile, repoFolderFiles } from '../testing/source-scan';
  * and the set of migrations that write the category table is pinned, so a newer migration that adds or
  * relabels a category fails here until this test has read it.
  *
- * WHAT IT DOES NOT COVER: the Seller Companion's served values (`seller.role.*`, `seller.status.*` and
- * `seller.order.state.*`, which carry a `.other` fallback key for a value the app does not know), the
+ * WHAT IT DOES NOT COVER: the Seller Companion's served values (`seller.role.*` and `seller.status.*`,
+ * which carry a `.other` fallback key for a value the app does not know), the
  * storefront status (`StorefrontDto.status`), any enum of the contract not listed above, and a category
  * created outside a migration (the seed folder is empty and no Console write path exists today).
  */

@@ -18,12 +18,11 @@ import { ApiError } from '../api-error';
 import type { AdulisProblem } from '../../lib/states';
 import {
   FIXTURE_MARKER,
+  FIXTURE_OBLIGATIONS,
   FIXTURE_READINESS,
   FIXTURE_SELLERS,
   FIXTURE_VERSION,
-  fixtureObligations,
-  fixtureOrderDetail,
-  fixtureOrders,
+  fixtureProducts,
   fixtureSubscription,
 } from './data';
 
@@ -91,21 +90,15 @@ async function serve(path: string, call: Call): Promise<unknown> {
     };
   }
   if (clean === '/seller/list') return { data: FIXTURE_SELLERS };
-  if (clean === '/seller/orders') {
+  if (clean === '/seller/products') {
     await delayFor(call.sellerId);
-    const rows = call.sellerId ? fixtureOrders(call.sellerId) : null;
+    const rows = call.sellerId ? fixtureProducts(call.sellerId) : null;
     if (rows === null) throw problem(403, 'FORBIDDEN');
     return { data: rows, has_more: false, next_cursor: null };
   }
   if (clean === '/seller/readiness') return FIXTURE_READINESS;
-  if (clean === '/seller/obligations') return fixtureObligations();
+  if (clean === '/seller/obligations') return FIXTURE_OBLIGATIONS;
   if (clean === '/billing/subscription') return fixtureSubscription();
-  const detail = /^\/seller\/orders\/([^/]+)$/.exec(clean);
-  if (detail?.[1]) {
-    const d = call.sellerId ? fixtureOrderDetail(call.sellerId, detail[1]) : null;
-    if (d === null) throw problem(403, 'FORBIDDEN');
-    return d;
-  }
   throw problem(501, 'FIXTURE_BLOCKED');
 }
 
@@ -116,10 +109,5 @@ export const transport = {
     record(path, call);
     if (DENIED_PATH.test(path)) throw problem(501, 'FIXTURE_BLOCKED');
     return (await serve(path, call)) as T;
-  },
-  async blob(path: string, call: Call): Promise<Blob> {
-    record(path, call);
-    // Bytes are evidence-shaped by definition in this console; none are served.
-    throw problem(501, 'FIXTURE_BLOCKED');
   },
 };

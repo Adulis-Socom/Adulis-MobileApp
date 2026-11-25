@@ -5,6 +5,7 @@ import { Pool, type PoolClient } from 'pg';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * WO-007A -- public Reviews rest on REV-01's two evidence bases only (founder decision ON-033),
@@ -31,6 +32,7 @@ const BUYER = { one: id(13), two: id(14), liveTeam: id(16), revokedTeam: id(17) 
 const OPERATOR = id(15);
 const SELLER = { a: id(20), b: id(21), c: id(22) };
 const DEV = id(30);
+const BUYER_S = id(31); // BUYER.one's MOBILE session, for the retired creation route
 const PRODUCT = id(40);
 const order = (n: number) => id(0x100 + n);
 
@@ -109,19 +111,27 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
        VALUES ($1,$2,$3,$4,'PAYMENT_CONFIRMED', now(), now() + interval '48 hours','ETB','ETB')`,
       [o, MA, seller, buyer],
     );
-  /** The Buyer's own QR scan of the final receipt, through the production triggers. */
+  /** The Buyer's own QR scan of the final receipt, through the production validity trigger. */
   const finalReceipt = async (o: string, buyer: string, signedAgo = '0 seconds') => {
     await sql(`INSERT INTO core.order_qr_token (id, order_id, nonce, signing_key_version, issued_at) VALUES ($1,$2,$3,1, now() - interval '10 days')`, [
       randomUUID(),
       o,
       randomUUID(),
     ]);
-    await sql(`INSERT INTO core.handoff_scan (order_id, scanned_by_account_id, nonce, signed_at) VALUES ($1,$2,$3, now() - $4::interval)`, [
-      o,
-      buyer,
-      randomUUID(),
-      signedAgo,
-    ]);
+    const scan = await sql(
+      `INSERT INTO core.handoff_scan (order_id, scanned_by_account_id, nonce, signed_at) VALUES ($1,$2,$3, now() - $4::interval)
+       RETURNING id, validity::text AS validity`,
+      [o, buyer, randomUUID(), signedAgo],
+    );
+    // The VERIFIED_HANDOFF confirmation trg_handoff_scan_effects wrote before 0063 dropped it: an
+    // inert historical row, so the legacy badge below is derived as it was for real Orders.
+    if (['VALID', 'LATE'].includes(scan.rows[0].validity)) {
+      await sql(`INSERT INTO core.order_confirmation (id, order_id, tier, source_scan_id) VALUES ($1,$2,'VERIFIED_HANDOFF',$3)`, [
+        randomUUID(),
+        o,
+        scan.rows[0].id,
+      ]);
+    }
   };
   const claim = (o: string, trigger: string, outcome: 'UPHELD' | 'NOT_UPHELD' | null) =>
     replica(
@@ -158,8 +168,7 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
       [MA, MC],
     );
     await sql(
-      `INSERT INTO core.timing_config (id, market_id, reservation_window,
-         payment_confirmation_window, fulfilment_window, offline_sync_horizon,
+      `INSERT INTO core.timing_config (id, market_id, payment_confirmation_window, fulfilment_window, offline_sync_horizon,
          payout_activation_delay, recovery_cooling_period,
          deleted_number_cooling_period, refund_ack_window, media_retention,
          level_credit_grace, mobile_session_lifetime, console_session_lifetime,
@@ -168,7 +177,7 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
          new_device_payout_lock, same_seller_cancellation_threshold,
          same_seller_cooldown, cross_seller_cooldown_ladder,
          cancellation_counter_decay)
-       VALUES (gen_random_uuid(), $1, '48 hours','24 hours','72 hours','7 days',
+       VALUES (gen_random_uuid(), $1,'24 hours','72 hours','7 days',
          '24 hours','7 days','30 days','48 hours','90 days','24 hours',
          '30 days','12 hours','30 minutes','7 days','8 hours','5 minutes',5,
          '5 minutes','24 hours',3,'1 hour',
@@ -183,6 +192,12 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
       [OWNER.a, OWNER.b, OWNER.c, BUYER.one, BUYER.two, OPERATOR, MA, MC, BUYER.liveTeam, BUYER.revokedTeam],
     );
     await sql(`INSERT INTO core.device (id, platform, market_id) VALUES ($1,'ANDROID',$2)`, [DEV, MA]);
+    await sql(
+      `INSERT INTO core.session (id, account_id, audience, device_id, expires_at)
+       VALUES ($1,$2,'MOBILE',$3, now() + interval '30 days')`,
+      [BUYER_S, BUYER.one, DEV],
+    );
+    await armFixtureSessions(admin, [BUYER_S]);
     await sql(
       `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type, store_name, handle, status) VALUES
         ($1,$4,$6,'INDIVIDUAL','Review Store','review-store','ACTIVE'),
@@ -307,6 +322,7 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
         `DELETE FROM core.seller_level_state WHERE seller_id IN (${sellers})`,
         `DELETE FROM core.seller_public_stats WHERE seller_id IN (${sellers})`,
         `DELETE FROM core.seller WHERE id IN (${sellers})`,
+        `DELETE FROM core.session WHERE id = '${BUYER_S}'`,
         `DELETE FROM core.device WHERE id = '${DEV}'`,
         `DELETE FROM core.account WHERE id::text LIKE '0e07a000-%'`,
         `DELETE FROM core.timing_config WHERE market_id IN ('${MA}','${MC}')`,
@@ -459,6 +475,21 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
         average_rating: null,
         basis_counts: { FINAL_HANDOFF: 0, VERIFIED_ORDER_FAILURE: 0 },
       });
+    });
+  });
+
+  describe('review creation is retired with the legacy Order (0063); the reads above stay', () => {
+    it('POST /v1/orders/:id/review is 404 for the Buyer of the Order and writes no review', async () => {
+      const count = async () => (await sql(`SELECT count(*)::int AS n FROM core.review WHERE seller_id = $1`, [SELLER.a])).rows[0].n as number;
+      const before = await count();
+      await server()
+        .post(`/v1/orders/${O.unverified}/review`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
+        .set('X-Adulis-Device', DEV)
+        .set('Idempotency-Key', randomUUID())
+        .send({ seller_rating: 5, body: 'retired' })
+        .expect(404);
+      expect(await count()).toBe(before);
     });
   });
 

@@ -210,13 +210,10 @@ describe('migration 01 — foundation', () => {
     const byHand: Record<string, string[]> = {
       // R2 — two audiences, not three. SELLER_WEB renamed, COURIER_WEB removed.
       'core.session_audience': ['MOBILE', 'CONSOLE'],
-      // C2 — two state machines. REFUNDED exists only at reservation level.
+      // C2 — the order state machine (inert since 0063; the Reservation machine is gone).
       'core.order_state': [
         'CREATED', 'NOTIFIED', 'PAYMENT_SUBMITTED', 'PAYMENT_CONFIRMED', 'HANDED_OFF',
         'COMPLETED', 'CANCELLED_BY_BUYER', 'CANCELLED_BY_SELLER', 'EXPIRED_UNCLAIMED',
-      ],
-      'core.reservation_state': [
-        'ACTIVE', 'FULFILLED', 'CANCELLED_BY_BUYER', 'CANCELLED_BY_SELLER', 'REFUNDED', 'EXPIRED',
       ],
       // Section 16 seeds a grant for each of these six.
       'core.team_role': [
@@ -243,6 +240,60 @@ describe('migration 01 — foundation', () => {
         [schema, typname],
       );
       expect(rows[0]?.v).toEqual(values);
+    });
+
+    it('has no Reservation type or table after 0063 retired the model', async () => {
+      const rows = await q(
+        `SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+          WHERE n.nspname = 'core' AND t.typname = 'reservation_state'`,
+      );
+      expect(rows).toEqual([]);
+      const tables = await q<{ t: string | null }>(
+        `SELECT to_regclass('core.reservation')::text AS t
+         UNION ALL SELECT to_regclass('core.refund')::text
+         UNION ALL SELECT to_regclass('core.reservation_state_transition_legal')::text`,
+      );
+      expect(tables.map((r) => r.t)).toEqual([null, null, null]);
+    });
+
+    it('0063 leaves no Reservation column, order stock reason or retired boundary function', async () => {
+      const cols = await q(
+        `SELECT table_schema || '.' || table_name AS c FROM information_schema.columns
+          WHERE column_name ILIKE '%reservation%' AND table_schema NOT IN ('pg_catalog','information_schema')`,
+      );
+      expect(cols).toEqual([]);
+      const fns = await q<{ f: string | null }>(
+        `SELECT to_regprocedure('financial.read_payment_evidence(uuid,uuid,text)')::text AS f
+         UNION ALL SELECT to_regprocedure('financial.render_payment_instructions(uuid,uuid)')::text
+         UNION ALL SELECT to_regprocedure('financial.write_payment_evidence(uuid,text,text,integer,integer)')::text
+         UNION ALL SELECT to_regprocedure('financial.write_payout_credential(uuid,bytea,bytea,text)')::text
+         UNION ALL SELECT to_regprocedure('core.fn_create_order(uuid,uuid,uuid,jsonb)')::text
+         UNION ALL SELECT to_regprocedure('core.fn_release_reservation_stock(uuid,uuid,core.stock_event_reason)')::text`,
+      );
+      expect(fns.map((r) => r.f)).toEqual([null, null, null, null, null, null]);
+      // The release rules died with reservation_id; the CHECK is what keeps a positive
+      // ORDER_EXPIRED row from inventing stock.
+      const check = await q<{ def: string }>(
+        `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+          WHERE conrelid = 'core.stock_event'::regclass AND conname = 'stock_event_no_order_reason'`,
+      );
+      for (const reason of ['ORDER_CREATED', 'ORDER_EXPIRED', 'LINE_CANCELLED']) {
+        expect(check[0]?.def).toContain(reason);
+      }
+    });
+
+    it('the app and worker roles cannot write the inert legacy order tables after 0063', async () => {
+      const rows = await q<{ t: string; r: string }>(
+        `SELECT c.oid::regclass::text AS t, r.rolname AS r
+           FROM pg_class c CROSS JOIN pg_roles r
+          WHERE r.rolname IN ('adulis_app', 'adulis_jobs')
+            AND c.oid IN ('core."order"'::regclass, 'core.claim'::regclass, 'core.handoff_scan'::regclass,
+                          'core.payment_submission'::regclass, 'core.review'::regclass,
+                          'core.payout_details'::regclass, 'billing.collection_record'::regclass)
+            AND (has_table_privilege(r.oid, c.oid, 'INSERT') OR has_table_privilege(r.oid, c.oid, 'UPDATE')
+                 OR has_table_privilege(r.oid, c.oid, 'DELETE'))`,
+      );
+      expect(rows).toEqual([]);
     });
 
     it('has no SELLER_WEB or COURIER_WEB anywhere — R2 is a rename, not an addition', async () => {

@@ -90,7 +90,8 @@ const contract = JSON.parse(repoFile('contracts/openapi.json')) as Contract;
 
 describe('what the contract says about the four channels', () => {
   it('carries no Following, Nearby, Discounts or Locally Made fact in any path, parameter or property', () => {
-    expect(Object.keys(contract.paths).length).toBeGreaterThan(100);
+    // A floor against an empty or truncated contract: 94 paths after migration 0063 retired the order family.
+    expect(Object.keys(contract.paths).length).toBeGreaterThan(80);
     const open = unacknowledged(channelFactsIn(contract), ACKNOWLEDGED);
     if (open.length > 0) {
       throw new Error(

@@ -6,15 +6,12 @@
  * DRIVEN, not rendered -- fulfilment saves for real and reads back, closure
  * closes and reopens a real seller, an availability override is written and
  * removed, a courier is invited and revoked, notification preferences PATCH
- * a real row, and the payout change drives the ENTIRE step-up pipeline (the
- * modal opens, a real code leaves the dev SMS adapter, verify passes, the
- * action retries) into the seed's one deterministic answer: the NEW-DEVICE
- * lock, whose 409 must render as a message and not as silence.
+ * a real row, and the team invite drives the step-up pipeline into the real
+ * server. (Payout went with the Reservation retirement, 2026-11-25.)
  *
- * Two facts are planted at the wire (the upgrade-required.spec.ts pattern),
- * because the real server cannot be made to produce them in this harness:
- * a PENDING payout row (the 24h new-device lock blocks creating one) for
- * R21's presence half, and nothing else.
+ * Facts the real server cannot produce in this harness are planted at the
+ * wire (the upgrade-required.spec.ts pattern): Team's seats flag and SC-29's
+ * deletion blocker.
  *
  * Order of tests matters only within the closure block (close -> reopen
  * restores the seed's ACTIVE state for later runs of anything).
@@ -40,8 +37,7 @@ test.describe('More menu and shell navigation', () => {
     ]) {
       await expect(page.locator('.more-menu').getByRole('link', { name: entry, exact: true })).toBeVisible();
     }
-    // B02-D02 / D24-01: Payout and Claims are deferred, so they are not offered (and SC-24 is covered
-    // by the negative tests below, not by the old five-facts screen).
+    // Payout and Claims were retired with the Reservation model (2026-11-25): not offered.
     for (const gone of ['Payout', 'Claims']) {
       await expect(page.locator('.more-menu').getByRole('link', { name: gone })).toHaveCount(0);
     }
@@ -275,32 +271,8 @@ test.describe('SC-23 Couriers -- invite and revoke, for real', () => {
   });
 });
 
-/*
- * SC-24 Payout -- SUPERSEDED by B02-D02 (Payout Option A, 25 November 2026). The four tests that stood
- * here drove the bank-detail screen: the R21 five facts, the cancel control's absence and presence,
- * the "no payout details means no lock" read, and the new-device lock wording. The screen is removed
- * from the MVP console and no code calls the payout endpoints, so those positive expectations are
- * replaced by this negative one rather than deleted; the originals are in git history. The backend
- * controls they exercised still exist and are NOT touched by the frontend work order.
- */
-test.describe('SC-24 Payout -- deferred entirely (B02-D02) @safety', () => {
-  test('the old URL meets an honest deferred state, with no bank-detail field and no payout call', async ({
-    page,
-  }) => {
-    const payoutCalls: string[] = [];
-    page.on('request', (r) => {
-      const u = new URL(r.url());
-      if (u.pathname.startsWith('/v1/') && /payout/i.test(u.pathname)) payoutCalls.push(`${r.method()} ${u.pathname}`);
-    });
-    await page.goto(`${base}/payouts`);
-    const screen = page.locator('[data-deferred-screen="payout"]');
-    await expect(screen).toBeVisible();
-    await expect(screen).toContainText('Payouts are not part of this release');
-    expect(await screen.locator('input, textarea, select, form').count()).toBe(0);
-    await expect(page.locator('[data-screen="SC-24"]')).toHaveCount(0);
-    expect(payoutCalls, payoutCalls.join(' | ')).toEqual([]);
-  });
-});
+// SC-24 Payout was retired with the Reservation model (2026-11-25); chooser.spec.ts asserts
+// its URL is gone.
 
 test.describe('SC-25 Team -- the entitlement is the server\'s answer', () => {
   test('the seed seller is not Business: NO_ENTITLEMENT renders with the unlock named', async ({ page }) => {
@@ -353,7 +325,12 @@ test.describe('SC-25 Team -- the entitlement is the server\'s answer', () => {
 });
 
 test.describe('SC-26 Subscription -- honest about having none', () => {
-  test('renders the empty truth, the S16.1 table, and Business-only team', async ({ page }) => {
+  test('renders the empty truth, the S16.1 table, Business-only team, and no purchase', async ({ page }) => {
+    const writes: string[] = [];
+    page.on('request', (r) => {
+      const u = new URL(r.url());
+      if (u.pathname.startsWith('/v1/billing') && r.method() !== 'GET') writes.push(`${r.method()} ${u.pathname}`);
+    });
     await page.goto(`${base}/subscription`);
     await expect(page.locator('[data-screen="SC-26"]')).toBeVisible();
     await expect(page.getByText(/No subscription yet/)).toBeVisible();
@@ -361,59 +338,8 @@ test.describe('SC-26 Subscription -- honest about having none', () => {
     const table = page.locator('.compare-plans table');
     await expect(table.getByText('Included, with roles')).toHaveCount(1);
     await expect(table.locator('tr', { hasText: 'Business' }).getByText('Included, with roles')).toBeVisible();
-  });
-
-  test('a stale open intent from the server is NOT drawn: no reference, no instructions, no transfer (B02-D01, planted)', async ({
-    page,
-    context,
-  }) => {
-    /*
-     * The reference-owed sentence's removal, proven on SCREEN (pass M7). A
-     * real open intent needs the billing seed T14-C registered as owed, so
-     * the GET is planted -- the R21 pattern, and the plant derives from the
-     * server's real shape: t6-purchase-intent proves the wire carries this
-     * exact object, reference included, identical to the POST's.
-     */
-    await context.route('**/v1/billing/subscription', async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback();
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        json: {
-          subscription: {
-            state: 'PENDING_PAYMENT',
-            tier: 'LISTED',
-            term: 'ANNUAL',
-            trial_ends_at: null,
-            current_period_start: null,
-            current_period_end: null,
-            locked_rate_minor: 1200000,
-            locked_rate_currency: 'ETB',
-          },
-          intent: {
-            intent_id: '33333333-3333-4333-8333-333333333333',
-            collection_record_id: 'ab12cd34-5678-4000-8000-000000000001',
-            tier: 'LISTED',
-            term: 'ANNUAL',
-            amount_minor: 1200000,
-            currency: 'ETB',
-            expires_at: '2026-09-03T10:00:00Z',
-            reference: 'ADU-SUB-AB12CD34',
-            marked_transferred_at: null,
-          },
-        },
-      });
-    });
-    const writes: string[] = [];
-    page.on('request', (r) => {
-      const u = new URL(r.url());
-      if (u.pathname.startsWith('/v1/billing') && r.method() !== 'GET') writes.push(`${r.method()} ${u.pathname}`);
-    });
-    await page.goto(`${base}/subscription`);
-    await expect(page.locator('.purchase [data-deferred="purchase"]')).toBeVisible();
-    // The seller must not read back a transfer reference, an amount to pay, or be offered a transfer.
-    await expect(page.locator('[data-reference]')).toHaveCount(0);
-    await expect(page.getByText(/ADU-SUB-AB12CD34|bank transfer/)).toHaveCount(0);
+    // The purchase intent and mark-transferred routes are gone (2026-11-25): no region, no control.
+    await expect(page.locator('.purchase')).toHaveCount(0);
     expect(await page.locator('.subscription select, .subscription button').count()).toBe(0);
     expect(writes, writes.join(' | ')).toEqual([]);
   });
@@ -491,15 +417,36 @@ test.describe('SC-28 Notification preferences -- R22, driven', () => {
 });
 
 test.describe('SC-29 Closure -- two things, not blurred, driven for real', () => {
-  test('blockers render as messages, closure stays available, and close/reopen round-trips', async ({ page }) => {
+  test('blockers render without their code, closure stays available, and close/reopen round-trips', async ({ page, context }) => {
+    /*
+     * The seed held live orders, which blocked deletion for real. Since migration 0063 the only
+     * blocker is SUBSCRIPTION_PAST_DUE and the seed has none, so the blocker is planted at the
+     * wire in the server's own shape (fn_deletion_blockers -> deletion.service.ts).
+     */
+    await context.route('**/v1/seller/deletion/blockers', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        json: {
+          items: [
+            {
+              code: 'SUBSCRIPTION_PAST_DUE',
+              message_key: 'deletion.blocker.subscription_past_due',
+              resolving_action: { kind: 'SETTLE_SUBSCRIPTION_BALANCE' },
+            },
+          ],
+        },
+      });
+    });
     await page.goto(`${base}/closure`);
     await expect(page.locator('[data-screen="SC-29"]')).toBeVisible();
 
-    // The seed holds live orders: deletion is BLOCKED, every blocker renders
-    // as its MESSAGE (never a code), and the delete control is absent.
+    // Deletion is BLOCKED, the blocker renders as its message_key's text
+    // (never the code), and the delete control is absent.
     await expect(page.getByText('Deletion blocked')).toBeVisible();
-    await expect(page.getByText(/must be/).first()).toBeVisible();
-    await expect(page.getByText('NON_TERMINAL_RESERVATIONS')).toHaveCount(0);
+    await expect(page.locator('[data-state="CONFLICT"] li')).toHaveCount(1);
+    await expect(page.getByText('SUBSCRIPTION_PAST_DUE')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Delete account/ })).toHaveCount(0);
     // G1.3: closing SURVIVES the deletion block.
     await expect(page.getByRole('button', { name: 'Close store', exact: true })).toBeVisible();

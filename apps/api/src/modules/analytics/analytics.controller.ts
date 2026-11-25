@@ -115,19 +115,13 @@ export class AnalyticsController {
           (SELECT count(*)::int FROM core.product p
             WHERE p.seller_id = ${sellerId} AND p.visibility = 'PUBLISHED')
             AS products_published,
-          (SELECT count(*)::int FROM core."order" o, win
-            WHERE o.seller_id = ${sellerId}
-              AND o.created_at >= win.lo AND o.created_at < win.hi) AS orders,
-          (SELECT count(*)::int FROM core.reservation r2
-            WHERE r2.seller_id = ${sellerId} AND r2.state = 'ACTIVE')
-            AS active_reservations,
-          coalesce(ps.completed_handoff_count, 0) AS completed_handoffs,
+          -- Order, Reservation and handoff counts were retired with the Reservation model
+          -- (migration 0063): nothing can create them, and a zero would read as performance.
           (SELECT count(*)::int FROM core.follow f
             WHERE f.seller_id = ${sellerId} AND f.state = 'FOLLOWING') AS followers,
           (SELECT to_char(lo, 'YYYY-MM-DD') FROM win) AS window_from,
           (SELECT to_char(hi - interval '1 second', 'YYYY-MM-DD') FROM win) AS window_to
-          FROM (SELECT 1) x
-          LEFT JOIN core.seller_public_stats ps ON ps.seller_id = ${sellerId}`.execute(trx);
+          FROM (SELECT 1) x`.execute(trx);
       // v1.10 S12.13: the window is a property of the RESPONSE, not of each
       // field -- `window: {from, to}` once, and the fields carry no suffix. A
       // field named `orders_30d` returning ninety days is a name that lies.
@@ -143,7 +137,7 @@ export class AnalyticsController {
   @Get('seller/analytics/full')
   @ApiOperation({
     summary:
-      'Views, reservations, conversion, funnel over a window — entitlement-gated. product_views counts server-recorded Product openings (a read the client declares a revalidation is not recorded); it is NOT de-duplicated and NOT unique visitors.',
+      'Storefront and Product views over a window — entitlement-gated. product_views counts server-recorded Product openings (a read the client declares a revalidation is not recorded); it is NOT de-duplicated and NOT unique visitors.',
   })
   async full(
     @Req() req: AuthedRequest,
@@ -180,29 +174,18 @@ export class AnalyticsController {
           (SELECT count(*)::int FROM analytics.event e, win
             WHERE e.seller_id = ${sellerId} AND e.name = 'product_viewed'
               AND e.occurred_at >= win.lo AND e.occurred_at < win.hi) AS product_views,
-          (SELECT count(*)::int FROM core.reservation r2, win
-            WHERE r2.seller_id = ${sellerId}
-              AND r2.created_at >= win.lo AND r2.created_at < win.hi) AS reservations,
-          (SELECT count(*)::int FROM core."order" o, win
-            WHERE o.seller_id = ${sellerId} AND o.state = 'COMPLETED'
-              AND o.created_at >= win.lo AND o.created_at < win.hi) AS completed,
-          ps.confirmation_rate, ps.cancellation_rate, ps.scan_completion_rate,
-          ps.unresolved_claim_count,
+          -- Reservation, completed-order and commerce-rate fields were retired with the
+          -- Reservation model (migration 0063); no conversion is derived from them.
           (SELECT to_char(lo, 'YYYY-MM-DD') FROM win) AS window_from,
           (SELECT to_char(hi - interval '1 second', 'YYYY-MM-DD') FROM win) AS window_to
-          FROM (SELECT 1) x
-          LEFT JOIN core.seller_public_stats ps ON ps.seller_id = ${sellerId}`.execute(trx);
+          FROM (SELECT 1) x`.execute(trx);
       const row = first(r.rows) as Record<string, unknown>;
-      const views = Number(row['product_views'] ?? 0);
-      const reservations = Number(row['reservations'] ?? 0);
       // v1.10 S12.13: one `window: {from, to}` on the response; no suffixes.
       const { window_from, window_to, ...fields } = row;
       return {
         ...fields,
         window: { from: window_from, to: window_to },
         scope: limit.scope,
-        // Resolved here, not by the client: two clients would differ.
-        view_to_reservation_rate: views > 0 ? reservations / views : null,
       };
     });
   }

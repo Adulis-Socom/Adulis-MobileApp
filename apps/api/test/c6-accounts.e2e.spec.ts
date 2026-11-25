@@ -13,8 +13,8 @@ import { armFixtureSessions, sessionToken } from './session-fixture';
  * C6 — identity/session (12.2), team/subscription/deletion (12.12), web
  * deletion (12.18), couriers (12.11): the OTP ladder end to end, the R17
  * cookie pair, step-up request/verify and its single use, the R4 billing
- * audience gate, seat entitlements, courier revocation ending assignments,
- * closure gating new orders, both deletion paths with their blockers, and
+ * audience gate, seat entitlements, courier invite and revocation,
+ * reversible closure, both deletion paths with their blockers, and
  * the phone-reuse block read at seller creation.
  */
 
@@ -166,8 +166,7 @@ const browserCookie = async (): Promise<string> => {
       [M],
     );
     await admin.query(
-      `INSERT INTO core.timing_config (id, market_id, reservation_window,
-         payment_confirmation_window, fulfilment_window, offline_sync_horizon,
+      `INSERT INTO core.timing_config (id, market_id, payment_confirmation_window, fulfilment_window, offline_sync_horizon,
          payout_activation_delay, recovery_cooling_period,
          deleted_number_cooling_period, refund_ack_window, media_retention,
          level_credit_grace, mobile_session_lifetime, console_session_lifetime,
@@ -176,7 +175,7 @@ const browserCookie = async (): Promise<string> => {
          new_device_payout_lock, same_seller_cancellation_threshold,
          same_seller_cooldown, cross_seller_cooldown_ladder,
          cancellation_counter_decay)
-       VALUES (gen_random_uuid(), $1, '48 hours','24 hours','72 hours','7 days',
+       VALUES (gen_random_uuid(), $1,'24 hours','72 hours','7 days',
          '24 hours','7 days','30 days','48 hours','90 days','24 hours',
          '30 days','12 hours','30 minutes','7 days','8 hours','5 minutes',5,
          '5 minutes','24 hours',3,'1 hour',
@@ -231,8 +230,7 @@ const browserCookie = async (): Promise<string> => {
        VALUES (gen_random_uuid(),$1,$2,10,'SELLER_SET')`,
       [VARIANT, SELLER],
     );
-    // Active payout on both sellers: fn_create_order snapshots it, and the
-    // deletion effects purge it.
+    // Active payout on both sellers: the deletion effects purge it.
     await admin.query(
       `INSERT INTO core.payout_details (id, seller_id, bank_code, account_last4,
          state, activated_at, requested_by_account_id) VALUES
@@ -312,10 +310,9 @@ const browserCookie = async (): Promise<string> => {
       `DELETE FROM core.order_courier_assignment WHERE order_id IN (SELECT id FROM core."order" WHERE market_id='${M}')`,
       `DELETE FROM core.stock_event WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
       `DELETE FROM core.buyer_cancellation_counter WHERE buyer_account_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,
-      `DELETE FROM core.reservation WHERE order_id IN (SELECT id FROM core."order" WHERE market_id='${M}')`,
       `DELETE FROM core.order_payout_snapshot WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
       `DELETE FROM core.notification WHERE recipient_account_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,
-      // INF-03: the cancels above logged transitions; replica mode skips their FK, so they go first.
+      // INF-03: the money-gate updates logged transitions; replica mode skips their FK, so they go first.
       `DELETE FROM core.order_state_transition WHERE order_id IN (SELECT id FROM core."order" WHERE market_id='${M}')`,
       `DELETE FROM core."order" WHERE market_id='${M}'`,
       `DELETE FROM core.cart_line WHERE cart_id IN (SELECT id FROM core.cart WHERE seller_id IN ('${SELLER}','${DELSELLER}'))`,
@@ -843,9 +840,10 @@ const browserCookie = async (): Promise<string> => {
       expect(JSON.stringify(r.body)).not.toContain('BUSINESS');
     });
 
-    it('an ANALYST reads orders until revocation; the NEXT request is refused (R28)', async () => {
+    // Reviews, not orders: the seller order reads went with the Reservation model (0063).
+    it('an ANALYST reads reviews until revocation; the NEXT request is refused (R28)', async () => {
       await http()
-        .get('/v1/seller/orders')
+        .get('/v1/seller/reviews')
         .set('Authorization', `Bearer ${sessionToken(MEMBER1_S)}`)
         .set('X-Adulis-Seller', SELLER)
         .expect(200);
@@ -857,35 +855,16 @@ const browserCookie = async (): Promise<string> => {
         .send({ step_up_challenge_id: await freshStepUp(OWNER, 'TEAM_CHANGE') })
         .expect(204);
       const r = await http()
-        .get('/v1/seller/orders')
+        .get('/v1/seller/reviews')
         .set('Authorization', `Bearer ${sessionToken(MEMBER1_S)}`)
         .set('X-Adulis-Seller', SELLER)
         .expect(403);
       expect(r.body.code).toBe('PERMISSION_DENIED');
     });
 
-    it('courier invite, assignment, revocation: access ends in the same transaction', async () => {
-      // An order to assign: buyer cart -> order through the API.
-      await http()
-        .post('/v1/cart/lines')
-        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
-        .set('X-Adulis-Device', DEVICE)
-        .set('Idempotency-Key', key())
-        .send({ variant_id: VARIANT, quantity: 1 })
-        .expect(201);
-      const cart = await http()
-        .get('/v1/cart')
-        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
-        .set('X-Adulis-Device', DEVICE)
-        .expect(200);
-      const order = await http()
-        .post('/v1/orders')
-        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
-        .set('X-Adulis-Device', DEVICE)
-        .set('Idempotency-Key', key())
-        .send({ cart_id: cart.body.cart_id, expected: [{ variant_id: VARIANT, unit_price_minor: 50000 }] })
-        .expect(201);
-
+    // Order assignment and the courier's order reads went with the handoff routes (0063);
+    // the invite lifecycle stays.
+    it('courier invite and revocation: the invite is listed, then gone, and a second revoke is 404', async () => {
       const invited = await http()
         .post('/v1/seller/couriers')
         .set('Cookie', cookie(OWNER_S))
@@ -894,39 +873,19 @@ const browserCookie = async (): Promise<string> => {
         .set('Idempotency-Key', key())
         .send({ phone: P_COURIER })
         .expect(201);
-      await http()
-        .post(`/v1/seller/orders/${order.body.id}/courier-assignment`)
-        .set('Cookie', cookie(OWNER_S))
-        .set('X-Adulis-Seller', SELLER)
-        .set('Origin', CONSOLE_ORIGIN)
-        .set('Idempotency-Key', key())
-        .send({ courier_account_id: COURIER_ACC })
-        .expect(201);
-      const seen = await http()
-        .get('/v1/courier/orders')
-        .set('Cookie', cookie(COURIER_S))
-        .expect(200);
-      expect(seen.body.data).toHaveLength(1);
+      const listed = () =>
+        http().get('/v1/seller/couriers').set('Cookie', cookie(OWNER_S)).set('X-Adulis-Seller', SELLER).expect(200);
+      expect((await listed()).body.data.map((i: { id: string }) => i.id)).toContain(invited.body.id);
 
-      await http()
-        .delete(`/v1/seller/couriers/${invited.body.id}`)
-        .set('Cookie', cookie(OWNER_S))
-        .set('X-Adulis-Seller', SELLER)
-        .set('Origin', CONSOLE_ORIGIN)
-        .expect(204);
-      const after = await http()
-        .get('/v1/courier/orders')
-        .set('Cookie', cookie(COURIER_S))
-        .expect(200);
-      expect(after.body.data).toHaveLength(0);
-
-      // Settle the line so it never blocks the closure/deletion tests.
-      await http()
-        .post(`/v1/orders/${order.body.id}/cancel`)
-        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
-        .set('X-Adulis-Device', DEVICE)
-        .set('Idempotency-Key', key())
-        .expect(200);
+      const revoke = () =>
+        http()
+          .delete(`/v1/seller/couriers/${invited.body.id}`)
+          .set('Cookie', cookie(OWNER_S))
+          .set('X-Adulis-Seller', SELLER)
+          .set('Origin', CONSOLE_ORIGIN);
+      await revoke().expect(204);
+      expect((await listed()).body.data.map((i: { id: string }) => i.id)).not.toContain(invited.body.id);
+      await revoke().expect(404);
     });
 
     it('a SALES_SUPPORT-less role cannot manage couriers', async () => {
@@ -953,60 +912,43 @@ const browserCookie = async (): Promise<string> => {
       expect(r.headers['location']).toBeUndefined();
     });
 
-    it('purchase-intent prices from the schedule with the term discount; mark-transferred stamps', async () => {
+    it('the subscription read carries the subscription and no payment intent', async () => {
       const sub = await http()
         .get('/v1/billing/subscription')
         .set('Cookie', cookie(OWNER_S))
         .set('X-Adulis-Seller', SELLER)
         .expect(200);
       expect(sub.body.subscription).toMatchObject({ state: 'TRIAL', tier: 'BUSINESS' });
-
-      const intent = await http()
-        .post('/v1/billing/purchase-intent')
-        .set('Cookie', cookie(OWNER_S))
-        .set('X-Adulis-Seller', SELLER)
-        .set('Origin', CONSOLE_ORIGIN)
-        .set('Idempotency-Key', key())
-        .send({
-          tier: 'BUSINESS',
-          term: 'ANNUAL',
-          step_up_challenge_id: await freshStepUp(OWNER, 'SUBSCRIPTION_CHANGE'),
-        })
-        .expect(201);
-      // 100000 x 12 months x (1 - 0.10 annual discount)
-      expect(intent.body.amount_minor).toBe(1080000);
-      expect(intent.body.currency).toBe('ETB');
-
-      const marked = await http()
-        .post('/v1/billing/mark-transferred')
-        .set('Cookie', cookie(OWNER_S))
-        .set('X-Adulis-Seller', SELLER)
-        .set('Origin', CONSOLE_ORIGIN)
-        .set('Idempotency-Key', key())
-        .send({ collection_record_id: intent.body.collection_record_id })
-        .expect(200);
-      expect(marked.body.marked_transferred_at).toBeTruthy();
+      expect(Object.keys(sub.body)).toEqual(['subscription']);
     });
 
-    it('the wrong step-up action cannot open a purchase-intent', async () => {
+    // Purchasing and manual collection were retired with 0063: the routes are gone
+    // and calling them writes nothing.
+    it.each([
+      ['/v1/billing/purchase-intent', { tier: 'BUSINESS', term: 'ANNUAL' }],
+      ['/v1/billing/mark-transferred', { collection_record_id: randomUUID() }],
+    ])('POST %s is 404 for the Owner and writes nothing', async (path, body) => {
       const r = await http()
-        .post('/v1/billing/purchase-intent')
+        .post(path)
         .set('Cookie', cookie(OWNER_S))
         .set('X-Adulis-Seller', SELLER)
         .set('Origin', CONSOLE_ORIGIN)
         .set('Idempotency-Key', key())
-        .send({
-          tier: 'BUSINESS',
-          term: 'MONTHLY',
-          step_up_challenge_id: await freshStepUp(OWNER, 'TEAM_CHANGE'),
-        })
-        .expect(403);
-      expect(r.body.code).toBe('STEP_UP_ACTION_MISMATCH');
+        .send({ ...body, step_up_challenge_id: await freshStepUp(OWNER, 'SUBSCRIPTION_CHANGE') });
+      expect(r.status).toBe(404);
+      const written = await admin.query(
+        `SELECT (SELECT count(*) FROM billing.purchase_intent WHERE subscription_id = $1)::int
+              + (SELECT count(*) FROM billing.collection_record WHERE subscription_id = $1)::int AS n`,
+        [SUB],
+      );
+      expect(written.rows[0].n).toBe(0);
     });
   });
 
   describe('closure and deletion (12.12, 12.18, S16.9)', () => {
-    it('closure blocks NEW orders and is reversible; existing state is untouched', async () => {
+    // Order creation is gone (0063), so closure gates no transaction here; the
+    // ACTIVE -> CLOSING -> ACTIVE round trip is what remains to prove.
+    it('closure enters CLOSING and is reversible', async () => {
       await http()
         .post('/v1/seller/closure')
         .set('Cookie', cookie(OWNER_S))
@@ -1014,27 +956,8 @@ const browserCookie = async (): Promise<string> => {
         .set('Origin', CONSOLE_ORIGIN)
         .set('Idempotency-Key', key())
         .expect(200);
-
-      await http()
-        .post('/v1/cart/lines')
-        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
-        .set('X-Adulis-Device', DEVICE)
-        .set('Idempotency-Key', key())
-        .send({ variant_id: VARIANT, quantity: 1 })
-        .expect(201);
-      const cart = await http()
-        .get('/v1/cart')
-        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
-        .set('X-Adulis-Device', DEVICE)
-        .expect(200);
-      const refused = await http()
-        .post('/v1/orders')
-        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
-        .set('X-Adulis-Device', DEVICE)
-        .set('Idempotency-Key', key())
-        .send({ cart_id: cart.body.cart_id, expected: [{ variant_id: VARIANT, unit_price_minor: 50000 }] })
-        .expect(409);
-      expect(JSON.stringify(refused.body.items ?? refused.body)).toContain('SELLER_UNAVAILABLE');
+      const closing = await admin.query(`SELECT status FROM core.seller WHERE id=$1`, [SELLER]);
+      expect(closing.rows[0].status).toBe('CLOSING');
 
       await http()
         .delete('/v1/seller/closure')
@@ -1061,9 +984,10 @@ const browserCookie = async (): Promise<string> => {
         .set('Cookie', cookie(OWNER2_S))
         .set('X-Adulis-Seller', DELSELLER)
         .expect(200);
-      expect(blockers.body.items.map((i: { code: string }) => i.code)).toContain(
+      // The only seller blocker left after 0063 retired the Reservation ones.
+      expect(blockers.body.items.map((i: { code: string }) => i.code)).toEqual([
         'SUBSCRIPTION_PAST_DUE',
-      );
+      ]);
 
       const su = await freshStepUp(OWNER2, 'SELLER_DELETION');
       const refused = await http()
@@ -1128,7 +1052,7 @@ const browserCookie = async (): Promise<string> => {
       expect(r.body.slots.reason).toBe('PHONE_REUSE_BLOCKED');
     });
 
-    it('web deletion: ticket-only flow, money gate, release, scrub, phone freed (12.18)', async () => {
+    it('web deletion: ticket-only flow, money gate, scrub, phone freed (12.18)', async () => {
       // A fresh buyer through the real sign-up flow.
       const d = randomUUID();
       await http()
@@ -1184,26 +1108,15 @@ const browserCookie = async (): Promise<string> => {
       );
       expect(remembered.rows[0].n).toBe(1);
 
-      // An order that will be RELEASED by deletion (still pre-payment).
-      await http()
-        .post('/v1/cart/lines')
-        .set('Authorization', `Bearer ${sessionToken(bearer)}`)
-        .set('X-Adulis-Device', d)
-        .set('Idempotency-Key', key())
-        .send({ variant_id: VARIANT, quantity: 1 })
-        .expect(201);
-      const cart = await http()
-        .get('/v1/cart')
-        .set('Authorization', `Bearer ${sessionToken(bearer)}`)
-        .set('X-Adulis-Device', d)
-        .expect(200);
-      const order = await http()
-        .post('/v1/orders')
-        .set('Authorization', `Bearer ${sessionToken(bearer)}`)
-        .set('X-Adulis-Device', d)
-        .set('Idempotency-Key', key())
-        .send({ cart_id: cart.body.cart_id, expected: [{ variant_id: VARIANT, unit_price_minor: 50000 }] })
-        .expect(201);
+      // An INERT order row for the buyer-side money gate, which still reads
+      // core."order" -- nothing creates one through the API since 0063.
+      const orderId = randomUUID();
+      await admin.query(
+        `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id, state,
+           expires_at, total_minor, total_currency, display_currency)
+         VALUES ($1,$2,$3,$4,'PAYMENT_SUBMITTED', now() + interval '48 hours', 50000,'ETB','ETB')`,
+        [orderId, M, SELLER, accountId],
+      );
 
       // The deletion OTP mints a ticket, and the ticket is NOT a session.
       const requested = await http()
@@ -1225,17 +1138,12 @@ const browserCookie = async (): Promise<string> => {
       expectConforms(verified, 'post', '/v1/deletion/otp/verify', true);
       const ticket = verified.body.ticket as string;
       await http()
-        .get('/v1/orders')
+        .get('/v1/auth/sessions')
         // The ticket itself, raw: it must never work as a bearer.
         .set('Authorization', `Bearer ${ticket}`)
         .expect(401);
 
       // Money gate: with payment submitted, preview blocks and confirm 409s.
-      await admin.query(
-        `SET session_replication_role = replica;
-         UPDATE core."order" SET state='PAYMENT_SUBMITTED' WHERE id='${order.body.id}';
-         SET session_replication_role = DEFAULT`,
-      );
       const blockedPreview = await http()
         .get('/v1/deletion/preview')
         .set('Authorization', `Ticket ${ticket}`)
@@ -1254,7 +1162,7 @@ const browserCookie = async (): Promise<string> => {
 
       await admin.query(
         `SET session_replication_role = replica;
-         UPDATE core."order" SET state='CREATED' WHERE id='${order.body.id}';
+         UPDATE core."order" SET state='CREATED' WHERE id='${orderId}';
          SET session_replication_role = DEFAULT`,
       );
       const preview = await http()
@@ -1264,6 +1172,9 @@ const browserCookie = async (): Promise<string> => {
       expectConforms(preview, 'get', '/v1/deletion/preview', true);
       expect(preview.body.items).toHaveLength(0);
       expect(preview.body.effects.length).toBeGreaterThan(0);
+      expect(preview.body.effects.map((e: { code: string }) => e.code)).not.toContain(
+        'RESERVATIONS_RELEASED',
+      );
 
       const confirmed = await http()
         .post('/v1/deletion/confirm')
@@ -1273,17 +1184,12 @@ const browserCookie = async (): Promise<string> => {
         .expect(200);
       expectConforms(confirmed, 'post', '/v1/deletion/confirm', true);
 
-      // Scrubbed: the session is dead, the reservation released, the row
-      // tombstoned — and the number is free for a brand-new account.
+      // Scrubbed: the session is dead, the row tombstoned -- and the number
+      // is free for a brand-new account.
       await http()
-        .get('/v1/orders')
+        .get('/v1/auth/sessions')
         .set('Authorization', `Bearer ${sessionToken(bearer)}`)
         .expect(401);
-      const released = await admin.query(
-        `SELECT r.state FROM core.reservation r WHERE r.order_id=$1`,
-        [order.body.id],
-      );
-      expect(released.rows[0].state).toBe('CANCELLED_BY_BUYER');
       const scrubbed = await admin.query(
         `SELECT status, phone_e164, scrubbed_at FROM core.account WHERE id=$1`,
         [accountId],

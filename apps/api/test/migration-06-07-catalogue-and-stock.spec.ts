@@ -204,7 +204,7 @@ describe('migrations 06-07 — catalogue, media, and the derived stock count', (
         await seed(c);
         await addStock(c, 10);
         expect(await countOf(c)).toBe(10);
-        await addStock(c, -3, 'ORDER_CREATED');
+        await addStock(c, -3, 'RECONCILIATION');
         expect(await countOf(c)).toBe(7);
 
         const { rows } = (await c.query(
@@ -247,12 +247,10 @@ describe('migrations 06-07 — catalogue, media, and the derived stock count', (
     it('keeps the count equal to the sum of its events', async () => {
       await tx(async (c) => {
         await seed(c);
-        // ORDER_CREATED for the decrements: since migration 09, LINE_CANCELLED
-        // is a RELEASE reason and A3.2's release_has_a_line CHECK requires a
-        // reservation anchor on it - which is the constraint working, not a
-        // test inconvenience.
+        // RECONCILIATION for the decrements: the order reasons (ORDER_CREATED,
+        // ORDER_EXPIRED, LINE_CANCELLED) are refused by CHECK since migration 0063.
         for (const d of [10, -2, 5, -1, -4]) {
-          await addStock(c, d, d > 0 ? 'RESTOCK' : 'ORDER_CREATED');
+          await addStock(c, d, d > 0 ? 'RESTOCK' : 'RECONCILIATION');
         }
         const { rows } = (await c.query(
           `SELECT sum(delta)::int AS s FROM core.stock_event WHERE variant_id=$1`,
@@ -270,7 +268,7 @@ describe('migrations 06-07 — catalogue, media, and the derived stock count', (
       await tx(async (c) => {
         await seed(c);
         await addStock(c, 7);
-        await expect(addStock(c, -100, 'ORDER_CREATED')).rejects.toThrow(/stock_count_check/);
+        await expect(addStock(c, -100, 'RECONCILIATION')).rejects.toThrow(/stock_count_check/);
         expect(await countOf(c)).toBe(7);
         const { rows } = (await c.query(
           `SELECT count(*)::int AS n FROM core.stock_event WHERE variant_id=$1`,
@@ -284,7 +282,7 @@ describe('migrations 06-07 — catalogue, media, and the derived stock count', (
       await tx(async (c) => {
         await seed(c);
         await addStock(c, 3);
-        await expect(addStock(c, -3, 'ORDER_CREATED')).resolves.toBeDefined();
+        await expect(addStock(c, -3, 'RECONCILIATION')).resolves.toBeDefined();
         expect(await countOf(c)).toBe(0);
       });
     });
@@ -381,7 +379,7 @@ describe('migrations 06-07 — catalogue, media, and the derived stock count', (
           await c.query('SELECT pg_sleep(0.25)');
           await c.query(
             `INSERT INTO core.stock_event (id, variant_id, seller_id, delta, reason)
-             VALUES (gen_random_uuid(),$1,$2,-6,'ORDER_CREATED')`,
+             VALUES (gen_random_uuid(),$1,$2,-6,'RECONCILIATION')`,
             [rv, rs],
           );
           await c.query('COMMIT');

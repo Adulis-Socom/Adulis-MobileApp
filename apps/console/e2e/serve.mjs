@@ -23,7 +23,7 @@
  * origin); only the origin token differs, and both come from one variable.
  *
  * SPA fallback: any path that is not a file is `index.html`, because
- * `/s/:id/orders` is a route rather than a directory.
+ * `/s/:id/products` is a route rather than a directory.
  */
 import { createServer } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';

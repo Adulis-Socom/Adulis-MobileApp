@@ -6,7 +6,10 @@
  *   /s/new              SC-02 become a seller (no id yet -- it makes one)
  *   /s/:sellerId/*      every seller-scoped route -- the seller id lives in
  *                       the URL and ONLY the URL (two tabs, two stores)
- *   /courier            SC-C1 (C-8: live -- the courier's own tree)
+ *
+ * The Reservation retirement (founder, 2026-11-25) removed the trade, payout,
+ * claims and courier-order routes outright; a stored link to one meets a
+ * catch-all, never a dead screen.
  */
 import { createBrowserRouter, Navigate, Outlet } from 'react-router';
 import { SignIn } from './auth/SignIn';
@@ -15,8 +18,6 @@ import { Shell } from './layout/Shell';
 import { Chooser } from './features/entry/Chooser';
 import { StateDemo } from './features/entry/StateDemo';
 import { Home } from './features/entry/Home';
-import { Orders } from './features/trade/Orders';
-import { OrderDetail } from './features/trade/OrderDetail';
 import { BecomeSeller } from './features/entry/BecomeSeller';
 import { Products } from './features/catalogue/Products';
 import { ProductEditor } from './features/catalogue/ProductEditor';
@@ -39,7 +40,6 @@ import { Reviews } from './features/trust/Reviews';
 import { Inbox } from './features/conversation/Inbox';
 import { Thread } from './features/conversation/Thread';
 import { NotificationCentre } from './features/notifications/NotificationCentre';
-import { Deferred } from './components/Deferred';
 
 export const router = createBrowserRouter([
   { path: '/sign-in', element: <SignIn /> },
@@ -61,11 +61,6 @@ export const router = createBrowserRouter([
           // the screen that replaced it.
           { index: true, element: <Home /> },
           { path: 'states', element: <StateDemo /> },
-          // C-4, group B. SC-05 and SC-06 are MODALS OVER SC-04 rather than
-          // routes -- ADU-CON-03 S7 says so for both, and a modal with its own
-          // URL is a screen a seller can land on with no order behind it.
-          { path: 'orders', element: <Orders /> },
-          { path: 'orders/:orderId', element: <OrderDetail /> },
           // C-5 catalogue (SC-07..SC-11). SC-09 Variants and SC-10 Media are
           // SECTIONS of SC-08, not routes; SC-11 Stock is inline on SC-09 and
           // has its own route below.
@@ -87,9 +82,6 @@ export const router = createBrowserRouter([
           // since C-3 are discharged by the real screens.
           { path: 'eligibility', element: <Identity /> },
           { path: 'profile', element: <Profile /> },
-          // B02-D02 Payout Option A: deferred entirely. The route stays so a stored link or
-          // a typed URL meets an honest state, not the catch-all; the Payout screen is unrouted.
-          { path: 'payouts', element: <Deferred what="payout" /> },
           { path: 'fulfilment', element: <Fulfilment /> },
           { path: 'availability', element: <Availability /> },
           { path: 'couriers', element: <Couriers /> },
@@ -99,14 +91,9 @@ export const router = createBrowserRouter([
           { path: 'notification-preferences', element: <NotificationPrefs /> },
           { path: 'closure', element: <Closure /> },
           // C-7, groups D and E plus SC-30 -- the placeholders discharged.
-          // SC-15/16 claims are filed under NO More section (S2.3: an open
-          // obligation surfaces on Home and Orders); the routes exist here.
           { path: 'insights', element: <Analytics /> },
           { path: 'insights/trust', element: <TrustLevel /> },
           { path: 'insights/reviews', element: <Reviews /> },
-          // D24-01: purchase-derived claims (incl. payment-evidence claims) are deferred.
-          { path: 'claims', element: <Deferred what="claims" /> },
-          { path: 'claims/:claimId', element: <Deferred what="claims" /> },
           { path: 'inbox', element: <Inbox /> },
           { path: 'inbox/:conversationId', element: <Thread /> },
           { path: 'notifications', element: <NotificationCentre /> },
@@ -117,10 +104,8 @@ export const router = createBrowserRouter([
           { path: '*', element: <Navigate to=".." relative="path" replace /> },
         ],
       },
-      // C-8: the one screen for a DIFFERENT user -- no Shell, no seller
-      // navigation, its own route tree (S12).
-      // Live courier delivery is deferred (handoff depends on a confirmed payment, D24-01).
-      { path: '/courier', element: <Deferred what="courier" /> },
+      // An unknown top-level URL (the retired /courier among them) goes to the chooser.
+      { path: '*', element: <Navigate to="/" replace /> },
     ],
   },
 ]);

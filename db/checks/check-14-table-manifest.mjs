@@ -33,7 +33,11 @@ const SCHEMAS = [
   'analytics',
   'waitlist',
 ];
-const EXPECTED = 109;
+// RETIRED BY MIGRATION 0063 (founder pre-launch authorization, 2026-11-25): the legacy
+// Reservation model left the architecture, and with it three manifest tables. Pinned BY NAME,
+// like the exceptions below, so the count cannot absorb a stray: each must be ABSENT.
+const RETIRED = ['core.reservation', 'core.refund', 'core.reservation_state_transition_legal'];
+const EXPECTED = 109 - RETIRED.length;
 // Register D-18: the section 9 body gives core.category a "per-market
 // availability", which only spells relationally as a join table - and
 // Appendix B's manifest does not list it. This is the manifest's own
@@ -125,14 +129,22 @@ export default {
       (t) => !pinned.some((r) => r.t === t),
     );
 
+    const lingering = await sql(
+      `SELECT n.nspname || '.' || c.relname AS t
+         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname || '.' || c.relname = ANY($1::text[])`,
+      [RETIRED],
+    );
+
     const want = EXPECTED + BODY_OVER_MANIFEST.length;
-    return total === want && missingPinned.length === 0
+    return total === want && missingPinned.length === 0 && lingering.length === 0
       ? ok(
-          `${total} tables: manifest ${EXPECTED} + ${BODY_OVER_MANIFEST.length} body-over-manifest (D-18) (${breakdown})`,
+          `${total} tables: manifest ${EXPECTED} (109 less ${RETIRED.length} retired by 0063) + ${BODY_OVER_MANIFEST.length} body-over-manifest (D-18) (${breakdown})`,
         )
       : bad(
           `${total} tables, expected ${want} (manifest ${EXPECTED} + D-18 exception)` +
             (missingPinned.length ? `; pinned table missing: ${missingPinned.join(', ')}` : '') +
+            (lingering.length ? `; retired table present: ${lingering.map((r) => r.t).join(', ')}` : '') +
             ` — ${breakdown}`,
         );
   },
