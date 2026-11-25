@@ -233,35 +233,45 @@ jobs:
       - name: Install from the lockfile (clean, frozen)
         run: pnpm install --frozen-lockfile
 
+      # Every step below runs even when an earlier one failed, so one run reports every failure; the job is still red.
+
       - name: Shared token and locale validation
         run: |
           pnpm verify:tokens
           pnpm --filter @adulis/locale test
 
       - name: Strict type check
+        if: ${{ !cancelled() }}
         run: pnpm --filter @adulis/console typecheck
 
       - name: Lint
+        if: ${{ !cancelled() }}
         run: pnpm --filter @adulis/console lint
 
       - name: Dependency boundaries (and that the rules fire)
+        if: ${{ !cancelled() }}
         run: |
           pnpm exec depcruise apps/console packages --config .dependency-cruiser.cjs
           bash apps/console/scripts/verify-deps-fires.sh
 
       - name: Unit tests
+        if: ${{ !cancelled() }}
         run: pnpm --filter @adulis/console test
 
       - name: Release build
+        if: ${{ !cancelled() }}
         run: pnpm --filter @adulis/console build
 
       - name: Fixture exclusion from release (negative scan with its positive control)
+        if: ${{ !cancelled() }}
         run: pnpm --filter @adulis/console verify:release
 
       - name: Install the browser
+        if: ${{ !cancelled() }}
         run: pnpm --filter @adulis/console exec playwright install --with-deps chromium
 
       - name: Playwright - journeys, isolation, responsive, accessibility, screenshots, release build
+        if: ${{ !cancelled() }}
         run: pnpm --filter @adulis/console test:e2e
 
       - name: Upload screenshots

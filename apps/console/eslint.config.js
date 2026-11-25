@@ -20,6 +20,8 @@ export default tseslint.config(
     plugins: { 'react-hooks': reactHooks, 'jsx-a11y': jsxA11y },
     rules: {
       ...jsxA11y.flatConfigs.recommended.rules,
+      // A choice label is input + span + strong + text: the default depth of 2 cannot see the text.
+      'jsx-a11y/label-has-associated-control': ['error', { depth: 3 }],
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'error',
       '@typescript-eslint/no-explicit-any': 'error',
