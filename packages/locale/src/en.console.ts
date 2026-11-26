@@ -944,4 +944,7 @@ export const enConsole = {
   'reviews.more_service': 'Show more service reviews',
   'reviews.list_product': 'Product review list',
   'reviews.list_service': 'Service review list',
+
+  // ---- SC-FE-08 Inbox (review polish) (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
+  'inbox.scene_chosen': 'Chosen Scene: {scene}',
 } as const;

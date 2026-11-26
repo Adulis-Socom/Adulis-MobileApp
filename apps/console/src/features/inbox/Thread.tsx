@@ -38,10 +38,11 @@ function MessageRow({ message, timezone }: { message: Message; timezone: string 
       <li className="message message-system">
         <p className="notice">
           <Icon name="info" />
-          <span>
-            {message.body} <time dateTime={message.sent_at}>{formatInstant(message.sent_at, timezone)}</time>
-          </span>
+          <span>{message.body}</span>
         </p>
+        <time className="ledger-meta" dateTime={message.sent_at}>
+          {formatInstant(message.sent_at, timezone)}
+        </time>
       </li>
     );
   }

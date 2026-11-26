@@ -14,6 +14,8 @@ import { HOUR_MS, invalid, need, needCap, notFound, withIdempotency, type Handle
  */
 const PAGE_SIZE = 4; // demonstration value: the real page size is the server's
 const PREVIEW_CHARS = 80; // demonstration value: the server picks the excerpt
+/** The actual person behind a reply (CHAT S9), by demonstration account. A real server records the signed-in account's own name. */
+const ACTORS: Readonly<Record<string, string>> = { fx_acct_owner: 'Alem', fx_acct_admin: 'Selam', fx_acct_sales: 'Tigist', fx_acct_multirole: 'Tigist', fx_acct_states: 'Dawit', fx_acct_mixed: 'Lemlem' };
 
 type InboxOps = 'inbox.list' | 'inbox.thread.get' | 'inbox.context.get' | 'inbox.reply.send' | 'inbox.read.mark';
 export interface Inbox {
@@ -63,7 +65,7 @@ export function createInbox(kit: Kit, catalogue: Catalogue, content: Content): I
         { id: 'fx_conv_alem_1', buyer: 'Demonstration buyer A', state: 'OPEN', readCount: 3, msgs: [
           m('BUYER', 'Is the linen wrap dress still available in size S?', 5, { productId: p(1), scene: scene(1, 'Linen wrap dress styled for the rainy season') }),
           auto('Thanks for your message. A team member will reply.', 5),
-          m('SELLER_TEAM', 'Yes, we have it in size S.', 4, { actor: 'Team member', productId: p(1) }),
+          m('SELLER_TEAM', 'Yes, we have it in size S.', 4, { actor: 'Selam', productId: p(1) }),
           m('BUYER', 'Thank you, that helps.', 1),
         ] },
         { id: 'fx_conv_alem_2', buyer: 'Demonstration buyer B', state: 'WAITING_FOR_HUMAN', readCount: 0, msgs: [
@@ -74,12 +76,12 @@ export function createInbox(kit: Kit, catalogue: Catalogue, content: Content): I
         ] },
         { id: 'fx_conv_alem_3', buyer: 'Demonstration buyer C', state: 'OPEN', readCount: 2, msgs: [
           m('BUYER', 'I love this look. Where is it from?', 30, { scene: scene(6, 'The old kaftan, styled two ways') }),
-          m('SELLER_TEAM', 'It is from our own workshop.', 29, { actor: 'Team member', scene: scene(6, 'The old kaftan, styled two ways') }),
+          m('SELLER_TEAM', 'It is from our own workshop.', 29, { actor: 'Selam', scene: scene(6, 'The old kaftan, styled two ways') }),
         ] },
         { id: 'fx_conv_alem_4', buyer: 'Demonstration buyer D', state: 'OPEN', readCount: 1, msgs: [m('BUYER', 'Do you have a shop I can visit?', 50)] },
         { id: 'fx_conv_alem_5', buyer: 'Demonstration buyer E', state: 'OPEN', readCount: 2, msgs: [
           m('BUYER', 'Good afternoon.', 100),
-          m('SELLER_TEAM', 'Good afternoon, how can we help?', 99, { actor: 'Team member' }),
+          m('SELLER_TEAM', 'Good afternoon, how can we help?', 99, { actor: 'Tigist' }),
         ] },
       ];
     }
@@ -179,7 +181,7 @@ export function createInbox(kit: Kit, catalogue: Catalogue, content: Content): I
         else if (scene && !scene.productIds.includes(product_id)) errors['product'] = 'MESSAGE_PRODUCT_NOT_IN_SCENE';
       }
       if (Object.keys(errors).length > 0) throw invalid(errors);
-      c.msgs.push({ id: kit.next('fx_msg'), sender: 'SELLER_TEAM', actor: 'Team member', body: body.trim(), productId: product_id, scene: scene ? { id: scene.id, label: scene.label } : null, at: kit.now(), automation: null });
+      c.msgs.push({ id: kit.next('fx_msg'), sender: 'SELLER_TEAM', actor: ACTORS[a.accountId] ?? 'A team member', body: body.trim(), productId: product_id, scene: scene ? { id: scene.id, label: scene.label } : null, at: kit.now(), automation: null });
       // A human reply continues the same thread and takes it back from automation; the reply itself is read by the person who wrote it.
       c.state = 'OPEN';
       c.readCount = c.msgs.length;

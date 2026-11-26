@@ -61,6 +61,7 @@ export function Composer({ thread, onSent }: { thread: ThreadView; onSent: (next
           </select>
         )}
       </Field>
+      {sceneId !== '' ? <p className="hint">{t('inbox.scene_chosen', { scene: ready?.scenes.find((s) => s.id === sceneId)?.label ?? '' })}</p> : null}
       <Field id="product" label={t('inbox.product_label')} hint={sceneId === '' ? t('inbox.product_hint_all') : t('inbox.product_hint_scene')} error={action.fields['product']}>
         {(control) => (
           <select {...control} className="text-input" value={productId} onChange={(e) => setProductId(e.target.value)}>
