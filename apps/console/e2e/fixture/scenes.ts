@@ -32,6 +32,9 @@ async function statesAccountAt(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
 }
 
+/** A valid 1x1 PNG, so a chosen file renders as a real image in a screenshot. */
+const REAL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
 export const SCENES: readonly Scene[] = [
   { name: 'signin', setup: async (p) => { await p.goto('/sign-in'); await expect(p.getByRole('heading', { level: 1 })).toBeVisible(); } },
   {
@@ -411,6 +414,46 @@ export const SCENES: readonly Scene[] = [
       await goInApp(p, `/s/${SELLER.alem.id}/store/couriers`);
       await p.getByRole('button', { name: 'Revoke Meseret (demonstration)' }).click();
       await expect(p.getByRole('dialog', { name: 'Revoke this Courier?' })).toBeVisible();
+    },
+  },
+  {
+    name: 'store-company',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.states, SELLER.eden.name);
+      await goInApp(p, `/s/${SELLER.eden.id}/store/company`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Company details', exact: true })).toBeVisible();
+      await expect(p.getByText('does not mean Adulis has verified the company')).toBeVisible();
+    },
+  },
+  {
+    name: 'store-location-preview',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.biruk.name);
+      await goInApp(p, `/s/${SELLER.biruk.id}/store/location`);
+      await p.getByLabel('Search for your shop').fill('Piassa');
+      await p.getByRole('button', { name: 'Search places' }).click();
+      await p.getByRole('button', { name: 'Preview Demonstration place 2, Piassa, Addis Ababa' }).click();
+      await expect(p.getByRole('img', { name: /Demonstration map preview/ })).toBeVisible();
+    },
+  },
+  {
+    name: 'story-compose-photo',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/content/stories`);
+      await p.getByRole('button', { name: 'Add a Story' }).click();
+      await p.getByLabel('Photo', { exact: true }).setInputFiles({ name: 'look.png', mimeType: 'image/png', buffer: REAL_PNG });
+      await expect(p.getByRole('img', { name: 'Photo for the Story: look.png' })).toBeVisible();
+    },
+  },
+  {
+    name: 'product-editor-media-tiktok',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/products/fx_prod_alem_1`);
+      await expect(p.getByRole('heading', { level: 2, name: 'Product images' })).toBeVisible();
+      await p.getByRole('heading', { level: 2, name: 'TikTok video' }).scrollIntoViewIfNeeded();
+      await expect(p.getByRole('heading', { level: 2, name: 'TikTok video' })).toBeVisible();
     },
   },
 ];
