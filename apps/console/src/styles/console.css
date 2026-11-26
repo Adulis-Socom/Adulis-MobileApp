@@ -1561,3 +1561,9 @@ legend {
   padding-inline-start: var(--adu-space-lg);
 }
 
+
+/* A server identifier (a template key, a code) has no spaces: at doubled text it must still break rather than widen its panel */
+.facts dd,
+.ledger-meta {
+  overflow-wrap: anywhere;
+}
