@@ -830,7 +830,6 @@ export const amConsole: { readonly [K in keyof typeof enConsole]: AmEntry } = {
 
   // ---- Batch 02C closure (review fixes) ----
   'stock.last_confirmed_sentence': PENDING,
-  'stock.never_confirmed_sentence': PENDING,
   'hours.opens_short': PENDING,
   'hours.closes_short': PENDING,
   'hours.remove_short': PENDING,

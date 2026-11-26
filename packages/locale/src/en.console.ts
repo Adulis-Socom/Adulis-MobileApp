@@ -832,7 +832,7 @@ export const enConsole = {
   'company.not_a_company': 'Company details apply only to a Company Seller.',
   'company.not_verification': 'These details describe your company. Filling them in does not mean Adulis has verified the company or its representative.',
   'company.name_label': 'Company name',
-  'company.description_label': 'About the company',
+  'company.description_label': 'Company description',
   'company.description_hint': 'A short description Buyers can read. Optional.',
   'company.representative_label': 'Company representative',
   'company.representative_hint': 'The person who speaks for the company. Only the Owner can change this.',
@@ -841,7 +841,7 @@ export const enConsole = {
   'company.contact_hint': 'Include the country code.',
   'company.no_id_note': 'Adulis does not ask for a Government ID here.',
   'company.save': 'Save company details',
-  'store.nav_company': 'Company details',
+  'store.nav_company': 'Company',
   'store.nav_picker': 'Store section',
   'store.location_preview': 'Preview {address}',
   'store.map_none': 'No place is set, so there is nothing to preview yet.',
@@ -850,7 +850,6 @@ export const enConsole = {
 
   // ---- Batch 02C closure (review fixes) (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
   'stock.last_confirmed_sentence': 'Last confirmed {when}.',
-  'stock.never_confirmed_sentence': 'This stock has never been confirmed.',
   'hours.opens_short': 'Opens',
   'hours.closes_short': 'Closes',
   'hours.remove_short': 'Remove',
