@@ -927,4 +927,7 @@ export const amConsole: { readonly [K in keyof typeof enConsole]: AmEntry } = {
 
   // ---- SC-FE-08 Inbox (review polish) ----
   'inbox.scene_chosen': PENDING,
+
+  // ---- SC-FE-09 Trust and Reviews (review polish) ----
+  'reviews.at_rating': PENDING,
 };
