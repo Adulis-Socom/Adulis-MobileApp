@@ -912,4 +912,7 @@ export const enConsole = {
   'field_error.MESSAGE_PRODUCT_NOT_IN_SCENE': 'This Product is not tagged in the chosen Scene.',
   'field_error.CONTEXT_SCENE_NOT_AVAILABLE': 'This Scene cannot be used right now.',
   'field_error.CONTEXT_PRODUCT_NOT_AVAILABLE': 'This Product cannot be used right now.',
+
+  // ---- SC-FE-08 Inbox (review polish) (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
+  'inbox.scene_chosen': 'Chosen Scene: {scene}',
 } as const;

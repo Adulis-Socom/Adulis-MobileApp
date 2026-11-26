@@ -892,4 +892,7 @@ export const amConsole: { readonly [K in keyof typeof enConsole]: AmEntry } = {
   'field_error.MESSAGE_PRODUCT_NOT_IN_SCENE': PENDING,
   'field_error.CONTEXT_SCENE_NOT_AVAILABLE': PENDING,
   'field_error.CONTEXT_PRODUCT_NOT_AVAILABLE': PENDING,
+
+  // ---- SC-FE-08 Inbox (review polish) ----
+  'inbox.scene_chosen': PENDING,
 };
