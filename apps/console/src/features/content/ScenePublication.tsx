@@ -64,11 +64,11 @@ export function ScenePublication({ scene, onChange, onReload, timezone }: SceneS
       {scene.blockers.length > 0 ? (
         <div className="stack">
           <h3>{t('scenes.blockers_title', { count: scene.blockers.length })}</h3>
-          <ul className="plain-list">
+          <ul className="plain-list blocker-list">
             {scene.blockers.map((b, i) => {
               const text = codeText('scene.blocker', b.code) ?? t('scene.blocker.unknown', { code: b.code });
               return (
-                <li key={`${b.code}-${i}`} className="row-start">
+                <li key={`${b.code}-${i}`}>
                   <Icon name="alert" />
                   {b.field ? (
                     <a className="btn btn-link" href={`#${b.field}`}>

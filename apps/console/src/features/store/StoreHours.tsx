@@ -44,7 +44,7 @@ function Body({ view, onChange, onReload, editable }: StoreProps) {
                 {d.intervals.map((interval, n) => (
                   <div key={n} className="stack">
                     <div className="interval">
-                    <Field id={`${d.day}-${n}-open`} label={t('hours.opens', { day: dayName, n: n + 1 })}>
+                    <Field id={`${d.day}-${n}-open`} label={<><span aria-hidden="true">{t('hours.opens_short')}</span><span className="sr-only">{t('hours.opens', { day: dayName, n: n + 1 })}</span></>}>
                       {(control) => (
                         <input
                           {...control}
@@ -55,7 +55,7 @@ function Body({ view, onChange, onReload, editable }: StoreProps) {
                         />
                       )}
                     </Field>
-                    <Field id={`${d.day}-${n}-close`} label={t('hours.closes', { day: dayName, n: n + 1 })}>
+                    <Field id={`${d.day}-${n}-close`} label={<><span aria-hidden="true">{t('hours.closes_short')}</span><span className="sr-only">{t('hours.closes', { day: dayName, n: n + 1 })}</span></>}>
                       {(control) => (
                         <input
                           {...control}
@@ -66,20 +66,18 @@ function Body({ view, onChange, onReload, editable }: StoreProps) {
                         />
                       )}
                     </Field>
-                    </div>
                     {editable ? (
-                      <div className="actions">
-                        <button type="button" className="btn btn-quiet" onClick={() => editDay(d.day, (list) => list.filter((_, i) => i !== n))}>
-                          {t('hours.remove', { day: dayName, n: n + 1 })}
-                        </button>
-                      </div>
+                      <button type="button" className="btn btn-quiet interval-remove" aria-label={t('hours.remove', { day: dayName, n: n + 1 })} onClick={() => editDay(d.day, (list) => list.filter((_, i) => i !== n))}>
+                        {t('hours.remove_short')}
+                      </button>
                     ) : null}
+                    </div>
                   </div>
                 ))}
                 {editable ? (
                   <div className="actions">
-                    <button type="button" className="btn btn-quiet" onClick={() => editDay(d.day, (list) => [...list, { ...NEW_INTERVAL }])}>
-                      {t('hours.add', { day: dayName })}
+                    <button type="button" className="btn btn-quiet" aria-label={t('hours.add', { day: dayName })} onClick={() => editDay(d.day, (list) => [...list, { ...NEW_INTERVAL }])}>
+                      {t('hours.add_short')}
                     </button>
                   </div>
                 ) : null}

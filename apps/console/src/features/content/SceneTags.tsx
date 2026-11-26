@@ -40,10 +40,10 @@ function Candidates({ tagged, onTag, editable }: { tagged: ReadonlySet<string>; 
   const { state, retry } = useSellerQuery('scenes.tag_candidates.get', { query });
   return (
     <div className="stack">
-      <h3>{t('scenes.find_title')}</h3>
+      <h3 className="subhead">{t('scenes.find_title')}</h3>
       <form
         role="search"
-        className="row"
+        className="row search-row"
         onSubmit={(e: FormEvent) => {
           e.preventDefault();
           setQuery(draft);
@@ -148,6 +148,11 @@ export function SceneTagsSection({ scene, onChange, onReload, localImage }: Scen
   return (
     <Section id="tags" title={t('scenes.tags_title')}>
       <p className="hint">{t('scenes.tags_hint')}</p>
+      {editable ? (
+        <div className="subsection-end">
+          <Candidates tagged={tagged} editable={editable} onTag={tag} />
+        </div>
+      ) : null}
       <form onSubmit={(e) => void save(e)} noValidate className="stack">
         <ActionProblem action={action} onReload={onReload} />
         {tags.length === 0 ? (
@@ -185,7 +190,7 @@ export function SceneTagsSection({ scene, onChange, onReload, localImage }: Scen
 
         {editable && tags.length > 0 ? (
           <div id="hotspots" className="stack subsection">
-            <h3>{t('scenes.hotspots_title')}</h3>
+            <h3 className="subhead">{t('scenes.hotspots_title')}</h3>
             {image === null ? (
               <p className="empty">{t('scenes.hotspots_need_image')}</p>
             ) : (
@@ -285,11 +290,6 @@ export function SceneTagsSection({ scene, onChange, onReload, localImage }: Scen
           </div>
         ) : null}
       </form>
-      {editable ? (
-        <div className="subsection">
-          <Candidates tagged={tagged} editable={editable} onTag={tag} />
-        </div>
-      ) : null}
     </Section>
   );
 }

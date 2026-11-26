@@ -347,7 +347,7 @@ export const SCENES: readonly Scene[] = [
       await atSellerHome(p, PHONE.owner, SELLER.alem.name);
       await goInApp(p, `/s/${SELLER.alem.id}/content/stories`);
       await p.getByRole('button', { name: 'Add a Story' }).click();
-      await p.getByLabel('Photo', { exact: true }).setInputFiles({ name: 'rain.png', mimeType: 'image/png', buffer: Buffer.from('demonstration photo bytes') });
+      await p.getByLabel('Photo', { exact: true }).setInputFiles({ name: 'rain.png', mimeType: 'image/png', buffer: REAL_PNG });
       await p.getByLabel('Text', { exact: true }).fill('Fresh stock');
       await p.getByRole('radio', { name: 'A Product' }).check();
       await p.getByLabel('Product', { exact: true }).selectOption({ label: 'Canvas backpack' });

@@ -102,7 +102,7 @@ export function StoryComposer({ onCancel, onPublished }: { onCancel: () => void;
     return (
       <Section id="story-preview" title={t('stories.preview_title')}>
         <p className="hint">{t('stories.preview_note')}</p>
-        <Stage aspect={PREVIEW_ASPECT} imageName={photo.name} imageUrl={photo.url} measure markers={[]} />
+        <Stage aspect={PREVIEW_ASPECT} imageName={photo.name} imageUrl={photo.url} imageAlt={t('stories.photo_alt', { name: photo.name })} measure markers={[]} />
         <p>{text.trim() === '' ? t('stories.no_text') : text.trim()}</p>
         <p>{kind === 'NONE' ? t('stories.preview_no_link') : t(kind === 'PRODUCT' ? 'stories.preview_links_product' : 'stories.preview_links_scene', { label })}</p>
         <ActionProblem action={action} />

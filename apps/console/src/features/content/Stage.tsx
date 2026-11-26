@@ -29,6 +29,7 @@ export function Stage({
   aspect,
   imageName,
   imageUrl,
+  imageAlt,
   measure = false,
   markers,
   placeLabel,
@@ -40,6 +41,8 @@ export function Stage({
   aspect: number;
   imageName: string | null;
   imageUrl?: string | null | undefined;
+  /** Overrides the default Scene wording (a Story photo is not a Scene image). */
+  imageAlt?: string | undefined;
   measure?: boolean | undefined;
   markers: readonly Marker[];
   placeLabel?: string | undefined;
@@ -51,6 +54,7 @@ export function Stage({
   const ref = useRef<HTMLDivElement>(null);
   const dragging = useRef<string | null>(null);
   const [natural, setNatural] = useState<number | null>(null);
+  const [broken, setBroken] = useState(false);
   const shownAspect = measure && natural !== null ? natural : aspect;
 
   function place(event: MouseEvent<HTMLButtonElement>) {
@@ -88,19 +92,20 @@ export function Stage({
 
   return (
     <div className="stage" ref={ref} style={{ aspectRatio: String(shownAspect) }}>
-      {imageUrl ? (
+      {imageUrl && !broken ? (
         <img
           className="stage-img"
           src={imageUrl}
-          alt={t('stage.image_alt', { name: imageName ?? '' })}
+          alt={imageAlt ?? t('stage.image_alt', { name: imageName ?? '' })}
           draggable={false}
+          onError={() => setBroken(true)}
           onLoad={(e) => {
             const { naturalWidth, naturalHeight } = e.currentTarget;
             if (naturalWidth > 0 && naturalHeight > 0) setNatural(naturalWidth / naturalHeight);
           }}
         />
       ) : (
-        <span className="stage-name">{imageName ?? t('scenes.no_image')}</span>
+        <span className="stage-name">{imageUrl ? t('stage.image_failed') : (imageName ?? t('scenes.no_image'))}</span>
       )}
       {onPlace ? <button type="button" className="stage-hit" aria-label={placeLabel ?? t('scenes.place_default')} onClick={place} /> : null}
       {markers.map((m) => {

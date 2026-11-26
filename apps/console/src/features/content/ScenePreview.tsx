@@ -1,7 +1,7 @@
 import { t } from '../../i18n/t';
 import { AvailabilityBadge } from '../products/badges';
 import { Section } from '../products/Section';
-import { PrivateReason, SceneBadges } from './sceneBadges';
+import { PrivateReason } from './sceneBadges';
 import { imageSrc, type SceneSectionProps } from './sceneEditor';
 import { Stage, type Marker } from './Stage';
 
@@ -18,10 +18,7 @@ export function ScenePreview({ scene, localImage }: SceneSectionProps) {
   return (
     <Section id="preview" title={t('scenes.preview_title')}>
       <p className="hint">{t('scenes.preview_note')}</p>
-      <div className="row">
-        <SceneBadges publication={scene.publication_state} visibility={scene.visibility} moderation={scene.moderation} />
-        {scene.publication_state === 'PUBLISHED' && scene.visibility === 'PRIVATE' ? <PrivateReason reason={scene.private_reason} /> : null}
-      </div>
+      {scene.publication_state === 'PUBLISHED' && scene.visibility === 'PRIVATE' ? <PrivateReason reason={scene.private_reason} /> : null}
       {scene.image ? <Stage aspect={scene.image.aspect} imageName={scene.image.file_name} imageUrl={src.url} measure={src.measure} markers={markers} /> : <p className="empty">{t('scenes.image_empty')}</p>}
       <p>{scene.caption.trim() === '' ? t('scenes.no_caption') : scene.caption}</p>
       <h3>{t('scenes.preview_products')}</h3>

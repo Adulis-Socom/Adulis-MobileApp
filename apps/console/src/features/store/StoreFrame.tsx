@@ -98,8 +98,8 @@ export function StoreFrame({ title, lead, children }: { title: string; lead?: st
     <DirtyProvider>
       <PageTitle title={title}>{title}</PageTitle>
       <UnsavedNote />
-      {lead ? <p className="lead">{lead}</p> : null}
       <StoreNav />
+      {lead ? <p className="lead">{lead}</p> : null}
       {query.state.status === 'error' ? (
         <StatePanel
           kind="danger"

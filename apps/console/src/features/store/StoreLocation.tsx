@@ -21,11 +21,12 @@ const place = (lat: number, lon: number): { x: number; y: number } => ({ x: Math
  * A demonstration map preview (CON S98 asks for one). No map provider is connected, and the figure says so: it plots the provider-resolved
  * coordinates on a plain outline, so the Seller can see that choosing a different place moves the pin. Never presented as a real map.
  */
-function MapPreview({ target }: { target: LocationCandidate | null }) {
+function MapPreview({ target, saved }: { target: LocationCandidate | null; saved: boolean }) {
   if (target === null) return <p className="hint">{t('store.map_none')}</p>;
   const p = place(target.latitude, target.longitude);
   return (
     <figure className="map-preview">
+      <p className="hint">{t(saved ? 'store.map_label_saved' : 'store.map_label_unsaved', { address: target.display_address })}</p>
       <svg viewBox="0 0 300 200" role="img" aria-label={t('store.map_alt', { address: target.display_address })}>
         <rect className="map-bg" x="0" y="0" width="300" height="200" />
         {[1, 2, 3].map((i) => (
@@ -148,7 +149,7 @@ function Body({ view, onChange, onReload, editable }: StoreProps) {
           ) : null}
         </div>
       )}
-      <MapPreview target={previewed ?? (location ? asCandidate(location) : null)} />
+      <MapPreview target={previewed ?? (location ? asCandidate(location) : null)} saved={previewed === null} />
       <p className="hint">{t('store.map_note')}</p>
       {editable ? <Search busy={action.busy} previewed={previewed?.provider_reference ?? null} onPreview={setPreviewed} onPick={(c) => void set(c, isPublic)} /> : null}
     </Section>

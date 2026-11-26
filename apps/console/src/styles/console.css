@@ -1413,3 +1413,85 @@ legend {
   stroke-width: 3;
 }
 
+/* ---- Batch 02C closure: fixes from the targeted finish review ------------------------------------------------------ */
+/* a blocker is a ruled row: the mark, then the words, left aligned (the link is a text row, not a centred button) */
+.blocker-list > li {
+  display: flex;
+  align-items: center;
+  gap: var(--adu-space-smd);
+  border-top: 1px solid var(--adu-color-border);
+}
+
+.blocker-list > li > .btn-link {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  text-align: start;
+  padding-inline: 0;
+}
+
+/* a disclosure that looks like one: a chevron that turns, and no empty band under it */
+.more > summary {
+  list-style: none;
+}
+
+.more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.more > summary::before {
+  content: '';
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-inline-end: var(--adu-space-sm);
+  border-right: 2px solid currentcolor;
+  border-bottom: 2px solid currentcolor;
+  transform: rotate(-45deg);
+}
+
+.more[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+/* a badge placed in a stack is as wide as its words, not as wide as the row */
+.stack > .badge {
+  justify-self: start;
+}
+
+/* opening hours: the Remove button sits beside the times it removes */
+.interval-remove {
+  align-self: end;
+  justify-self: start;
+}
+
+.group > legend {
+  margin-bottom: var(--adu-space-sm);
+}
+
+/* Scene editor: a sub-section heading is heavier than a field label; the search is one row; the finder sits above what it feeds */
+.subhead {
+  font-size: var(--adu-font-size-lg);
+}
+
+.search-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--adu-space-smd);
+}
+
+.search-row > .field {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.subsection-end {
+  border-bottom: 1px solid var(--adu-color-border);
+  padding-bottom: var(--adu-space-md);
+}
+
+.map-preview {
+  margin-bottom: var(--adu-space-md);
+}
+

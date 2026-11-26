@@ -57,11 +57,11 @@ export function PublicationSection({ detail, onChange, onReload, timezone }: Sec
       {blockers.length > 0 ? (
         <div className="stack">
           <h3>{t('publish.blockers_title', { count: blockers.length })}</h3>
-          <ul className="plain-list">
+          <ul className="plain-list blocker-list">
             {blockers.map((b, i) => {
               const text = codeText('blocker', b.code) ?? t('blocker.unknown', { code: b.code });
               return (
-                <li key={`${b.code}-${b.field ?? i}-${i}`} className="row-start">
+                <li key={`${b.code}-${b.field ?? i}-${i}`}>
                   <Icon name="alert" />
                   {b.field ? (
                     <a className="btn btn-link" href={`#${b.field}`}>

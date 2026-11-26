@@ -116,14 +116,14 @@ export function MediaSection({ detail, onChange, onReload, onRefresh }: SectionP
                   {m.state === 'REJECTED' ? <p className="hint">{t('media.rejected_hint')}</p> : null}
                   {editable ? (
                     <div className="actions">
-                      <button type="button" className="btn btn-quiet" aria-disabled={i === 0 || action.busy} onClick={() => void move(i, -1)}>
-                        {t('media.move_earlier', { name: m.file_name })}
+                      <button type="button" className="btn btn-quiet" aria-label={t('media.move_earlier', { name: m.file_name })} aria-disabled={i === 0 || action.busy} onClick={() => void move(i, -1)}>
+                        {t('media.earlier')}
                       </button>
-                      <button type="button" className="btn btn-quiet" aria-disabled={i === detail.media.length - 1 || action.busy} onClick={() => void move(i, 1)}>
-                        {t('media.move_later', { name: m.file_name })}
+                      <button type="button" className="btn btn-quiet" aria-label={t('media.move_later', { name: m.file_name })} aria-disabled={i === detail.media.length - 1 || action.busy} onClick={() => void move(i, 1)}>
+                        {t('media.later')}
                       </button>
-                      <button type="button" className="btn btn-quiet" aria-disabled={action.busy} onClick={() => void remove(m.id)}>
-                        {t('media.remove', { name: m.file_name })}
+                      <button type="button" className="btn btn-quiet" aria-label={t('media.remove', { name: m.file_name })} aria-disabled={action.busy} onClick={() => void remove(m.id)}>
+                        {t('media.remove_short')}
                       </button>
                     </div>
                   ) : null}
