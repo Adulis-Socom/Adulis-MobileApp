@@ -927,4 +927,11 @@ export const amConsole: { readonly [K in keyof typeof enConsole]: AmEntry } = {
   'reviews.more_service': PENDING,
   'reviews.list_product': PENDING,
   'reviews.list_service': PENDING,
+
+
+  // ---- SC-FE-08 Inbox (review polish) ----
+  'inbox.scene_chosen': PENDING,
+
+  // ---- SC-FE-09 Trust and Reviews (review polish) ----
+  'reviews.at_rating': PENDING,
 };
