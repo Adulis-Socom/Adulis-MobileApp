@@ -58,7 +58,7 @@ describe('small pure behaviours the screens rely on', () => {
   });
 
   it('every problem code reads as a sentence, and a rate limit shows the SERVER time', () => {
-    const codes: ProblemCode[] = ['AUTHENTICATION_REQUIRED', 'PERMISSION_DENIED', 'VALIDATION_FAILED', 'NOT_FOUND', 'OTP_INVALID', 'OTP_EXPIRED', 'RATE_LIMITED', 'UNAVAILABLE', 'NETWORK', 'INTERNAL', 'CONTEXT_MISMATCH', 'REFUSED'];
+    const codes: ProblemCode[] = ['AUTHENTICATION_REQUIRED', 'PERMISSION_DENIED', 'VALIDATION_FAILED', 'NOT_FOUND', 'OTP_INVALID', 'OTP_EXPIRED', 'RATE_LIMITED', 'UNAVAILABLE', 'NETWORK', 'INTERNAL', 'CONTEXT_MISMATCH', 'CONFLICT', 'REFUSED'];
     for (const code of codes) expect(problemText(new TransportError(code)).length).toBeGreaterThan(5);
     expect(problemText(new TransportError('RATE_LIMITED', { retryAt: '2026-11-25T09:00:30.000Z' }))).toMatch(/try again at/);
     expect(problemText(new TransportError('RATE_LIMITED'))).toMatch(/wait/);

@@ -7,8 +7,21 @@ import { SignIn } from './features/auth/SignIn';
 import { Verify } from './features/auth/Verify';
 import { Chooser } from './features/entry/Chooser';
 import { Home } from './features/home/Home';
+import { SceneEditor } from './features/content/SceneEditor';
+import { Scenes } from './features/content/Scenes';
+import { Stories } from './features/content/Stories';
 import { Notifications } from './features/notifications/Notifications';
+import { ProductEditor } from './features/products/ProductEditor';
+import { Products } from './features/products/Products';
 import { Admission } from './features/onboarding/Admission';
+import { Couriers } from './features/store/Couriers';
+import { StoreCompany } from './features/store/StoreCompany';
+import { StoreCoverage } from './features/store/StoreCoverage';
+import { StoreFulfilment } from './features/store/StoreFulfilment';
+import { StoreLayout } from './features/store/StoreFrame';
+import { StoreHours } from './features/store/StoreHours';
+import { StoreLocation } from './features/store/StoreLocation';
+import { StoreProfile } from './features/store/StoreProfile';
 import { BecomeSeller } from './features/onboarding/BecomeSeller';
 import { Gate, Deferred } from './features/unavailable/Gate';
 import { NotFound, NotFoundInSeller } from './features/unavailable/NotFound';
@@ -46,11 +59,31 @@ const children: RouteObject[] = [
           { path: 'admission', element: <Gate dest="home"><Admission /></Gate> },
           { path: 'notifications', element: <Notifications /> },
           { path: 'more', element: <More /> },
-          deferred('products/*', 'products'),
+          { path: 'products', element: <Gate dest="products"><Products /></Gate> },
+          { path: 'products/:productId', element: <Gate dest="products"><ProductEditor /></Gate> },
+          { path: 'content', element: <Gate dest="content"><Scenes /></Gate> },
+          { path: 'content/scenes/:postId', element: <Gate dest="content"><SceneEditor /></Gate> },
+          { path: 'content/stories', element: <Gate dest="content"><Stories /></Gate> },
           deferred('content/*', 'content'),
           deferred('inbox/*', 'inbox'),
           deferred('insights/*', 'insights'),
-          deferred('store/*', 'store'),
+          {
+            path: 'store',
+            element: (
+              <Gate dest="store">
+                <StoreLayout />
+              </Gate>
+            ),
+            children: [
+              { index: true, element: <StoreProfile /> },
+              { path: 'company', element: <StoreCompany /> },
+              { path: 'location', element: <StoreLocation /> },
+              { path: 'coverage', element: <StoreCoverage /> },
+              { path: 'hours', element: <StoreHours /> },
+              { path: 'fulfilment', element: <StoreFulfilment /> },
+              { path: 'couriers', element: <Couriers /> },
+            ],
+          },
           deferred('trust/*', 'trust'),
           deferred('settings/*', 'settings'),
           { path: '*', element: <NotFoundInSeller /> },

@@ -3,15 +3,15 @@ import { codeText, t } from '../../i18n/t';
 import { destinationAccess, sellerPath } from '../../seller/access';
 
 /**
- * Where a resolving action leads. Only the admission step is built in this release; the others lead to destinations
+ * Where a resolving action leads. The admission step, Products (SC-FE-04) and the Store profile, company details and fulfilment (SC-FE-06) are built; the others lead to destinations
  * that honestly say they arrive later. An unknown kind has no destination, so it shows no action at all.
  */
 const TARGETS: Record<string, { dest: DestinationKey; path: string; built: boolean }> = {
   CONNECT_SOCIAL_ACCOUNT: { dest: 'home', path: 'admission', built: true },
-  EDIT_COMPANY_DETAILS: { dest: 'store', path: 'store', built: false },
-  EDIT_STORE_PROFILE: { dest: 'store', path: 'store', built: false },
-  CONFIGURE_FULFILMENT: { dest: 'store', path: 'store', built: false },
-  ADD_PRODUCT: { dest: 'products', path: 'products', built: false },
+  EDIT_COMPANY_DETAILS: { dest: 'store', path: 'store/company', built: true },
+  EDIT_STORE_PROFILE: { dest: 'store', path: 'store', built: true },
+  CONFIGURE_FULFILMENT: { dest: 'store', path: 'store/fulfilment', built: true },
+  ADD_PRODUCT: { dest: 'products', path: 'products', built: true },
 };
 
 export type RowAction =

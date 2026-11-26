@@ -46,7 +46,7 @@ function Message({ id, children }: { id: string; children: ReactNode }) {
 }
 
 /** Label, hint and error wired to the control with ids. Every input has a visible <label for>. */
-export function Field({ id: given, label, hint, error, children }: { id?: string; label: string; hint?: string; error?: string | undefined; children: (props: ControlProps) => ReactNode }) {
+export function Field({ id: given, label, hint, error, children }: { id?: string; label: ReactNode; hint?: string; error?: string | undefined; children: (props: ControlProps) => ReactNode }) {
   const raw = useId();
   const id = given ?? `f${raw.replace(/:/g, '')}`;
   const describedBy = [hint ? `${id}-hint` : null, error ? `${id}-err` : null].filter(Boolean).join(' ');

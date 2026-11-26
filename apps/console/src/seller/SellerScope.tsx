@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useParams } from 'react-router';
 import { Shell } from '../layout/Shell';
 import { Skeleton } from '../components/Skeleton';
@@ -6,6 +6,8 @@ import { StatePanel } from '../components/StatePanel';
 import { t } from '../i18n/t';
 import { useSession } from '../session/SessionProvider';
 import { SellerContext, type SellerContextValue } from './context';
+import { createRetryKeys } from './retry';
+import { RetryKeysContext } from './retryContext';
 import { authorize, failureFor, generationOf, grantFor, type Outcome } from './grant';
 
 /**
@@ -43,6 +45,8 @@ function SellerScope({ sellerId }: { sellerId: string }) {
   const accountId = session.state.status === 'READY' ? session.state.context.account.id : '';
   const [stored, setOutcome] = useState<Outcome | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // Retry identity for writes of unknown outcome: outlives navigation inside this Seller, dies with the Seller, the account or the session.
+  const retryKeys = useRef(createRetryKeys());
   const { transport } = session.selected;
   const expire = session.expire;
   const member = membership !== undefined;
@@ -108,10 +112,12 @@ function SellerScope({ sellerId }: { sellerId: string }) {
     );
   }
   return (
-    <SellerContext.Provider value={value}>
-      <Shell>
-        <Outlet />
-      </Shell>
-    </SellerContext.Provider>
+    <RetryKeysContext.Provider value={retryKeys.current}>
+      <SellerContext.Provider value={value}>
+        <Shell>
+          <Outlet />
+        </Shell>
+      </SellerContext.Provider>
+    </RetryKeysContext.Provider>
   );
 }

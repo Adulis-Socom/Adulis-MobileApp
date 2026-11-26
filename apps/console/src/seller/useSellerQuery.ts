@@ -22,6 +22,8 @@ export function useSellerQuery<K extends SellerOp>(op: K, input: OpInput<K>): { 
   const expire = session.expire;
   const [state, setState] = useState<QueryState<OpOutput<K>>>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  // A read whose input changes (a search, a filter) is a different request: the serialised input is part of the trigger.
+  const inputKey = JSON.stringify(input);
 
   useEffect(() => {
     let live = true;
@@ -41,9 +43,9 @@ export function useSellerQuery<K extends SellerOp>(op: K, input: OpInput<K>): { 
       live = false;
       controller.abort();
     };
-    // `input` is always a constant empty object for these reads; the op, the Seller and a manual retry are the triggers.
+    // `input` is read through its serialised form (`inputKey`); the op, the Seller, the input and a manual retry are the triggers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transport, op, sellerId, attempt, expire]);
+  }, [transport, op, sellerId, attempt, expire, inputKey]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   return { state, retry };

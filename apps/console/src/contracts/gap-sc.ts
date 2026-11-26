@@ -14,11 +14,14 @@
  * GAP-SC-05 Home brief: nonfinancial cards, alerts, obligations          (SC-BE-03 and owning domains)
  * GAP-SC-06 notification list and unread count                           (SC-BE-06, NOTIF-01)
  * GAP-SC-07 Market context                                               (SC-BE-03, MKT-01)
+ * GAP-SC-08..10 taxonomy, Catalogue/Variants, Inventory   -> gap-sc-catalogue.ts (SC-FE-04)
+ * GAP-SC-11..12 Scene Posts and Seller Stories            -> gap-sc-content.ts   (SC-FE-05, SC-FE-05S)
+ * GAP-SC-13..14 Store configuration, Courier relationships -> gap-sc-store.ts     (SC-FE-06)
  *
  * Every deadline is an absolute UTC ISO-8601 instant the SERVER decided (AUTH-02 S16, CONSOLE-02 S125). Durations,
  * attempt limits and rate-limit values are open decisions: the Console never assumes any of them.
  */
-export const PROVISIONAL_CONTRACT_VERSION = 'gap-sc-provisional-1';
+export const PROVISIONAL_CONTRACT_VERSION = 'gap-sc-provisional-2';
 
 export type SellerStatus = 'DRAFT' | 'ACTIVE' | 'SUSPENDED';
 export type Publication = 'NEVER_PUBLISHED' | 'PUBLISHED' | 'UNPUBLISHED';
@@ -66,7 +69,15 @@ export interface AccountContext {
 }
 
 /** Closed set used by the Console. An unknown capability string from a newer server is ignored, never granted. */
-export type Capability = 'readiness.resolve' | 'admission.manage' | 'notifications.view';
+export type Capability =
+  | 'readiness.resolve'
+  | 'admission.manage'
+  | 'notifications.view'
+  | 'catalogue.write'
+  | 'inventory.write'
+  | 'content.write'
+  | 'store.manage'
+  | 'couriers.manage';
 export type DestinationKey = 'home' | 'products' | 'content' | 'inbox' | 'insights' | 'store' | 'trust' | 'settings';
 export interface DestinationAccess {
   readonly key: DestinationKey;
@@ -196,8 +207,12 @@ export interface OnboardingMarket {
   readonly timezone: string;
 }
 
+import type { CatalogueOperations } from './gap-sc-catalogue';
+import type { SceneOperations, StoryOperations } from './gap-sc-content';
+import type { StoreOperations } from './gap-sc-store';
+
 // ---- the operation table the transport speaks ----------------------------------------------------------------------
-export interface Operations {
+export interface Operations extends CatalogueOperations, SceneOperations, StoryOperations, StoreOperations {
   readonly 'auth.otp.start': { in: { phone: string }; out: OtpChallenge };
   readonly 'auth.otp.status': { in: { challenge_id: string }; out: OtpStatus };
   readonly 'auth.otp.resend': { in: { challenge_id: string }; out: OtpChallenge };
@@ -232,5 +247,46 @@ export const SELLER_SCOPED_OPS = [
   'seller.home.get',
   'notifications.list',
   'market.context.get',
+  'catalogue.categories.get',
+  'catalogue.category.attributes.get',
+  'products.list',
+  'products.create',
+  'products.get',
+  'products.update',
+  'products.publish',
+  'products.withdraw',
+  'products.media.add',
+  'products.media.remove',
+  'products.media.arrange',
+  'products.tiktok.attach',
+  'products.tiktok.detach',
+  'variants.create',
+  'variants.update',
+  'inventory.set',
+  'inventory.confirm',
+  'inventory.history.get',
+  'scenes.list',
+  'scenes.create',
+  'scenes.get',
+  'scenes.update',
+  'scenes.media.set',
+  'scenes.publish',
+  'scenes.archive',
+  'scenes.tag_candidates.get',
+  'stories.list',
+  'stories.targets.get',
+  'stories.create',
+  'stories.withdraw',
+  'store.get',
+  'store.profile.update',
+  'store.location.search',
+  'store.location.set',
+  'store.coverage.set',
+  'store.hours.set',
+  'store.fulfilment.set',
+  'store.company.update',
+  'couriers.list',
+  'couriers.invite',
+  'couriers.revoke',
 ] as const satisfies readonly OpId[];
 export type SellerOp = (typeof SELLER_SCOPED_OPS)[number];

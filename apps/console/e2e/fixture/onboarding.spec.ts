@@ -138,12 +138,14 @@ test.describe('SC-FE-02: the Publication Readiness Hub (independent items, serve
     expect(titles).toEqual(['Account created', 'Seller type chosen', 'Admission to Adulis', 'Store profile', 'How buyers receive items', 'First Product']);
     expect(await limeCount(page)).toBe(1);
     await expect(row(page, 'Admission to Adulis').getByRole('link', { name: 'Connect a social account' })).toHaveClass(/btn-highlight/);
-    await expect(row(page, 'Store profile')).toContainText('This step arrives in a later release.');
-    // a step that is not built is a disabled control with its reason beside it, not a link to a dead page
-    const store = row(page, 'Store profile').getByRole('button', { name: 'Set up the store profile' });
-    await expect(store).toHaveAttribute('aria-disabled', 'true');
-    await expect(store).toHaveAccessibleDescription('This step arrives in a later release.');
-    await expect(row(page, 'Store profile').getByRole('link')).toHaveCount(0);
+    // The Store profile and fulfilment steps are built (SC-FE-06): active links to where each is resolved, and only the first built
+    // action on the screen (admission) carries the lime action.
+    const store = row(page, 'Store profile').getByRole('link', { name: 'Set up the store profile' });
+    await expect(store).toHaveAttribute('href', `/s/${SELLER.biruk.id}/store`);
+    await expect(store).not.toHaveClass(/btn-highlight/);
+    await expect(row(page, 'How buyers receive items').getByRole('link')).toHaveAttribute('href', `/s/${SELLER.biruk.id}/store/fulfilment`);
+    await expect(row(page, 'Store profile')).not.toContainText('arrives in a later release');
+    await expect(row(page, 'First Product').getByRole('link')).toHaveAttribute('href', `/s/${SELLER.biruk.id}/products`);
   });
 
   test('partially complete readiness reflects only what the server marked done', async ({ page }) => {
@@ -152,8 +154,12 @@ test.describe('SC-FE-02: the Publication Readiness Hub (independent items, serve
     await expect(row(page, 'Store profile')).toContainText('Done');
     await expect(row(page, 'How buyers receive items')).toContainText('Needs your action');
     await expect(row(page, 'First Product')).toContainText('Create your first Product.');
-    // nothing built resolves an item: the first actionable item leads to an honest "arrives later", never a form
-    expect(await limeCount(page)).toBe(0);
+    // Fulfilment (SC-FE-06) comes first among the built actions here and carries the single lime action; Products (SC-FE-04) is a quiet link
+    await expect(row(page, 'How buyers receive items').getByRole('link')).toHaveAttribute('href', `/s/${SELLER.chaltu.id}/store/fulfilment`);
+    await expect(row(page, 'How buyers receive items').getByRole('link')).toHaveClass(/btn-highlight/);
+    await expect(row(page, 'First Product').getByRole('link')).toHaveAttribute('href', `/s/${SELLER.chaltu.id}/products`);
+    await expect(row(page, 'First Product').getByRole('link')).not.toHaveClass(/btn-highlight/);
+    expect(await limeCount(page)).toBe(1);
   });
 
   test('complete non-financial readiness is stated, and offers no publish control', async ({ page }) => {
@@ -170,7 +176,7 @@ test.describe('SC-FE-02: the Publication Readiness Hub (independent items, serve
     await page.getByRole('link', { name: SELLER.eden.name }).click();
     await expect(hub(page)).toContainText('2 of 7 requirements are met.');
     await expect(row(page, 'Company details')).toContainText('Company details are incomplete.');
-    await expect(row(page, 'Company details').getByRole('button', { name: 'Add company details' })).toHaveAttribute('aria-disabled', 'true');
+    await expect(row(page, 'Company details').getByRole('link', { name: 'Add company details' })).toHaveAttribute('href', `/s/${SELLER.eden.id}/store/company`);
     await expect(row(page, 'Admission to Adulis')).toContainText('Waiting for an Adulis review.');
     await expect(page.getByText('Eden Foods PLC').first()).toBeVisible();
   });

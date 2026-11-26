@@ -1142,3 +1142,357 @@ legend {
     transition: none !important;
   }
 }
+
+/* ---- SC-FE-04: editors ------------------------------------------------------------------------------------------ */
+/* a fieldset used only to disable a whole group of controls at once: it must not look like a boxed group */
+.plain-fieldset {
+  display: grid;
+  gap: var(--adu-space-md);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.plain-fieldset:disabled {
+  opacity: 0.85;
+}
+
+h3 {
+  font-weight: var(--adu-font-weight-semibold);
+}
+
+/* a short list of labelled facts: the label above its value, so Amharic and 200% text never need a second column */
+.facts {
+  display: grid;
+  gap: var(--adu-space-xs);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.facts dt {
+  color: var(--adu-color-text-secondary);
+}
+
+.facts dd {
+  margin: 0 0 var(--adu-space-xs);
+  min-width: 0;
+}
+
+textarea.text-input {
+  min-height: calc(var(--adu-touch-min) * 2);
+  resize: vertical;
+}
+
+/* ---- SC-FE-05: Scene stage, hotspot markers, pressed tabs ------------------------------------------------------- */
+/* The image presentation: only a box with the right aspect ratio, because hotspots are fractions of it (SCN S22). */
+.stage {
+  position: relative;
+  width: 100%;
+  max-width: 28rem;
+  border: 1px solid var(--adu-color-border-strong);
+  border-radius: var(--adu-radius-lg);
+  background: var(--adu-color-secondary);
+  overflow: hidden;
+}
+
+/* the file name sits at the top edge, away from the markers, and is small: it is a stand-in for the photo */
+.stage-name {
+  position: absolute;
+  top: var(--adu-space-sm);
+  left: var(--adu-space-sm);
+  right: var(--adu-space-sm);
+  padding: 0;
+  text-align: start;
+  overflow-wrap: anywhere;
+  font-size: var(--adu-font-size-sm);
+  color: var(--adu-color-text-secondary);
+}
+
+/* a real button over the whole stage, so placing a hotspot works from the keyboard as well as by pointer */
+.stage-hit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  cursor: crosshair;
+}
+
+.marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  min-width: var(--adu-touch-min);
+  min-height: var(--adu-touch-min);
+  border: 2px solid var(--adu-color-primary-text);
+  border-radius: var(--adu-radius-full);
+  background: var(--adu-color-primary);
+  color: var(--adu-color-primary-text);
+  font-weight: var(--adu-font-weight-bold);
+}
+
+button.marker {
+  cursor: grab;
+}
+
+.marker[data-current='true'] {
+  box-shadow: 0 0 0 3px var(--adu-color-surface), 0 0 0 5px var(--adu-color-primary);
+}
+
+.btn[aria-current='page'],
+.btn[aria-pressed='true'] {
+  background: var(--adu-color-primary);
+  color: var(--adu-color-primary-text);
+  border-color: var(--adu-color-primary);
+}
+
+h4 {
+  margin: 0;
+  font-weight: var(--adu-font-weight-semibold);
+}
+
+/* ---- design review fixes (SC-FE-04..06) ------------------------------------------------------------------------- */
+/* a header row whose badges and message stay beside the title instead of floating to the widest sibling */
+.row-start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--adu-space-xs) var(--adu-space-smd);
+}
+
+.row-start > * {
+  min-width: 0;
+}
+
+/* Opens and Closes side by side; each keeps its full label, so nothing changes for a screen reader */
+.interval {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--adu-space-smd);
+}
+
+/* a day, a closure or a method is a ruled block with a hairline above it, not a floating run of fields */
+.plain-fieldset > .group + .group {
+  border-top: 1px solid var(--adu-color-border);
+  padding-top: var(--adu-space-md);
+}
+
+/* a back link points back */
+.flip {
+  display: inline-flex;
+  transform: scaleX(-1);
+}
+
+legend {
+  padding: 0;
+}
+
+/* ---- Batch 02C closure ------------------------------------------------------------------------------------------ */
+.stage-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill; /* the stage already has the image's own aspect ratio, so nothing is cropped or stretched */
+  user-select: none;
+}
+
+.marker {
+  touch-action: none;
+}
+
+.story-photo {
+  display: block;
+  width: 100%;
+  max-width: 16rem;
+  height: auto;
+  border: 1px solid var(--adu-color-border-strong);
+  border-radius: var(--adu-radius-md);
+}
+
+.story-thumb {
+  max-width: 8rem;
+}
+
+.media-row {
+  display: grid;
+  grid-template-columns: minmax(4rem, 8rem) minmax(0, 1fr);
+  gap: var(--adu-space-md);
+  width: 100%;
+}
+
+.media-thumb {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border: 1px solid var(--adu-color-border-strong);
+  border-radius: var(--adu-radius-md);
+  background: var(--adu-color-secondary);
+  overflow: hidden;
+}
+
+.media-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.media-thumb-empty {
+  padding: var(--adu-space-xs);
+  text-align: center;
+  color: var(--adu-color-text-secondary);
+  font-size: var(--adu-font-size-sm);
+}
+
+/* a ruled sub-section inside a card: tagging, hotspots and search are distinct jobs */
+.subsection {
+  border-top: 1px solid var(--adu-color-border);
+  padding-top: var(--adu-space-md);
+}
+
+/* details used as a quiet disclosure; the summary is a full-size target */
+.more > summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--adu-touch-min);
+  cursor: pointer;
+  font-weight: var(--adu-font-weight-semibold);
+}
+
+.more[open] > summary {
+  margin-bottom: var(--adu-space-xs);
+}
+
+/* Store section switcher: links on wide screens, one labelled picker on phones */
+.subnav-narrow {
+  display: none;
+  gap: var(--adu-space-xs);
+}
+
+@media (max-width: 39.99rem) {
+  .subnav-wide {
+    display: none;
+  }
+
+  .subnav-narrow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.map-preview {
+  display: grid;
+  gap: var(--adu-space-xs);
+  margin: 0;
+  max-width: 28rem;
+}
+
+.map-preview svg {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--adu-color-border-strong);
+  border-radius: var(--adu-radius-md);
+}
+
+.map-bg {
+  fill: var(--adu-color-secondary);
+}
+
+.map-line {
+  stroke: var(--adu-color-border);
+  stroke-width: 1;
+}
+
+.map-pin {
+  fill: var(--adu-color-primary);
+  stroke: var(--adu-color-surface);
+  stroke-width: 3;
+}
+
+/* ---- Batch 02C closure: fixes from the targeted finish review ------------------------------------------------------ */
+/* a blocker is a ruled row: the mark, then the words, left aligned (the link is a text row, not a centred button) */
+.blocker-list > li {
+  display: flex;
+  align-items: center;
+  gap: var(--adu-space-smd);
+  border-top: 1px solid var(--adu-color-border);
+}
+
+.blocker-list > li > .btn-link {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  text-align: start;
+  padding-inline: 0;
+}
+
+/* a disclosure that looks like one: a chevron that turns, and no empty band under it */
+.more > summary {
+  list-style: none;
+}
+
+.more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.more > summary::before {
+  content: '';
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-inline-end: var(--adu-space-sm);
+  border-right: 2px solid currentcolor;
+  border-bottom: 2px solid currentcolor;
+  transform: rotate(-45deg);
+}
+
+.more[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+/* a badge placed in a stack is as wide as its words, not as wide as the row */
+.stack > .badge {
+  justify-self: start;
+}
+
+/* opening hours: the Remove button sits beside the times it removes */
+.interval-remove {
+  align-self: end;
+  justify-self: start;
+}
+
+.group > legend {
+  margin-bottom: var(--adu-space-sm);
+}
+
+/* Scene editor: a sub-section heading is heavier than a field label; the search is one row; the finder sits above what it feeds */
+.subhead {
+  font-size: var(--adu-font-size-xl);
+  font-weight: var(--adu-font-weight-bold);
+}
+
+.search-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--adu-space-smd);
+}
+
+.search-row > .field {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.subsection-end {
+  border-bottom: 1px solid var(--adu-color-border);
+  padding-bottom: var(--adu-space-md);
+}
+
+.map-preview {
+  margin-bottom: var(--adu-space-md);
+}
+
