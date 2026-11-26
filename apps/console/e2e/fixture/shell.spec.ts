@@ -128,7 +128,7 @@ test.describe('SC-FE-01: roles, permission and entitlement', () => {
   test('direct navigation to a destination the role cannot use is denied, not redirected and not fetched', async ({ page }) => {
     await atSellerHome(page, PHONE.sales, SELLER.alem.name);
     await goInApp(page, `/s/${SELLER.alem.id}/products`);
-    await expect(page.getByRole('heading', { level: 1, name: 'You do not have access to this' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Access denied' })).toBeVisible();
     await expect(page).toHaveURL(new RegExp('/products$'));
     await expect(page.getByText('arrives in a later release')).toHaveCount(0);
   });
@@ -136,10 +136,10 @@ test.describe('SC-FE-01: roles, permission and entitlement', () => {
   test('a Seller that is not the account\'s is denied the same way as one that does not exist', async ({ page }) => {
     await atSellerHome(page, PHONE.owner, SELLER.alem.name);
     await goInApp(page, `/s/${SELLER.dawit.id}`);
-    await expect(page.getByRole('heading', { name: 'You do not have access to this' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Access denied' })).toBeVisible();
     await expect(page.getByText(SELLER.dawit.name)).toHaveCount(0);
     await goInApp(page, '/s/fx_seller_nobody');
-    await expect(page.getByRole('heading', { name: 'You do not have access to this' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Access denied' })).toBeVisible();
     await page.getByRole('link', { name: 'Back to your Sellers' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Your Sellers' })).toBeVisible();
   });
@@ -175,6 +175,6 @@ test.describe('SC-FE-01: roles, permission and entitlement', () => {
     await sidebar(page).getByRole('link', { name: 'Inbox' }).click();
     await expect(sidebar(page).getByText('Products', { exact: true })).toHaveCount(0);
     await goInApp(page, `/s/${SELLER.alem.id}/products`);
-    await expect(page.getByRole('heading', { level: 1, name: 'You do not have access to this' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Access denied' })).toBeVisible();
   });
 });

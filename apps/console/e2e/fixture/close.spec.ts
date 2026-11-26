@@ -35,7 +35,7 @@ test.describe('A: pending authorization serves no outdated grant', () => {
     await expect(page.getByRole('heading', { name: 'Inbox' })).toHaveCount(0);
     expect((await ops(page)).slice(before)).toEqual(['seller.access.get']);
     // The answer says no: a plain denial, with nothing of the destination, and no Inbox entry left to follow.
-    await expect(page.getByRole('heading', { level: 1, name: 'You do not have access to this' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Access denied' })).toBeVisible();
     await expect(mainNav(page).getByRole('link', { name: 'Inbox' })).toHaveCount(0);
     await expect(page.getByText('arrives later')).toHaveCount(0);
   });

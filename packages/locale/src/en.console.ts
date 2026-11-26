@@ -51,7 +51,7 @@ export const enConsole = {
   'state.retry': 'Try again',
   'state.transport_error_title': 'We could not load this',
   'state.transport_error_body': 'Something went wrong while loading. This is not an empty result. Check your connection and try again.',
-  'state.no_permission_title': 'You do not have access to this',
+  'state.no_permission_title': 'Access denied',
   'state.no_permission_body': 'Your role on this Seller does not include this area. An Owner or Admin can change what you can do.',
   'state.no_entitlement_title': 'Not included for this Seller',
   'state.no_entitlement_body': 'This area is not included in what is enabled for this Seller yet.',

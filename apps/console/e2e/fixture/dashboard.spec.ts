@@ -98,7 +98,7 @@ test.describe('SC-FE-03: the daily operating Home', () => {
     await atSellerHome(page, PHONE.owner, SELLER.alem.name);
     await page.evaluate((id) => window.__ADULIS_FIXTURE__?.revokeCapability(id, 'notifications.view'), SELLER.alem.id);
     await goInApp(page, `/s/${SELLER.alem.id}/notifications`);
-    await expect(page.getByRole('heading', { level: 1, name: 'You do not have access to this' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Access denied' })).toBeVisible();
     // the bell is the same capability: it is gone, not left pointing at a denied page
     await expect(page.getByRole('banner').getByRole('link', { name: /Notifications/ })).toHaveCount(0);
   });

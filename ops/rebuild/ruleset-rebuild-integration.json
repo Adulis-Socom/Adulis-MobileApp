@@ -24,7 +24,8 @@
       "parameters": {
         "strict_required_status_checks_policy": true,
         "required_status_checks": [
-          { "context": "replacement foundation (rebuild-20261125)", "integration_id": 15368 }
+          { "context": "replacement foundation (rebuild-20261125)", "integration_id": 15368 },
+          { "context": "Seller Console (rebuild-20261125)", "integration_id": 15368 }
         ]
       }
     }

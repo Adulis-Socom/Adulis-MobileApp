@@ -165,7 +165,7 @@ export const SCENES: readonly Scene[] = [
     setup: async (p) => {
       await atSellerHome(p, PHONE.sales, SELLER.alem.name);
       await goInApp(p, `/s/${SELLER.alem.id}/products`);
-      await expect(p.getByRole('heading', { level: 1, name: 'You do not have access to this' })).toBeVisible();
+      await expect(p.getByRole('heading', { level: 1, name: 'Access denied' })).toBeVisible();
     },
   },
   {

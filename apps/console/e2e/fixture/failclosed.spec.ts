@@ -36,7 +36,7 @@ test.describe('fail closed', () => {
     await atSellerHome(page, PHONE.owner, SELLER.alem.name);
     await page.evaluate((id) => window.__ADULIS_FIXTURE__?.revokeMembership(id), SELLER.alem.id);
     await goInApp(page, `/s/${SELLER.alem.id}/more`);
-    await expect(page.getByRole('heading', { level: 1, name: 'You do not have access to this' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Access denied' })).toBeVisible();
     await expect(page.getByRole('banner')).toHaveCount(0);
     await expect(page.getByText(SELLER.alem.name)).toHaveCount(0);
   });
