@@ -114,7 +114,7 @@ export interface Catalogue {
     | 'products.withdraw'
     | 'products.media.add'
     | 'products.media.remove'
-    | 'products.media.reorder'
+    | 'products.media.arrange'
     | 'products.tiktok.attach'
     | 'products.tiktok.detach'
     | 'variants.create'
@@ -417,7 +417,7 @@ export function createCatalogue(kit: Kit): Catalogue {
       p.version += 1;
       return detail(a.sellerId, p, a);
     },
-    'products.media.reorder': ({ product_id, version, order }, ctx) => {
+    'products.media.arrange': ({ product_id, version, order }, ctx) => {
       const { a, p } = open(ctx, 'catalogue.write', product_id, version);
       const same = order.length === p.media.length && new Set(order).size === order.length && p.media.every((m) => order.includes(m.id));
       if (!same) throw invalid({ media: 'MEDIA_ORDER_INVALID' });

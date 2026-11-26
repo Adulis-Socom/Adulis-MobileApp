@@ -82,7 +82,7 @@ export function MediaSection({ detail, onChange, onReload, onRefresh }: SectionP
     if (a === undefined || b === undefined) return;
     order[index] = b;
     order[other] = a;
-    const next = await action.run(() => run('products.media.reorder', { product_id: detail.id, version: detail.version, order }));
+    const next = await action.run(() => run('products.media.arrange', { product_id: detail.id, version: detail.version, order }));
     if (next) onChange(next);
   }
 

@@ -257,7 +257,7 @@ export const SELLER_SCOPED_OPS = [
   'products.withdraw',
   'products.media.add',
   'products.media.remove',
-  'products.media.reorder',
+  'products.media.arrange',
   'products.tiktok.attach',
   'products.tiktok.detach',
   'variants.create',

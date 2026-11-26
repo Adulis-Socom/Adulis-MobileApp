@@ -205,7 +205,7 @@ export interface CatalogueOperations {
    */
   readonly 'products.media.add': { in: { product_id: string; version: number; file_name: string; content_type: string }; out: ProductDetail };
   /** The full new order of the Product's image ids; the first is the primary image. One Product at a time. */
-  readonly 'products.media.reorder': { in: { product_id: string; version: number; order: readonly string[] }; out: ProductDetail };
+  readonly 'products.media.arrange': { in: { product_id: string; version: number; order: readonly string[] }; out: ProductDetail };
   readonly 'products.media.remove': { in: { product_id: string; version: number; media_id: string }; out: ProductDetail };
   readonly 'products.tiktok.attach': { in: { product_id: string; version: number; video_url: string }; out: ProductDetail };
   readonly 'products.tiktok.detach': { in: { product_id: string; version: number }; out: ProductDetail };
