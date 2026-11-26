@@ -949,8 +949,6 @@ export const enConsole = {
   'reviews.list_service': 'Service review list',
 
 
-  // ---- SC-FE-08 Inbox (review polish) (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
-  'inbox.scene_chosen': 'Chosen Scene: {scene}',
 
   // ---- SC-FE-09 Trust and Reviews (review polish) (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
   'reviews.at_rating': 'Reviews: {count}',
