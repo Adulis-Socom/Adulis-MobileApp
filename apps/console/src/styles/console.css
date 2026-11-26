@@ -1,0 +1,1144 @@
+/*
+ * Seller Console styles. ALL colour, type, spacing, radius and focus values come from @adulis/tokens custom
+ * properties (tokens.css is imported first in main.tsx); there is no literal colour in this file or in any TSX.
+ * Light only (RB25-D05). No fixed heights on anything holding text: Amharic runs 30-50% longer, and every length
+ * that scales with text is in rem. The 1024px breakpoint is the spec's (CONSOLE-02 S23).
+ *
+ * Direction (see .impeccable/surfaces/src.md): a ruled-row ledger inside a conventional shell. Rows of fact, each
+ * with a status in words plus a drawn mark; lime appears once per screen as the standout action.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scrollbar-color: var(--adu-color-border-strong) var(--adu-color-secondary);
+}
+
+body {
+  margin: 0;
+  background: var(--adu-color-bg);
+  color: var(--adu-color-text);
+  font-family: var(--adu-font-family);
+  font-size: var(--adu-font-size-base);
+  line-height: var(--adu-line-height-base);
+  caret-color: var(--adu-color-primary);
+  /* A word wider than its box (a timezone name, a handle, a long Amharic word) breaks only when it must, and never changes how
+     wide a column is allowed to shrink: the items below carry min-width 0 so they can. */
+  overflow-wrap: break-word;
+}
+
+::selection {
+  background: var(--adu-color-highlight);
+  color: var(--adu-color-highlight-text);
+}
+
+h1,
+h2,
+h3,
+p,
+ul,
+fieldset {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  line-height: var(--adu-line-height-heading);
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+h1,
+.page-title {
+  font-size: var(--adu-font-size-xxl);
+  font-weight: var(--adu-font-weight-bold);
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: var(--adu-font-size-lg);
+  font-weight: var(--adu-font-weight-semibold);
+}
+
+h3 {
+  font-size: var(--adu-font-size-base);
+  font-weight: var(--adu-font-weight-semibold);
+}
+
+/* A heading that took focus programmatically (route change) needs no ring: it is not a control. */
+.page-title:focus {
+  outline: none;
+}
+
+a {
+  color: inherit;
+  text-underline-offset: 0.2em;
+}
+
+time {
+  font-variant-numeric: tabular-nums;
+}
+
+code {
+  font-family: var(--adu-font-mono);
+  font-size: 0.95em;
+  background: var(--adu-color-secondary);
+  padding: 0 var(--adu-space-xs);
+  border-radius: var(--adu-radius-sm);
+}
+
+.icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--adu-space-md);
+  top: var(--adu-space-md);
+  z-index: 100;
+  max-width: calc(100vw - 2rem);
+  padding: var(--adu-space-sm) var(--adu-space-md);
+  background: var(--adu-color-primary);
+  color: var(--adu-color-primary-text);
+  border-radius: var(--adu-radius-md);
+  font-weight: var(--adu-font-weight-semibold);
+}
+
+/* Hidden the robust way (not by an offset a doubled text size can undo); revealed, bounded, while it has focus. */
+.skip-link:not(:focus) {
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- demonstration strip (fixture builds only; the element is rendered by the fixture module) ------------------ */
+.fixture-strip {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  padding: var(--adu-space-sm) var(--adu-space-md);
+  background: var(--adu-color-primary);
+  color: var(--adu-color-primary-text);
+  font-size: var(--adu-font-size-sm);
+}
+
+.fixture-help {
+  display: grid;
+  gap: var(--adu-space-smd);
+  padding: var(--adu-space-md);
+  border: 1px dashed var(--adu-color-border-strong);
+  border-radius: var(--adu-radius-md);
+  background: var(--adu-color-surface);
+  font-size: var(--adu-font-size-sm);
+}
+
+.fixture-help ul {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--adu-space-xs);
+}
+
+/* ---- layout ------------------------------------------------------------------------------------------------------ */
+.page {
+  width: 100%;
+  max-width: 64rem;
+  margin-inline: auto;
+  padding: var(--adu-space-lg) var(--adu-space-md) var(--adu-space-xxl);
+  display: grid;
+  gap: var(--adu-space-md);
+  align-content: start;
+  min-width: 0;
+}
+
+.narrow-page {
+  max-width: 38rem;
+}
+
+/* every one-column grid lets its column shrink below its widest child, so a long label wraps instead of widening the page */
+.page,
+.stack,
+.field,
+.group,
+.panel,
+.state,
+.state-body,
+.section,
+.fixture-help,
+.dlg-body,
+.plain-list,
+.skeleton-block {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.fixture-help li > .btn {
+  max-width: 100%;
+}
+
+/* a heading inside a flex row (state panels) may wrap below its longest word instead of stretching the row */
+h1,
+h2,
+h3,
+.state-head,
+.ledger-title {
+  min-width: 0;
+}
+
+.page > *,
+.stack > *,
+.field,
+.group,
+.text-input,
+.panel > *,
+.state > *,
+.state-body > * {
+  min-width: 0;
+}
+
+.page p {
+  max-width: 70ch;
+}
+
+.lead {
+  font-size: var(--adu-font-size-lg);
+}
+
+.stack {
+  display: grid;
+  gap: var(--adu-space-md);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--adu-space-smd);
+}
+
+.plain {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.plain-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--adu-space-smd);
+  padding: var(--adu-space-smd) var(--adu-space-md);
+  background: var(--adu-color-surface);
+  border-bottom: 1px solid var(--adu-color-border);
+}
+
+.brand {
+  margin: 0;
+  font-size: var(--adu-font-size-lg);
+}
+
+.brand span {
+  color: var(--adu-color-text-muted);
+}
+
+.shell {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    'top'
+    'main'
+    'bottom';
+}
+
+.shell > .page {
+  grid-area: main;
+}
+
+.topbar {
+  grid-area: top;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--adu-space-xs) var(--adu-space-md);
+  padding: var(--adu-space-sm) var(--adu-space-md);
+  background: var(--adu-color-surface);
+  border-bottom: 1px solid var(--adu-color-border);
+}
+
+.topbar-seller {
+  display: flex;
+  flex: 1 1 8rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--adu-space-xs) var(--adu-space-smd);
+  min-width: 0;
+}
+
+.seller-name {
+  font-size: var(--adu-font-size-lg);
+  font-weight: var(--adu-font-weight-bold);
+  overflow-wrap: break-word;
+}
+
+.topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--adu-space-xs);
+}
+
+.icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--adu-space-xs);
+  min-width: var(--adu-touch-min);
+  min-height: var(--adu-touch-min);
+  padding: 0 var(--adu-space-sm);
+  border: 1px solid transparent;
+  border-radius: var(--adu-radius-md);
+  background: transparent;
+  color: var(--adu-color-text);
+  font: inherit;
+  font-weight: var(--adu-font-weight-semibold);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--adu-color-secondary);
+}
+
+.icon-btn-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 1.25rem;
+  padding: 0 var(--adu-space-xs);
+  border-radius: var(--adu-radius-full);
+  background: var(--adu-color-primary);
+  color: var(--adu-color-primary-text);
+  font-size: var(--adu-font-size-xs);
+  font-weight: var(--adu-font-weight-bold);
+  line-height: 1.25rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar {
+  display: none;
+}
+
+.bottombar {
+  grid-area: bottom;
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  background: var(--adu-color-secondary);
+  border-top: 1px solid var(--adu-color-border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.bottombar {
+  container-type: inline-size;
+}
+
+/* When the names no longer fit the bar at the current text size, the bar shows its icons and the names stay for assistive
+   technology: a label broken mid-word (Hom-e, Prod-ucts) is worse than none. rem scales with the text-size setting. */
+@container (max-width: 19.5rem) {
+  .bottombar ul[data-tabs='4'] .tab .nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@container (max-width: 14.75rem) {
+  .bottombar ul[data-tabs='3'] .tab .nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@container (max-width: 10rem) {
+  .bottombar ul[data-tabs='2'] .tab .nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+.bottombar ul {
+  list-style: none;
+  padding: var(--adu-space-xs);
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--adu-space-xs);
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: var(--adu-touch-min);
+  padding: var(--adu-space-xs);
+  border-radius: var(--adu-radius-md);
+  color: var(--adu-color-text);
+  text-decoration: none;
+  text-align: center;
+  font-size: var(--adu-font-size-xs);
+  font-weight: var(--adu-font-weight-semibold);
+  overflow-wrap: break-word;
+}
+
+.tab[aria-current='page'],
+.nav-link[aria-current='page'] {
+  background: var(--adu-color-primary);
+  color: var(--adu-color-primary-text);
+}
+
+/* Room for every name depends on how many tabs there are (data-tabs, set by the shell): about 4.9rem each, so the
+   thresholds below scale with the count instead of assuming four. In the middle range there is room for ONE name: the
+   destination the person is on keeps its label beside its icon and the others stay icons. Below it nothing fits, and all
+   names are for assistive technology. "More" counts as current on any route that lives under it. rem follows text size. */
+@container (min-width: 15rem) and (max-width: 19.5rem) {
+  .bottombar ul[data-tabs='4'] {
+    display: flex;
+  }
+  .bottombar ul[data-tabs='4'] li {
+    flex: 0 0 auto;
+    min-width: var(--adu-touch-min);
+  }
+  .bottombar ul[data-tabs='4'] li:has(> .tab[aria-current='page']) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .bottombar ul[data-tabs='4'] .tab[aria-current='page'] {
+    flex-direction: row;
+    gap: var(--adu-space-xs);
+  }
+  .bottombar ul[data-tabs='4'] .tab[aria-current='page'] .nav-label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip-path: none;
+    white-space: nowrap;
+  }
+}
+
+@container (min-width: 11.5rem) and (max-width: 14.75rem) {
+  .bottombar ul[data-tabs='3'] {
+    display: flex;
+  }
+  .bottombar ul[data-tabs='3'] li {
+    flex: 0 0 auto;
+    min-width: var(--adu-touch-min);
+  }
+  .bottombar ul[data-tabs='3'] li:has(> .tab[aria-current='page']) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .bottombar ul[data-tabs='3'] .tab[aria-current='page'] {
+    flex-direction: row;
+    gap: var(--adu-space-xs);
+  }
+  .bottombar ul[data-tabs='3'] .tab[aria-current='page'] .nav-label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip-path: none;
+    white-space: nowrap;
+  }
+}
+
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: var(--adu-space-smd);
+  width: 100%;
+  min-height: var(--adu-touch-min);
+  padding: 0 var(--adu-space-smd);
+  border: 0;
+  border-radius: var(--adu-radius-md);
+  background: transparent;
+  color: var(--adu-color-text);
+  font: inherit;
+  font-weight: var(--adu-font-weight-semibold);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.nav-link:hover:not([aria-current='page']) {
+  background: var(--adu-color-secondary-hover);
+}
+
+.nav-disabled {
+  color: var(--adu-color-text-muted);
+  cursor: not-allowed;
+}
+
+.nav-reason {
+  padding: 0 var(--adu-space-smd) var(--adu-space-xs);
+  color: var(--adu-color-text-muted);
+  font-size: var(--adu-font-size-xs);
+}
+
+@media (min-width: 1024px) {
+  /* chrome stays pinned only where there is room for it: on a phone it would take half the screen */
+  .topbar {
+    position: sticky;
+    top: var(--strip-h, 0px);
+    z-index: 20;
+  }
+
+  .shell {
+    /* 15rem, but never more than a third of the window: at doubled text size 15rem would take half of it */
+    grid-template-columns: minmax(0, min(15rem, 32vw)) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      'side top'
+      'side main';
+  }
+
+  .sidebar {
+    display: block;
+    grid-area: side;
+    position: sticky;
+    top: var(--strip-h, 0px);
+    align-self: start;
+    /* the secondary layer runs the full height of the viewport, not just as far as its links */
+    height: calc(100dvh - var(--strip-h, 0px));
+    overflow-y: auto;
+    padding: var(--adu-space-md);
+    background: var(--adu-color-secondary);
+    border-right: 1px solid var(--adu-color-border);
+  }
+
+  .sidebar ul {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: var(--adu-space-xs);
+  }
+
+  .bottombar {
+    display: none;
+  }
+
+  .icon-btn-label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .page {
+    padding-inline: var(--adu-space-xl);
+  }
+}
+
+/* ---- buttons ----------------------------------------------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--adu-space-sm);
+  min-height: var(--adu-touch-min);
+  padding: var(--adu-space-sm) var(--adu-space-md);
+  border: 1px solid transparent;
+  border-radius: var(--adu-radius-md);
+  font: inherit;
+  font-weight: var(--adu-font-weight-semibold);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 150ms ease-out;
+}
+
+.btn-primary {
+  background: var(--adu-color-primary);
+  color: var(--adu-color-primary-text);
+}
+
+.btn-primary:hover {
+  background: var(--adu-color-primary-hover);
+}
+
+.btn-primary:active {
+  background: var(--adu-color-primary-active);
+}
+
+/* The one standout action of a screen: lime fill, dark text, and a dark border because lime on the page is 1.1:1. */
+.btn-highlight {
+  background: var(--adu-color-highlight);
+  color: var(--adu-color-highlight-text);
+  border-color: var(--adu-color-highlight-border);
+}
+
+.btn-highlight:hover {
+  background: var(--adu-color-highlight-hover);
+}
+
+.btn-highlight:active {
+  background: var(--adu-color-highlight-active);
+}
+
+.btn-quiet {
+  background: var(--adu-color-surface);
+  color: var(--adu-color-text);
+  border-color: var(--adu-color-border-strong);
+}
+
+.btn-quiet:hover {
+  background: var(--adu-color-secondary);
+}
+
+.btn-quiet:active {
+  background: var(--adu-color-secondary-active);
+}
+
+.btn-link {
+  background: transparent;
+  color: var(--adu-color-text);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.btn-link:hover {
+  background: var(--adu-color-secondary);
+}
+
+.btn[aria-disabled='true'] {
+  background: var(--adu-color-secondary);
+  color: var(--adu-color-text-muted);
+  border-color: var(--adu-color-border);
+  cursor: not-allowed;
+}
+
+/* ---- forms ------------------------------------------------------------------------------------------------------- */
+.field {
+  display: grid;
+  gap: var(--adu-space-xs);
+}
+
+label,
+legend {
+  font-weight: var(--adu-font-weight-semibold);
+}
+
+.hint {
+  margin: 0;
+  color: var(--adu-color-text-muted);
+  font-size: var(--adu-font-size-sm);
+}
+
+.block {
+  display: block;
+}
+
+.field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--adu-space-xs);
+  margin: 0;
+  color: var(--adu-color-danger);
+  font-size: var(--adu-font-size-sm);
+  font-weight: var(--adu-font-weight-semibold);
+}
+
+.text-input {
+  width: 100%;
+  min-height: var(--adu-touch-min);
+  padding: var(--adu-space-sm) var(--adu-space-smd);
+  border: 1px solid var(--adu-color-border-strong);
+  border-radius: var(--adu-radius-md);
+  background: var(--adu-color-surface);
+  color: var(--adu-color-text);
+  font: inherit;
+}
+
+.field-invalid .text-input {
+  border: 2px solid var(--adu-color-danger);
+}
+
+.code-input {
+  font-family: var(--adu-font-mono);
+  letter-spacing: 0.15em;
+  font-variant-numeric: tabular-nums;
+}
+
+.group {
+  display: grid;
+  gap: var(--adu-space-smd);
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--adu-space-smd);
+  min-height: var(--adu-touch-min);
+  padding: var(--adu-space-smd) var(--adu-space-md);
+  border: 1px solid var(--adu-color-border-strong);
+  border-radius: var(--adu-radius-md);
+  background: var(--adu-color-surface);
+  font-weight: var(--adu-font-weight-regular);
+  cursor: pointer;
+}
+
+.choice strong {
+  font-weight: var(--adu-font-weight-semibold);
+}
+
+.choice input {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0.15rem 0 0;
+  accent-color: var(--adu-color-primary);
+}
+
+.choice:has(input:checked) {
+  border-color: var(--adu-color-primary);
+  box-shadow: 0 0 0 1px var(--adu-color-primary);
+}
+
+.choice:has(input:focus-visible) {
+  outline: var(--adu-focus-ring-width) solid var(--adu-focus-ring-color);
+  outline-offset: var(--adu-focus-ring-offset);
+}
+
+.field-invalid .choice {
+  border-color: var(--adu-color-danger);
+}
+
+.error-summary {
+  padding: var(--adu-space-md);
+  border: 2px solid var(--adu-color-danger);
+  border-radius: var(--adu-radius-md);
+  background: var(--adu-color-danger-bg);
+}
+
+.error-summary h2 {
+  color: var(--adu-color-danger);
+}
+
+.error-summary ul {
+  margin: var(--adu-space-sm) 0 0;
+  padding-left: var(--adu-space-lg);
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--adu-space-smd);
+  font-weight: var(--adu-font-weight-semibold);
+  padding: var(--adu-space-smd) var(--adu-space-md);
+  border: 1px solid var(--adu-color-info-border);
+  border-radius: var(--adu-radius-md);
+  background: var(--adu-color-info-bg);
+  color: var(--adu-color-info);
+}
+
+/* ---- badges and states ------------------------------------------------------------------------------------------ */
+.badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--adu-space-xs);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--adu-space-xs);
+  padding: 0.125rem var(--adu-space-sm);
+  border: 1px solid;
+  border-radius: var(--adu-radius-full);
+  font-size: var(--adu-font-size-xs);
+  font-weight: var(--adu-font-weight-semibold);
+  line-height: 1.35;
+}
+
+.badge .icon {
+  width: 1em;
+  height: 1em;
+}
+
+.badge-neutral {
+  background: var(--adu-color-secondary);
+  border-color: var(--adu-color-border-strong);
+  color: var(--adu-color-text-secondary);
+}
+
+.badge-success {
+  background: var(--adu-color-success-bg);
+  border-color: var(--adu-color-success-border);
+  color: var(--adu-color-success);
+}
+
+.badge-warn {
+  background: var(--adu-color-warn-bg);
+  border-color: var(--adu-color-warn-border);
+  color: var(--adu-color-warn);
+}
+
+.badge-danger {
+  background: var(--adu-color-danger-bg);
+  border-color: var(--adu-color-danger-border);
+  color: var(--adu-color-danger);
+}
+
+.badge-info {
+  background: var(--adu-color-info-bg);
+  border-color: var(--adu-color-info-border);
+  color: var(--adu-color-info);
+}
+
+.state {
+  display: grid;
+  gap: var(--adu-space-smd);
+  padding: var(--adu-space-md);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-lg);
+  background: var(--adu-color-surface);
+}
+
+.state-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--adu-space-smd);
+}
+
+/* Where the title cannot get a line of its own beside the icon (large text on a phone) it drops below the icon and
+   takes the full width, instead of being squeezed until a word breaks (restricte-d, connecte-d). */
+.state-head > :is(h1, h2) {
+  flex: 1 1 12rem;
+}
+
+.state-head .icon {
+  margin-top: 0.1rem;
+}
+
+.state-head .page-title {
+  font-size: var(--adu-font-size-xl);
+}
+
+.state-body {
+  display: grid;
+  gap: var(--adu-space-sm);
+}
+
+.state-info {
+  background: var(--adu-color-info-bg);
+  border-color: var(--adu-color-info-border);
+  color: var(--adu-color-info);
+}
+
+.state-neutral {
+  background: var(--adu-color-surface-muted);
+  border-color: var(--adu-color-border-strong);
+}
+
+.state-warn {
+  background: var(--adu-color-warn-bg);
+  border-color: var(--adu-color-warn-border);
+}
+
+.state-warn .state-head {
+  color: var(--adu-color-warn);
+}
+
+.state-danger {
+  background: var(--adu-color-danger-bg);
+  border-color: var(--adu-color-danger-border);
+}
+
+.state-danger .state-head {
+  color: var(--adu-color-danger);
+}
+
+.state-success {
+  background: var(--adu-color-success-bg);
+  border-color: var(--adu-color-success-border);
+}
+
+.state-success .state-head {
+  color: var(--adu-color-success);
+}
+
+.state-body,
+.state-info .state-body,
+.state-warn .state-body,
+.state-danger .state-body,
+.state-success .state-body {
+  color: var(--adu-color-text);
+}
+
+.skeleton-block {
+  display: grid;
+  gap: var(--adu-space-smd);
+}
+
+.skeleton {
+  height: 1.25rem;
+  border-radius: var(--adu-radius-sm);
+  background: var(--adu-color-secondary-hover);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton:nth-child(odd) {
+  width: 85%;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* a state or notice that sits inside a panel is part of it, not a second box */
+.panel .state,
+.panel .notice {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.section {
+  display: grid;
+  gap: var(--adu-space-smd);
+}
+
+.empty {
+  color: var(--adu-color-text-secondary);
+}
+
+.fixture-strip-more {
+  display: none;
+}
+
+@media (min-width: 40rem) {
+  .fixture-strip-more {
+    display: inline;
+  }
+}
+
+/* ---- ledger: the signature surface ------------------------------------------------------------------------------ */
+.panel {
+  display: grid;
+  gap: var(--adu-space-smd);
+  padding: var(--adu-space-md);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-lg);
+  background: var(--adu-color-surface);
+  min-width: 0;
+}
+
+.plain-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--adu-space-smd);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--adu-space-xs) var(--adu-space-smd);
+}
+
+.ledger {
+  list-style: none;
+  padding: 0;
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-lg);
+  background: var(--adu-color-surface);
+  overflow: hidden;
+}
+
+/* inside a panel the ledger is only ruled rows: no second box */
+.panel .ledger {
+  border: 0;
+  border-top: 1px solid var(--adu-color-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.ledger > li + li {
+  border-top: 1px solid var(--adu-color-border);
+}
+
+.ledger-row,
+.ledger-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--adu-space-smd) var(--adu-space-md);
+  min-height: var(--adu-touch-min);
+  padding: var(--adu-space-smd) var(--adu-space-md);
+}
+
+.panel .ledger-row,
+.panel .ledger-link {
+  padding-inline: 0;
+}
+
+.ledger-link {
+  flex-wrap: nowrap;
+  color: inherit;
+  text-decoration: none;
+}
+
+.ledger-link:hover {
+  background: var(--adu-color-secondary);
+}
+
+.ledger-link:focus-visible {
+  outline-offset: -2px;
+}
+
+.ledger-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--adu-space-xs);
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+
+.ledger-title {
+  font-weight: var(--adu-font-weight-semibold);
+  overflow-wrap: break-word;
+}
+
+.ledger-meta {
+  color: var(--adu-color-text-muted);
+  font-size: var(--adu-font-size-sm);
+}
+
+/* ---- dialog ------------------------------------------------------------------------------------------------------ */
+.dlg {
+  width: 100%;
+  max-width: min(32rem, calc(100vw - 2rem));
+  padding: 0;
+  border: 1px solid var(--adu-color-border-strong);
+  border-radius: var(--adu-radius-lg);
+  background: var(--adu-color-surface);
+  color: var(--adu-color-text);
+  box-shadow: 0 0.5rem 1.5rem color-mix(in srgb, var(--adu-color-primary) 22%, transparent);
+}
+
+.dlg::backdrop {
+  background: color-mix(in srgb, var(--adu-color-primary) 55%, transparent);
+}
+
+.dlg-body {
+  display: grid;
+  gap: var(--adu-space-md);
+  padding: var(--adu-space-lg);
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--adu-space-smd);
+  min-height: var(--adu-touch-min);
+  padding: var(--adu-space-smd) var(--adu-space-md);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-md);
+  color: var(--adu-color-text);
+  font-weight: var(--adu-font-weight-semibold);
+  text-decoration: none;
+}
+
+.switch-row:hover {
+  background: var(--adu-color-secondary);
+}
+
+.switch-row[aria-current='true'] {
+  border-color: var(--adu-color-primary);
+  background: var(--adu-color-secondary);
+}
+
+.switch-name {
+  overflow-wrap: break-word;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

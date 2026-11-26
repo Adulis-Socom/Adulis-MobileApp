@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-26T00:00:00Z",
+  "title": "Design System: Adulis Seller Console",
+  "extensions": {
+    "colorMeta": {
+      "ink": { "role": "primary", "displayName": "Ink", "canonical": "#111111", "tonalRamp": ["#111111", "#1f232d", "#333846", "#454b5b", "#5b6272", "#7e8494", "#c8ccd5", "#e5e7eb"] },
+      "secondary": { "role": "secondary", "displayName": "Mist Layer", "canonical": "#f4f5f7", "tonalRamp": ["#c8ccd5", "#e5e7eb", "#f4f5f7"] },
+      "lime": { "role": "tertiary", "displayName": "Signal Lime", "canonical": "#c4fe29", "tonalRamp": ["#a5dd0a", "#b5ef18", "#c4fe29"] },
+      "page": { "role": "neutral", "displayName": "Page Grey", "canonical": "#f5f5f7", "tonalRamp": ["#111111", "#454b5b", "#7e8494", "#c8ccd5", "#e5e7eb", "#f4f5f7", "#f5f5f7", "#ffffff"] },
+      "danger": { "role": "semantic", "displayName": "Danger", "canonical": "#b91c1c", "tonalRamp": ["#b91c1c", "#fda29b", "#fef3f2"] },
+      "success": { "role": "semantic", "displayName": "Success", "canonical": "#05603a", "tonalRamp": ["#05603a", "#a6e9c6", "#ecfdf3"] },
+      "warn": { "role": "semantic", "displayName": "Warn", "canonical": "#b54708", "tonalRamp": ["#b54708", "#fedf89", "#fffaeb"] }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Title", "purpose": "Page title." },
+      "heading": { "displayName": "Heading", "purpose": "Section headings." },
+      "body": { "displayName": "Body", "purpose": "Running text, about 70ch." },
+      "label": { "displayName": "Label", "purpose": "Labels, buttons, nav, ledger titles." },
+      "badge": { "displayName": "Badge", "purpose": "Status badge text." }
+    },
+    "shadows": [
+      { "name": "dialog", "value": "0 0.5rem 1.5rem color-mix(in srgb, #111111 22%, transparent)", "purpose": "The modal dialog only; the backdrop is Ink at 55%." },
+      { "name": "choice-ring", "value": "0 0 0 1px #111111", "purpose": "Checked choice row ring." }
+    ],
+    "motion": [
+      { "name": "button-bg", "value": "background-color 150ms ease-out", "purpose": "Button hover and active." },
+      { "name": "skeleton-pulse", "value": "pulse 1.4s ease-in-out infinite", "purpose": "Loading skeleton; all motion is removed under prefers-reduced-motion." }
+    ],
+    "breakpoints": [
+      { "name": "desktop", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ink fill, white text, the default action.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Continue</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0.5rem 1rem;border:1px solid transparent;border-radius:0.5rem;font:inherit;font-weight:600;cursor:pointer;transition:background-color 150ms ease-out}.ds-btn-primary{background:var(--adu-color-primary,#111);color:var(--adu-color-primary-text,#fff)}.ds-btn-primary:hover{background:var(--adu-color-primary-hover,#1f232d)}.ds-btn-primary:focus-visible{outline:2px solid #111;outline-offset:2px}"
+    },
+    {
+      "name": "Highlight Button",
+      "kind": "button",
+      "refersTo": "button-highlight",
+      "description": "The one lime standout action per screen, with a dark border.",
+      "html": "<button class=\"ds-btn ds-btn-hl\">Start readiness</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0.5rem 1rem;border:1px solid transparent;border-radius:0.5rem;font:inherit;font-weight:600;cursor:pointer;transition:background-color 150ms ease-out}.ds-btn-hl{background:var(--adu-color-highlight,#c4fe29);color:var(--adu-color-highlight-text,#111);border-color:var(--adu-color-highlight-border,#111)}.ds-btn-hl:hover{background:var(--adu-color-highlight-hover,#b5ef18)}.ds-btn-hl:focus-visible{outline:2px solid #111;outline-offset:2px}"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "White fill with a strong edge, for secondary actions.",
+      "html": "<button class=\"ds-btn ds-btn-quiet\">Cancel</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0.5rem 1rem;border:1px solid transparent;border-radius:0.5rem;font:inherit;font-weight:600;cursor:pointer}.ds-btn-quiet{background:var(--adu-color-surface,#fff);color:var(--adu-color-text,#111);border-color:var(--adu-color-border-strong,#7e8494)}.ds-btn-quiet:hover{background:var(--adu-color-secondary,#f4f5f7)}.ds-btn-quiet:focus-visible{outline:2px solid #111;outline-offset:2px}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "text-input",
+      "description": "Labelled field, 44px minimum, strong edge.",
+      "html": "<div class=\"ds-field\"><label for=\"ds-p\">Phone number</label><input id=\"ds-p\" class=\"ds-input\" type=\"text\"><p class=\"ds-hint\">We send a code by SMS.</p></div>",
+      "css": ".ds-field{display:grid;gap:0.25rem}.ds-field label{font-weight:600}.ds-input{min-height:44px;padding:0.5rem 0.75rem;border:1px solid var(--adu-color-border-strong,#7e8494);border-radius:0.5rem;background:var(--adu-color-surface,#fff);color:var(--adu-color-text,#111);font:inherit}.ds-input:focus-visible{outline:2px solid #111;outline-offset:2px}.ds-hint{margin:0;color:var(--adu-color-text-muted,#5b6272);font-size:0.875rem}"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-success",
+      "description": "Pill with a drawn icon and a word; never colour alone.",
+      "html": "<span class=\"ds-badge\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12.5l4.5 4.5L19 7.5\"/></svg><span>Done</span></span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;gap:0.25rem;padding:0.125rem 0.5rem;border:1px solid var(--adu-color-success-border,#a6e9c6);border-radius:9999px;background:var(--adu-color-success-bg,#ecfdf3);color:var(--adu-color-success,#05603a);font-size:0.8125rem;font-weight:600;line-height:1.35}"
+    },
+    {
+      "name": "Navigation Link",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Sidebar and bottom bar row; the current item is Ink with white text.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-link\" aria-current=\"page\" href=\"#\">Home</a><a class=\"ds-nav-link\" href=\"#\">Products</a></nav>",
+      "css": ".ds-nav{display:grid;gap:0.25rem;padding:1rem;width:15rem;background:var(--adu-color-secondary,#f4f5f7)}.ds-nav-link{display:flex;align-items:center;min-height:44px;padding:0 0.75rem;border-radius:0.5rem;color:var(--adu-color-text,#111);font-weight:600;text-decoration:none}.ds-nav-link:hover:not([aria-current=page]){background:var(--adu-color-secondary-hover,#e5e7eb)}.ds-nav-link[aria-current=page]{background:var(--adu-color-primary,#111);color:var(--adu-color-primary-text,#fff)}.ds-nav-link:focus-visible{outline:2px solid #111;outline-offset:2px}"
+    },
+    {
+      "name": "Ledger",
+      "kind": "custom",
+      "refersTo": "ledger-row",
+      "description": "The signature surface: ruled rows of title, meta and status, with a linked row.",
+      "html": "<ul class=\"ds-ledger\"><li class=\"ds-row\"><div class=\"ds-main\"><span class=\"ds-title\">Business name</span><span class=\"ds-meta\">Required before publishing</span></div><span class=\"ds-badge\">Done</span></li><li class=\"ds-row\"><div class=\"ds-main\"><span class=\"ds-title\">Payout details</span><span class=\"ds-meta\">Needs action</span></div><a class=\"ds-go\" href=\"#\">Open</a></li></ul>",
+      "css": ".ds-ledger{list-style:none;padding:0;margin:0;border:1px solid var(--adu-color-border,#e5e7eb);border-radius:0.75rem;background:var(--adu-color-surface,#fff);overflow:hidden}.ds-ledger>li+li{border-top:1px solid var(--adu-color-border,#e5e7eb)}.ds-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0.75rem 1rem;min-height:44px;padding:0.75rem 1rem}.ds-main{display:flex;flex-direction:column;gap:0.25rem;min-width:0;flex:1 1 14rem}.ds-title{font-weight:600;overflow-wrap:anywhere}.ds-meta{color:var(--adu-color-text-muted,#5b6272);font-size:0.875rem}.ds-badge{display:inline-flex;padding:0.125rem 0.5rem;border:1px solid #a6e9c6;border-radius:9999px;background:#ecfdf3;color:#05603a;font-size:0.8125rem;font-weight:600}.ds-go{color:inherit;font-weight:600}"
+    },
+    {
+      "name": "State Panel",
+      "kind": "card",
+      "refersTo": "state-panel",
+      "description": "Icon-led container for loading, empty, warn, danger and success states.",
+      "html": "<section class=\"ds-state\"><h2>Something needs attention</h2><p>Plain reason, then the way forward.</p></section>",
+      "css": ".ds-state{display:grid;gap:0.75rem;padding:1rem;border:1px solid var(--adu-color-warn-border,#fedf89);border-radius:0.75rem;background:var(--adu-color-warn-bg,#fffaeb)}.ds-state h2{margin:0;font-size:1.125rem;font-weight:600;color:var(--adu-color-warn,#b54708)}.ds-state p{margin:0;color:var(--adu-color-text,#111)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Ledger of What the Server Decided",
+    "overview": "The Console is an operating surface for sellers and their teams, used in sunlight on mid-range Android and on desktop. It does not decorate. Each screen reads as ruled rows of fact: a requirement or obligation, its status in words with a drawn mark, and its one resolving action. The console computes no business state, so the interface shows what the server resolved and nothing it invented.\n\nThe shell is conventional on purpose; the distinctiveness sits inside the content area, in the ledger. The palette is the founder-approved cool neutral ramp with near-black action and a single lime accent. Light only.",
+    "keyCharacteristics": [
+      "Ruled-row ledger sections rather than boxed cards; rows, not tiles.",
+      "Status is always a drawn icon plus a word; colour only reinforces.",
+      "Near-black is the action colour; lime marks the one standout action per screen.",
+      "One system font stack, fixed rem scale, tabular numerals for times.",
+      "Flat: tonal layers and hairlines carry depth, shadows are almost absent.",
+      "44px minimum targets, a visible 2px ink focus ring, reduced-motion respected."
+    ],
+    "rules": [
+      { "name": "The One Lime Rule", "body": "Lime appears once per screen, on the single standout action, with Ink text and an Ink border. A second lime element is a defect.", "section": "colors" },
+      { "name": "The Never Colour Alone Rule", "body": "No state is carried by colour alone. A status is a badge with a drawn icon and a word.", "section": "colors" },
+      { "name": "The Role Not Hex Rule", "body": "All colour comes from the shared token custom properties. No literal colour appears in the stylesheet or in components.", "section": "colors" },
+      { "name": "The Tabular Time Rule", "body": "Times use tabular numerals.", "section": "typography" },
+      { "name": "The No Fixed Height Rule", "body": "Nothing holding text has a fixed height; lengths that scale with text are rem.", "section": "typography" },
+      { "name": "The Flat Rule", "body": "Surfaces are flat at rest. Rules and tone separate; shadows are reserved for the modal dialog.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do express a requirement as a ledger row: title, meta, status badge, its one resolving action.",
+      "Do pair every status with a drawn icon and a word.",
+      "Do keep lime to the single standout action per screen, with Ink text and Ink border.",
+      "Do take every colour, size, space and radius from the shared token properties.",
+      "Do keep targets at 44px or more and every list with an empty state.",
+      "Do show unbuilt steps as disabled controls with a plain reason.",
+      "Do let text wrap; use rem, never fixed heights on text."
+    ],
+    "donts": [
+      "Don't nest boxes: a state, notice or ledger inside a panel loses its own border and fill.",
+      "Don't use metric tiles or a grid of equal cards for Home.",
+      "Don't carry state by colour alone.",
+      "Don't use lime as text or decoration, or twice on one screen.",
+      "Don't add a dark theme, a second font family, or literal colours.",
+      "Don't pin the top bar below 1024px, where it takes half a phone screen.",
+      "Don't link to destinations that do not exist yet."
+    ]
+  }
+}

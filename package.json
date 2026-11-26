@@ -10,9 +10,12 @@
   "packageManager": "pnpm@10.32.1",
   "scripts": {
     "build": "pnpm -r build",
+    "build:foundation": "pnpm -r --filter @adulis/api --filter \"./packages/*\" build",
     "typecheck": "pnpm -r typecheck",
+    "typecheck:foundation": "pnpm -r --filter @adulis/api --filter \"./packages/*\" typecheck",
     "lint": "eslint .",
     "test": "pnpm -r test",
+    "test:foundation": "pnpm -r --filter @adulis/api --filter \"./packages/*\" test",
     "test:integration": "pnpm --filter @adulis/api test:integration",
     "db:bootstrap": "pnpm --filter @adulis/api db:bootstrap",
     "db:migrate": "pnpm --filter @adulis/api db:migrate",

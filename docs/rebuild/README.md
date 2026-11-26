@@ -17,6 +17,7 @@ governance and preparation only; Batch 01A writes no feature code and starts no 
 | RBL-02 | `RBL-02-REPLACEMENT-DATABASE-AND-DATA-POLICY.md` (+ `ops/rebuild/disposable-db.sh`) | the new empty disposable database target; legacy data policy |
 | RBL-03 | `RBL-03-PR191-FINDINGS-AS-REQUIREMENTS.md`, `RBL-03-FINDING-DISPOSITION.csv` | #191 findings as requirements; all 52 carried findings disposed |
 | RBL-04 | `RBL-04-ARCHITECTURE-DECISION-AND-CONTRACT-REGISTER.md`, `RBL-04-EVENT-REGISTER.csv` | ADR, ownership, audiences, contracts, capability matrix, event register |
+| SC-FE-00 | `SC-FE-00-CONSOLE-SOURCE-TO-SCREEN.md` | Seller Console route map, authorization matrix, reuse decisions, missing-contract register (GAP-SC-01..07), SC-FE-01 plan |
 GOV-01, GOV-02 and GOV-05 evidence lives in the batch report folder; GOV-02's changes are the addendum and the
 scoped authority wording in CLAUDE.md, `.claude/reference` and five skills.
 

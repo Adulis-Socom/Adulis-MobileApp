@@ -1,9 +1,11 @@
 # The ACTIVE replacement workspace (ARC-BE-01, RB25-D01). Only these are installed, built and verified.
 #
-# apps/console and apps/mobile are the ARCHIVED legacy surfaces: they stay on disk (with their CLAUDE.md
-# and .claude permission denials) until SC-FE-01 and MOB-FE-01 replace them, but they are NOT workspace
-# members, so no install, build, test or acceptance run on this branch can reach them. Their permanent
-# copy is the tag recovery/legacy-dev-20261125. Add a surface here only in the work order that rebuilds it.
+# apps/mobile is the ARCHIVED legacy surface: it stays on disk (with its CLAUDE.md and .claude permission
+# denials) until MOB-FE-01 replaces it, but it is NOT a workspace member, so no install, build, test or
+# acceptance run on this branch can reach it. Its permanent copy is the tag recovery/legacy-dev-20261125.
+# apps/console was REPLACED at SC-FE-01 (Batch 02A): a clean React + Vite app, registered here in that work order.
+# Add a surface here only in the work order that rebuilds it.
 packages:
   - 'apps/api'
+  - 'apps/console'
   - 'packages/*'

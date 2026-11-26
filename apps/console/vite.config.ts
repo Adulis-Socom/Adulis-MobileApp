@@ -1,57 +1,25 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vitest/config';
 
 /**
- * ADU-CON-02 v3.0 section 3.9 — Vite over Next.js, security-driven.
+ * FIXTURES ARE A BUILD-TIME DECISION (GOV-06 S2). `__FIXTURES__` is a compile-time constant, so a build that
+ * is not allowed to carry fixtures folds the dynamic import in src/transport/select.ts away and the fixture
+ * chunk is never emitted.
  *
- * A Vite SPA emits ZERO inline scripts, which is what lets the console run
- * `script-src 'self'` with no nonce and no 'unsafe-inline' (public/_headers).
- * Next.js injects inline bootstrap scripts and would force the nonce machinery
- * of ADU-SEC-01 section 8.
- *
- * NOT configured here, deliberately: vite-plugin-pwa. It is front-end scope
- * (COO/CTO) and the Tier 0 work order excludes it. When it lands, the service
- * worker precaches the app shell ONLY; /v1/* is NetworkOnly — never a cached
- * authenticated response, no offline queue — and a new worker prompts rather
- * than silently reloading under a seller mid-payout-change (section 3.11).
+ * Allowed only for the dev server (`serve`) and for the explicit `fixture-control` mode, which CI uses to run
+ * the journeys and as the release scan's positive control. A release build is `vite build` in the default
+ * `production` mode: ADULIS_FIXTURES=on has no effect there, and scripts/verify-release.mjs proves it.
  */
-const pkg = JSON.parse(
-  readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
-) as { version: string };
-
-/**
- * T11 Phase 1: index.html carries data-build-id="%VITE_BUILD_ID%". Vite's HTML
- * env replacement substitutes VITE_-prefixed variables; an UNDEFINED one is
- * left as the literal token, which would ship "%VITE_BUILD_ID%" to sellers on
- * every build the harness did not mint an id for. Defaulted here, at config
- * load, so the ordinary build stamps 'untagged' and only the harness stamps a
- * per-run identity.
- */
-process.env['VITE_BUILD_ID'] ??= 'untagged';
-
-export default defineConfig({
-  // X-Adulis-Client carries `web/<version>` on every request (ADU-API-01 S3).
-  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
-  /**
-   * envDir is deliberately NOT pointed at the workspace root. Doing so makes
-   * the console's build read the root `.env`, which carries
-   * NODE_ENV=development -- and Vite then selects React's DEVELOPMENT build,
-   * doubling the bundle and shipping development warnings to sellers. That
-   * is the hazard `.env.example` warns about in as many words, and the
-   * `production-react` gate exists to catch it. VITE_API_BASE_URL reaches Vite from the SHELL
-   * instead (Vite reads VITE_-prefixed vars out of process.env), which is
-   * what `apps/console/CLAUDE.md`'s recipe loads.
-   */
-  plugins: [react()],
-  build: {
-    outDir: 'dist',
-    // No eval-based sourcemaps: CI greps the build output for 'unsafe-eval'
-    // and fails if it appears (section 16).
-    sourcemap: false,
-  },
-  server: {
-    port: 5173,
-  },
+export default defineConfig(({ command, mode }) => {
+  const requested = process.env['ADULIS_FIXTURES'] === 'on';
+  const allowed = command === 'serve' || mode === 'fixture-control';
+  return {
+    plugins: [react()],
+    define: { __FIXTURES__: JSON.stringify(requested && allowed) },
+    // Never the workspace root: the root carries NODE_ENV=development settings and would ship React's dev build.
+    envDir: import.meta.dirname,
+    // A fixture-control build lands in its own directory unless told otherwise: never in `dist`, which is the release output.
+    build: { sourcemap: false, target: 'es2023', ...(mode === 'fixture-control' ? { outDir: 'dist-fixture' } : {}) },
+    test: { environment: 'node', include: ['src/**/*.test.ts'] },
+  };
 });

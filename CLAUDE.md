@@ -240,6 +240,11 @@ starts from the current verified `origin/dev` on its own `<track>/<work-order>` 
 never used as a starting point. Automated tests never use a persistent database or object store. Full policy:
 `docs/engineering/DEVELOPMENT-BRANCH-POLICY.md`.
 
+**Rebuild lineage, RB26-D01 (26 November 2026):** work-order PRs integrate into `rebuild/2026-11-25`; each ACCEPTED surface milestone
+(SC-FE-12, SC-BE-08, MOB-FE-12, MOB-BE-09, SF-FE-07, SF-BE-05, OP-FE-09, OP-BE-07, REL-08) is promoted into `dev` by a normal reviewed PR
+with every required check, no second approval needed for the merge. First promotion after SC-FE-12:
+`docs/rebuild/DEV-PROMOTION-PROCEDURE.md`. It is not launch, deployment or database authorisation, and never touches `main`.
+
 ## Development storage (every work order)
 
 Drive C: on the development machine has run out mid-session (ON-20261111-100). Follow

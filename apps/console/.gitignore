@@ -1,0 +1,13 @@
+dist/
+dist-fixture/
+dist-release-scan/
+dist-fixture-scan/
+node_modules/
+playwright-report/
+test-results/
+screenshots/
+.impeccable/review/
+.impeccable/questions/
+.impeccable/mocks/
+.impeccable/hook.cache.json
+dist-harness/
