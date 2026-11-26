@@ -47,3 +47,20 @@ test('shot: 320px at 150% text, operating Home', async ({ page }) => {
   await settle(page);
   await page.screenshot({ path: 'screenshots/dashboard-operational.phone-320-text150.png', fullPage: true });
 });
+
+/** Narrow navigation and denial states at larger text (Batch 02B review E): real root font size, asserted. */
+for (const percent of [150, 200] as const) {
+  for (const name of ['dashboard-operational', 'dashboard-restricted-seller', 'no-permission', 'readiness-permission-denied', 'chooser']) {
+    const scene = SCENES.find((s) => s.name === name);
+    if (!scene) throw new Error(`no scene named ${name}`);
+    test(`shot: ${name} phone-390 at ${percent}% text`, async ({ page }) => {
+      const { expectTextScale, scaleText } = await import('./helpers');
+      await scaleText(page, percent);
+      await page.setViewportSize({ width: 390, height: 800 });
+      await scene.setup(page);
+      await expectTextScale(page, percent);
+      await settle(page);
+      await page.screenshot({ path: `screenshots/${name}.phone-390-text${percent}.png`, fullPage: !scene.dialog });
+    });
+  }
+}
