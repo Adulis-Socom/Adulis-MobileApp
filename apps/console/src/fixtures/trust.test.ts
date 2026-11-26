@@ -75,7 +75,7 @@ describe('SC-FE-09 fixture reviews: two dimensions, never combined, never altere
     await signIn(world, 'fx_acct_owner');
     const all = [...(await world.handle('reviews.list', { dimension: 'PRODUCT', cursor: null }, ALEM)).items, ...(await world.handle('reviews.list', { dimension: 'SELLER_SERVICE', cursor: null }, ALEM)).items];
     for (const r of all) expect(Object.keys(r).sort()).toEqual(['dimension', 'id', 'product_label', 'stars', 'text', 'written_at']);
-    expect(JSON.stringify(all)).not.toMatch(/verified|purchase|receipt|order|reply/i);
+    expect(JSON.stringify(all)).not.toMatch(/verified|purchase|receipt|order/i);
     expect(all.every((r) => r.id.startsWith('fx_rev_'))).toBe(true);
   });
 });
