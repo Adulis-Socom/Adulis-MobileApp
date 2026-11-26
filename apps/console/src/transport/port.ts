@@ -8,6 +8,7 @@ import type { OpId, OpInput, OpOutput } from '../contracts/gap-sc';
  * ProblemCode is a Console-side vocabulary mapped to localisable message keys (problem-message.ts). Codes the
  * replacement API already publishes keep their meaning; OTP_INVALID, OTP_EXPIRED and RATE_LIMITED are PROVISIONAL
  * (RB-B02A-02: the RATE_LIMITED error contract is assigned to SC-BE-02) and UNAVAILABLE/NETWORK are client-side.
+ * CONFLICT is PROVISIONAL (SC-FE-04): a stale optimistic-concurrency token (CATINV S119, STOCK_VERSION_CONFLICT S118).
  */
 export type ProblemCode =
   | 'AUTHENTICATION_REQUIRED'
@@ -21,6 +22,7 @@ export type ProblemCode =
   | 'NETWORK'
   | 'INTERNAL'
   | 'CONTEXT_MISMATCH'
+  | 'CONFLICT'
   | 'REFUSED';
 
 export class TransportError extends Error {

@@ -152,8 +152,9 @@ test.describe('SC-FE-02: the Publication Readiness Hub (independent items, serve
     await expect(row(page, 'Store profile')).toContainText('Done');
     await expect(row(page, 'How buyers receive items')).toContainText('Needs your action');
     await expect(row(page, 'First Product')).toContainText('Create your first Product.');
-    // nothing built resolves an item: the first actionable item leads to an honest "arrives later", never a form
-    expect(await limeCount(page)).toBe(0);
+    // Products is built (SC-FE-04), so its action is the first built one and carries the single lime action; Fulfilment is not built yet
+    await expect(row(page, 'First Product').getByRole('link')).toHaveAttribute('href', `/s/${SELLER.chaltu.id}/products`);
+    expect(await limeCount(page)).toBe(1);
   });
 
   test('complete non-financial readiness is stated, and offers no publish control', async ({ page }) => {

@@ -22,6 +22,8 @@ import type {
   SocialAccountState,
 } from '../contracts/gap-sc';
 import { TransportError, type CallContext } from '../transport/port';
+import { createCatalogue } from './catalogue';
+import type { Authz, Kit } from './kit';
 
 /**
  * The fixture world: synthetic Sellers, accounts and a server-like resolver (GOV-06). DEVELOPMENT ONLY: this module
@@ -193,6 +195,18 @@ const ROLE_DEST: Record<SellerRole, DestinationKey[]> = {
   CAMPAIGN_MANAGER: ['home', 'content', 'products', 'insights'],
 };
 const MANAGER_ROLES: SellerRole[] = ['OWNER', 'ADMIN'];
+/** Capabilities a manager holds beyond the admission ones, and what the other roles hold (CATINV S110, CONSOLE-02 S17). */
+const WRITE_CAPS = ['catalogue.write', 'inventory.write', 'content.write', 'store.manage', 'couriers.manage'];
+const ROLE_CAPS: Record<SellerRole, string[]> = {
+  OWNER: WRITE_CAPS,
+  ADMIN: WRITE_CAPS,
+  SALES_SUPPORT: [],
+  INVENTORY: ['catalogue.write', 'inventory.write'],
+  ANALYST: [],
+  CAMPAIGN_MANAGER: ['content.write'],
+};
+/** Brief areas whose work order is built (SC-FE-04: Products and Inventory). The rest stay DEFERRED. */
+const BUILT_AREAS = new Set(['PRODUCTS', 'INVENTORY']);
 const VIEW_PRIORITY: [SellerRole, RoleView][] = [
   ['OWNER', 'OWNER_ADMIN'], ['ADMIN', 'OWNER_ADMIN'], ['SALES_SUPPORT', 'SALES_SUPPORT'],
   ['INVENTORY', 'INVENTORY'], ['CAMPAIGN_MANAGER', 'CAMPAIGN_MANAGER'], ['ANALYST', 'ANALYST'],
@@ -276,7 +290,8 @@ export function createWorld(options: WorldOptions): World {
     const roles = m.roles;
     let dests = new Set<DestinationKey>(roles.flatMap((r) => ROLE_DEST[r]));
     let caps = new Set<string>(['notifications.view']);
-    if (roles.some((r) => MANAGER_ROLES.includes(r))) caps = new Set(['notifications.view', 'readiness.resolve', 'admission.manage']);
+    for (const r of roles) for (const c of ROLE_CAPS[r]) caps.add(c);
+    if (roles.some((r) => MANAGER_ROLES.includes(r))) caps.add('readiness.resolve').add('admission.manage');
     if (s.summary.status === 'SUSPENDED') {
       dests = new Set<DestinationKey>(['home', 'settings'].filter((d) => dests.has(d as DestinationKey)) as DestinationKey[]);
       caps = new Set(['notifications.view']);
@@ -301,6 +316,8 @@ export function createWorld(options: WorldOptions): World {
   function readinessOf(s: SellerRecord, caps: readonly string[]): Readiness {
     const e = s.eligibility;
     const canResolve = caps.includes('readiness.resolve');
+    // Resolved from the data the Console can change, never from a stored flag: publishing the first Product satisfies it.
+    const product = catalogue.hasPublishedProduct(s.summary.id);
     const act = (kind: string): ReadinessItem['resolving_action'] => ({ kind, denied: canResolve ? null : 'NO_PERMISSION' });
     const items: ReadinessItem[] = [
       { code: 'ACCOUNT_CREATED', satisfied: true, workflow_state: null, reason_codes: [], resolving_action: null },
@@ -325,7 +342,7 @@ export function createWorld(options: WorldOptions): World {
     items.push(
       { code: 'STORE_PROFILE', satisfied: s.store, workflow_state: null, reason_codes: s.store ? [] : ['STORE_PROFILE_INCOMPLETE'], resolving_action: s.store ? null : act('EDIT_STORE_PROFILE') },
       { code: 'FULFILMENT_CONFIG', satisfied: s.fulfilment, workflow_state: null, reason_codes: s.fulfilment ? [] : ['FULFILMENT_REQUIRED'], resolving_action: s.fulfilment ? null : act('CONFIGURE_FULFILMENT') },
-      { code: 'AT_LEAST_ONE_PRODUCT', satisfied: s.product, workflow_state: null, reason_codes: s.product ? [] : ['PRODUCT_REQUIRED'], resolving_action: s.product ? null : act('ADD_PRODUCT') },
+      { code: 'AT_LEAST_ONE_PRODUCT', satisfied: product, workflow_state: null, reason_codes: product ? [] : ['PRODUCT_REQUIRED'], resolving_action: product ? null : act('ADD_PRODUCT') },
     );
     return { seller_id: s.summary.id, ready: items.every((i) => i.satisfied), policy_version: 'fx_policy_1', items };
   }
@@ -347,7 +364,7 @@ export function createWorld(options: WorldOptions): World {
       .map((key) => {
         const d = AREA_DEST[key];
         const entitled = d === null || d === undefined || access.destinations.find((x) => x.key === d)?.access === 'GRANTED';
-        return { key, state: key === 'NOTIFICATIONS' ? 'AVAILABLE' : entitled ? 'DEFERRED' : 'NO_ENTITLEMENT' };
+        return { key, state: !entitled ? 'NO_ENTITLEMENT' : key === 'NOTIFICATIONS' || BUILT_AREAS.has(key) ? 'AVAILABLE' : 'DEFERRED' };
       });
     const isManager = view === 'OWNER_ADMIN';
     return {
@@ -380,8 +397,30 @@ export function createWorld(options: WorldOptions): World {
   }
   const digits = (v: string): string => v.replace(/[^\d+]/g, '');
 
+  const kit: Kit = {
+    now: nowMs,
+    iso,
+    next: (prefix) => `${prefix}_${++counter}`,
+    flags: (id) => {
+      const r = sellers[id];
+      return { name: r?.summary.display_name ?? '', product: r?.product ?? false, store: r?.store ?? false, fulfilment: r?.fulfilment ?? false };
+    },
+    authz: (ctx): Authz => {
+      const { m, s } = membership(persona(), sellerIdOf(ctx));
+      const access = accessFor(m, s);
+      return {
+        sellerId: s.summary.id,
+        sellerName: s.summary.display_name,
+        caps: new Set(access.capabilities),
+        reach: (dest) => access.destinations.some((d) => d.key === dest && d.access === 'GRANTED'),
+      };
+    },
+  };
+  const catalogue = createCatalogue(kit);
+
   type H = { [K in OpId]: (input: OpInput<K>, ctx: CallContext) => OpOutput<K> };
   const handlers: H = {
+    ...catalogue.handlers,
     'auth.otp.start': ({ phone }) => {
       if (!/^\+?\d{9,15}$/.test(digits(phone))) throw new TransportError('VALIDATION_FAILED', { fields: { phone: 'PHONE_INVALID' } });
       return newChallenge(digits(phone));

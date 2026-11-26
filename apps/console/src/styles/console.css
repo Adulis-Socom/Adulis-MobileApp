@@ -1142,3 +1142,44 @@ legend {
     transition: none !important;
   }
 }
+
+/* ---- SC-FE-04: editors ------------------------------------------------------------------------------------------ */
+/* a fieldset used only to disable a whole group of controls at once: it must not look like a boxed group */
+.plain-fieldset {
+  display: grid;
+  gap: var(--adu-space-md);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.plain-fieldset:disabled {
+  opacity: 0.85;
+}
+
+h3 {
+  font-weight: var(--adu-font-weight-semibold);
+}
+
+/* a short list of labelled facts: the label above its value, so Amharic and 200% text never need a second column */
+.facts {
+  display: grid;
+  gap: var(--adu-space-xs);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.facts dt {
+  color: var(--adu-color-text-secondary);
+}
+
+.facts dd {
+  margin: 0 0 var(--adu-space-xs);
+  min-width: 0;
+}
+
+textarea.text-input {
+  min-height: calc(var(--adu-touch-min) * 2);
+  resize: vertical;
+}

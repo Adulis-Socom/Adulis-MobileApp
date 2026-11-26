@@ -22,7 +22,11 @@ describe('a readiness action respects permission, entitlement, destination and w
   });
 
   it('leads to an unbuilt destination as a link flagged unbuilt (rendered disabled, with the reason it arrives later)', () => {
-    expect(actionFor(item('ADD_PRODUCT'), access(all), 'fx_s')).toMatchObject({ kind: 'link', built: false });
+    expect(actionFor(item('EDIT_COMPANY_DETAILS'), access(all), 'fx_s')).toMatchObject({ kind: 'link', built: false });
+  });
+
+  it('leads to Products now that it is built: an active link', () => {
+    expect(actionFor(item('ADD_PRODUCT'), access(all), 'fx_s')).toMatchObject({ kind: 'link', built: true, to: '/s/fx_s/products' });
   });
 
   it('hides the action when its own permission is missing, whatever the entitlement', () => {

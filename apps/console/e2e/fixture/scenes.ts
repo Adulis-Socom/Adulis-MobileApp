@@ -153,11 +153,11 @@ export const SCENES: readonly Scene[] = [
     },
   },
   {
-    name: 'unavailable-products',
+    name: 'unavailable-inbox',
     setup: async (p) => {
       await atSellerHome(p, PHONE.owner, SELLER.alem.name);
-      await goInApp(p, `/s/${SELLER.alem.id}/products`);
-      await expect(p.getByText('Products and Inventory arrives in a later release')).toBeVisible();
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox`);
+      await expect(p.getByText('Inbox arrives in a later release')).toBeVisible();
     },
   },
   {
@@ -226,6 +226,53 @@ export const SCENES: readonly Scene[] = [
       await atSellerHome(p, PHONE.owner, SELLER.alem.name);
       await p.getByRole('button', { name: 'Account' }).click();
       await expect(p.getByRole('dialog', { name: 'Account' })).toBeVisible();
+    },
+  },
+  {
+    name: 'products-list',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/products`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Products and Inventory' })).toBeVisible();
+      await expect(p.getByRole('link', { name: /Linen wrap dress/ })).toBeVisible();
+    },
+  },
+  {
+    name: 'product-editor-published',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/products/fx_prod_alem_1`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Linen wrap dress' })).toBeVisible();
+      await expect(p.getByRole('heading', { level: 2, name: 'Publication' })).toBeVisible();
+    },
+  },
+  {
+    name: 'product-editor-draft-blockers',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/products/fx_prod_alem_6`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Linen shirt' })).toBeVisible();
+      await expect(p.getByRole('heading', { level: 3, name: 'Needs attention before publication: 3' })).toBeVisible();
+    },
+  },
+  {
+    name: 'product-editor-category-gap',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/products/fx_prod_alem_4`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Canvas backpack' })).toBeVisible();
+      await expect(p.getByText('The attributes of this category have not been defined yet.').first()).toBeVisible();
+    },
+  },
+  {
+    name: 'dialog-stock-update',
+    dialog: true,
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/products/fx_prod_alem_1`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Linen wrap dress' })).toBeVisible();
+      await p.getByRole('button', { name: 'Update stock' }).first().click();
+      await expect(p.getByRole('dialog', { name: 'Update stock for Black / S' })).toBeVisible();
     },
   },
 ];

@@ -3,7 +3,7 @@ import { codeText, t } from '../../i18n/t';
 import { destinationAccess, sellerPath } from '../../seller/access';
 
 /**
- * Where a resolving action leads. Only the admission step is built in this release; the others lead to destinations
+ * Where a resolving action leads. The admission step and Products (SC-FE-04) are built; the others lead to destinations
  * that honestly say they arrive later. An unknown kind has no destination, so it shows no action at all.
  */
 const TARGETS: Record<string, { dest: DestinationKey; path: string; built: boolean }> = {
@@ -11,7 +11,7 @@ const TARGETS: Record<string, { dest: DestinationKey; path: string; built: boole
   EDIT_COMPANY_DETAILS: { dest: 'store', path: 'store', built: false },
   EDIT_STORE_PROFILE: { dest: 'store', path: 'store', built: false },
   CONFIGURE_FULFILMENT: { dest: 'store', path: 'store', built: false },
-  ADD_PRODUCT: { dest: 'products', path: 'products', built: false },
+  ADD_PRODUCT: { dest: 'products', path: 'products', built: true },
 };
 
 export type RowAction =

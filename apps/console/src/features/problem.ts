@@ -28,6 +28,8 @@ export function problemText(error: TransportError): string {
       return t('error.network');
     case 'CONTEXT_MISMATCH':
       return t('error.context_mismatch');
+    case 'CONFLICT':
+      return t('error.conflict');
     case 'REFUSED':
       return t('error.refused');
     case 'INTERNAL':
