@@ -1541,3 +1541,8 @@ legend {
   font-weight: var(--adu-font-weight-semibold);
 }
 
+/* a team message is indented, so Buyer and team read as two voices even before the sender's name is read */
+.message[data-sender='SELLER_TEAM'] {
+  padding-inline-start: var(--adu-space-lg);
+}
+
