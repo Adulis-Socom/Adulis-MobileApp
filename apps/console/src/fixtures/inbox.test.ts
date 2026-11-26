@@ -48,14 +48,17 @@ describe('SC-FE-08 fixture Inbox: list, thread, isolation', () => {
     expect(t.messages.filter((m) => m.sender === 'SELLER_TEAM')).toHaveLength(0);
   });
 
-  it('resolves a Scene on every read: a Scene that is no longer public is an unavailable reference, never newer content', async () => {
+  it('resolves only accessibility on every read: a Scene that is no longer public is an unavailable reference, never newer content', async () => {
     const { world } = setup();
     await signIn(world, 'fx_acct_owner');
     const t = await world.handle('inbox.thread.get', { conversation_id: 'fx_conv_alem_3' }, ALEM);
     // Scene 6's only Product is withdrawn, so the Scene is Private now; the message keeps its snapshot label and says it is unavailable.
-    expect(t.messages[0]?.context).toMatchObject({ kind: 'SCENE', scene: { id: 'fx_scene_alem_6', available: false } });
+    expect(t.messages[0]?.subject).toEqual({ kind: 'SCENE', ref: 'fx_scene_alem_6', revision: 1, label: 'The old kaftan, styled two ways', available: false });
+    expect(t.messages[0]?.source).toBeNull();
     const live = await world.handle('inbox.thread.get', { conversation_id: 'fx_conv_alem_1' }, ALEM);
-    expect(live.messages[0]?.context).toMatchObject({ kind: 'PRODUCT_IN_SCENE', product: { label: 'Linen wrap dress' }, scene: { available: true } });
+    // ONE subject (the Product); the Scene is provenance, not a second subject (CHAT S4).
+    expect(live.messages[0]?.subject).toEqual({ kind: 'PRODUCT', ref: 'fx_prod_alem_1', label: 'Linen wrap dress' });
+    expect(live.messages[0]?.source).toMatchObject({ ref: 'fx_scene_alem_1', revision: 1, available: true });
   });
 
   it('never shows one Seller another Seller\'s conversation, and a foreign id is the same not-found as a missing one', async () => {
@@ -64,18 +67,46 @@ describe('SC-FE-08 fixture Inbox: list, thread, isolation', () => {
     expect((await world.handle('inbox.list', { cursor: null }, BIRUK)).items.map((c) => c.id)).toEqual(['fx_conv_biruk_1']);
     const foreign = await failure(world.handle('inbox.thread.get', { conversation_id: 'fx_conv_alem_1' }, BIRUK));
     const missing = await failure(world.handle('inbox.thread.get', { conversation_id: 'fx_conv_nothing' }, BIRUK));
-    expect(foreign.code).toBe('NOT_FOUND');
-    expect(missing.code).toBe(foreign.code);
-    const reply = await failure(world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_1', body: 'hello', scene_id: null, product_id: null }, BIRUK));
+    expect(foreign).toMatchObject({ code: 'NOT_FOUND', detail: 'CONVERSATION_NOT_FOUND' });
+    expect(missing).toMatchObject({ code: foreign.code, detail: foreign.detail });
+    const reply = await failure(world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_1', body: 'hello', scene_id: null, scene_revision: null, product_id: null }, BIRUK));
     expect(reply.code).toBe('NOT_FOUND');
   });
+});
 
-  it('marks a thread read once, monotonically', async () => {
+describe('SC-FE-08 fixture Inbox: the shared Seller read mark is a monotonic high-water (CHAT S10)', () => {
+  it('marks up to the highest message shown, idempotently, and never backwards', async () => {
     const { world } = setup();
     await signIn(world, 'fx_acct_owner');
-    const marked = await world.handle('inbox.read.mark', { conversation_id: 'fx_conv_alem_2' }, ALEM);
-    expect(marked.unread_count).toBe(0);
-    expect((await world.handle('inbox.read.mark', { conversation_id: 'fx_conv_alem_2' }, ALEM)).unread_count).toBe(0);
+    const t = await world.handle('inbox.thread.get', { conversation_id: 'fx_conv_alem_2' }, ALEM);
+    const ids = t.messages.map((m) => m.id);
+    const last = ids[ids.length - 1] ?? '';
+    expect((await world.handle('inbox.read.mark', { conversation_id: 'fx_conv_alem_2', last_read_message_id: ids[0] ?? '' }, ALEM)).unread_count).toBe(1);
+    expect((await world.handle('inbox.read.mark', { conversation_id: 'fx_conv_alem_2', last_read_message_id: last }, ALEM)).unread_count).toBe(0);
+    expect((await world.handle('inbox.read.mark', { conversation_id: 'fx_conv_alem_2', last_read_message_id: last }, ALEM)).unread_count).toBe(0);
+    // A lower mark sent late (an older screen) does not move it back.
+    expect((await world.handle('inbox.read.mark', { conversation_id: 'fx_conv_alem_2', last_read_message_id: ids[0] ?? '' }, ALEM)).unread_count).toBe(0);
+  });
+
+  it('does not mark a Buyer message that arrived after the screen was loaded', async () => {
+    const { world } = setup();
+    await signIn(world, 'fx_acct_owner');
+    const t = await world.handle('inbox.thread.get', { conversation_id: 'fx_conv_alem_4' }, ALEM);
+    const shown = t.messages[t.messages.length - 1]?.id ?? '';
+    expect(world.hooks.buyerMessage('fx_seller_alem', 'fx_conv_alem_4', 'Are you open on Sunday?')).toBe(true);
+    const marked = await world.handle('inbox.read.mark', { conversation_id: 'fx_conv_alem_4', last_read_message_id: shown }, ALEM);
+    expect(marked.unread_count).toBe(1);
+  });
+
+  it('is one mark for the whole Seller team, and a message id from elsewhere is refused', async () => {
+    const { world } = setup();
+    await signIn(world, 'fx_acct_sales');
+    const t = await world.handle('inbox.thread.get', { conversation_id: 'fx_conv_alem_2' }, ALEM);
+    await world.handle('inbox.read.mark', { conversation_id: 'fx_conv_alem_2', last_read_message_id: t.messages[t.messages.length - 1]?.id ?? '' }, ALEM);
+    await signIn(world, 'fx_acct_owner');
+    expect((await world.handle('inbox.list', { cursor: null }, ALEM)).items.find((c) => c.id === 'fx_conv_alem_2')?.unread_count).toBe(0);
+    const foreign = await failure(world.handle('inbox.read.mark', { conversation_id: 'fx_conv_alem_2', last_read_message_id: 'fx_msg_biruk_1' }, ALEM));
+    expect(foreign.fields).toEqual({ last_read_message_id: 'MESSAGE_NOT_IN_CONVERSATION' });
   });
 });
 
@@ -94,7 +125,7 @@ describe('SC-FE-08 fixture Inbox: permissions (AUTH-02 seller.inbox:read and :re
       await signIn(world, who);
       expect((await failure(world.handle('inbox.list', { cursor: null }, ALEM))).code).toBe('PERMISSION_DENIED');
       expect((await failure(world.handle('inbox.thread.get', { conversation_id: 'fx_conv_alem_1' }, ALEM))).code).toBe('PERMISSION_DENIED');
-      expect((await failure(world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_1', body: 'hi', scene_id: null, product_id: null }, ALEM))).code).toBe('PERMISSION_DENIED');
+      expect((await failure(world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_1', body: 'hi', scene_id: null, scene_revision: null, product_id: null }, ALEM))).code).toBe('PERMISSION_DENIED');
     }
   });
 });
@@ -109,33 +140,73 @@ describe('SC-FE-08 fixture Inbox: context rules (CHAT S4-S5) and sending', () =>
     expect(inScene.products.map((p) => p.label).sort()).toEqual(['Cotton shirt dress', 'Linen wrap dress']);
     // a private, draft, removed or restricted Scene is not newly selectable
     expect(all.scenes.some((s) => s.id === 'fx_scene_alem_6')).toBe(false);
-    expect((await failure(world.handle('inbox.context.get', { scene_id: 'fx_scene_alem_6' }, ALEM))).fields).toEqual({ scene: 'CONTEXT_SCENE_NOT_AVAILABLE' });
+    expect((await failure(world.handle('inbox.context.get', { scene_id: 'fx_scene_alem_6' }, ALEM))).fields).toEqual({ scene: 'MESSAGE_SCENE_POST_INVALID' });
+    expect(all.scenes.find((s) => s.id === 'fx_scene_alem_1')?.revision).toBeGreaterThan(0);
   });
 
-  it('refuses an empty message, a Product that is not in the Scene, and a Scene that is not public, all at once', async () => {
+  it('refuses with the CHAT S15 codes: an empty message, a Product not in the Scene revision, a Scene that is not public, a half-given Scene', async () => {
     const { world } = setup();
     await signIn(world, 'fx_acct_owner');
-    const e1 = await failure(world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_4', body: '   ', scene_id: 'fx_scene_alem_1', product_id: 'fx_prod_alem_3' }, ALEM));
-    expect(e1.fields).toEqual({ body: 'MESSAGE_BODY_REQUIRED', product: 'MESSAGE_PRODUCT_NOT_IN_SCENE' });
-    const e2 = await failure(world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_4', body: 'hi', scene_id: 'fx_scene_alem_6', product_id: null }, ALEM));
-    expect(e2.fields).toEqual({ scene: 'CONTEXT_SCENE_NOT_AVAILABLE' });
+    const rev = (await world.handle('inbox.context.get', { scene_id: null }, ALEM)).scenes.find((s) => s.id === 'fx_scene_alem_1')?.revision ?? 0;
+    const e1 = await failure(world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_4', body: '   ', scene_id: 'fx_scene_alem_1', scene_revision: rev, product_id: 'fx_prod_alem_3' }, ALEM));
+    expect(e1.fields).toEqual({ body: 'MESSAGE_EMPTY', product: 'MESSAGE_PRODUCT_NOT_IN_SCENE_POST' });
+    const e2 = await failure(world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_4', body: 'hi', scene_id: 'fx_scene_alem_6', scene_revision: 1, product_id: null }, ALEM));
+    expect(e2.fields).toEqual({ scene: 'MESSAGE_SCENE_POST_INVALID' });
+    const e3 = await failure(world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_4', body: 'hi', scene_id: 'fx_scene_alem_1', scene_revision: null, product_id: null }, ALEM));
+    expect(e3.fields).toEqual({ scene: 'MESSAGE_CONTEXT_CONFLICT' });
+    const e4 = await failure(world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_4', body: 'hi', scene_id: null, scene_revision: null, product_id: 'fx_prod_alem_6' }, ALEM));
+    expect(e4.fields).toEqual({ product: 'MESSAGE_PRODUCT_POST_INVALID' }); // a draft Product
+    const e5 = await failure(world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_4', body: 'hi', scene_id: 'fx_scene_alem_1', scene_revision: rev + 50, product_id: null }, ALEM));
+    expect(e5.fields).toEqual({ scene: 'MESSAGE_SCENE_POST_INVALID' }); // a revision never offered
     expect((await world.handle('inbox.thread.get', { conversation_id: 'fx_conv_alem_4' }, ALEM)).messages).toHaveLength(1); // nothing was sent
   });
 
-  it('a human reply continues the SAME thread, takes it back from automation, and carries its own context', async () => {
+  it('checks membership against the EXACT revision the composer offered, and the next revision on its own terms', async () => {
     const { world } = setup();
     await signIn(world, 'fx_acct_owner');
-    const next = await world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_2', body: ' It comes in black. ', scene_id: null, product_id: 'fx_prod_alem_3' }, ALEM);
+    const offered = (await world.handle('inbox.context.get', { scene_id: 'fx_scene_alem_1' }, ALEM));
+    const rev = offered.scenes.find((s) => s.id === 'fx_scene_alem_1')?.revision ?? 0;
+    expect(offered.products.map((p) => p.id)).toContain('fx_prod_alem_2');
+    // The Seller edits the Scene: Product 2 is untagged in the new revision.
+    const scene = await world.handle('scenes.get', { scene_id: 'fx_scene_alem_1' }, ALEM);
+    const kept = scene.tags.filter((x) => x.product_id !== 'fx_prod_alem_2').map((x) => ({ product_id: x.product_id, hotspots: x.hotspots.map((h) => ({ x_norm: h.x_norm, y_norm: h.y_norm })) }));
+    await world.handle('scenes.update', { scene_id: 'fx_scene_alem_1', version: scene.version, tags: kept }, ALEM);
+    // Composed on the old revision, where Product 2 WAS tagged: accepted, and the message records that revision.
+    const ok = await world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_4', body: 'This one.', scene_id: 'fx_scene_alem_1', scene_revision: rev, product_id: 'fx_prod_alem_2' }, ALEM);
+    expect(ok.messages[ok.messages.length - 1]?.source).toMatchObject({ ref: 'fx_scene_alem_1', revision: rev });
+    // On the new revision it is not tagged.
+    const now = (await world.handle('inbox.context.get', { scene_id: null }, ALEM)).scenes.find((s) => s.id === 'fx_scene_alem_1')?.revision ?? 0;
+    expect(now).toBeGreaterThan(rev);
+    const refused = await failure(world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_4', body: 'This one.', scene_id: 'fx_scene_alem_1', scene_revision: now, product_id: 'fx_prod_alem_2' }, ALEM));
+    expect(refused.fields).toEqual({ product: 'MESSAGE_PRODUCT_NOT_IN_SCENE_POST' });
+  });
+
+  it('keeps the display snapshot of a sent message when the Product is renamed later', async () => {
+    const { world } = setup();
+    await signIn(world, 'fx_acct_owner');
+    await world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_4', body: 'Try this.', scene_id: null, scene_revision: null, product_id: 'fx_prod_alem_4' }, ALEM);
+    const product = await world.handle('products.get', { product_id: 'fx_prod_alem_4' }, ALEM);
+    await world.handle('products.update', { product_id: 'fx_prod_alem_4', version: product.version, title: 'Renamed backpack' }, ALEM);
+    const t = await world.handle('inbox.thread.get', { conversation_id: 'fx_conv_alem_4' }, ALEM);
+    expect(t.messages[t.messages.length - 1]?.subject).toEqual({ kind: 'PRODUCT', ref: 'fx_prod_alem_4', label: 'Canvas backpack' });
+  });
+
+  it('a human reply continues the SAME thread, takes it back from automation, and carries its own subject', async () => {
+    const { world } = setup();
+    await signIn(world, 'fx_acct_owner');
+    const next = await world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_2', body: ' It comes in black. ', scene_id: null, scene_revision: null, product_id: 'fx_prod_alem_3' }, ALEM);
     expect(next.state).toBe('OPEN');
     const sent = next.messages[next.messages.length - 1];
-    expect(sent).toMatchObject({ sender: 'SELLER_TEAM', body: 'It comes in black.', context: { kind: 'PRODUCT', product: { label: 'Silk slip dress' }, scene: null } });
+    expect(sent).toMatchObject({ sender: 'SELLER_TEAM', body: 'It comes in black.', subject: { kind: 'PRODUCT', label: 'Silk slip dress' }, source: null });
+    // The reply does not move the read mark; the Console marks the highest message it shows.
+    await world.handle('inbox.read.mark', { conversation_id: 'fx_conv_alem_2', last_read_message_id: sent?.id ?? '' }, ALEM);
     expect((await world.handle('inbox.list', { cursor: null }, ALEM)).items.find((c) => c.id === 'fx_conv_alem_2')?.unread_count).toBe(0);
   });
 
   it('a lost response and a retry with the same key make ONE message; a changed body under the same key is refused', async () => {
     const { world } = setup();
     await signIn(world, 'fx_acct_owner');
-    const input = { conversation_id: 'fx_conv_alem_4', body: 'Yes, come in any day.', scene_id: null, product_id: null };
+    const input = { conversation_id: 'fx_conv_alem_4', body: 'Yes, come in any day.', scene_id: null, scene_revision: null, product_id: null };
     await world.handle('inbox.reply.send', input, { ...ALEM, idempotencyKey: 'm1' });
     await world.handle('inbox.reply.send', input, { ...ALEM, idempotencyKey: 'm1' });
     expect((await world.handle('inbox.thread.get', { conversation_id: 'fx_conv_alem_4' }, ALEM)).messages).toHaveLength(2);

@@ -105,3 +105,23 @@ describe('SC-FE-09 fixture permissions (AUTH-02: trust for four roles, reviews f
     expect(Object.keys(world.hooks)).not.toContain('writeReview');
   });
 });
+
+describe('safety-suspended Seller: read-only Trust and historical Reviews stay, nothing commercial returns (P-70, MOD S29)', () => {
+  const GELILA = { sellerId: 'fx_seller_gelila' };
+  it('serves the standing and the historical Reviews to the Owner of a suspended Seller', async () => {
+    const { world } = setup();
+    await signIn(world, 'fx_acct_states');
+    expect(await world.handle('standing.get', {}, GELILA)).toMatchObject({ seller_id: 'fx_seller_gelila' });
+    const summary = await world.handle('reviews.summary.get', {}, GELILA);
+    expect([summary.product.count, summary.seller_service.count]).toEqual([1, 1]);
+    const list = await world.handle('reviews.list', { dimension: 'PRODUCT', cursor: null }, GELILA);
+    expect(list.items.map((r) => r.id)).toEqual(['fx_rev_gelila_1']);
+  });
+  it('keeps publication, catalogue writes, Inbox and Content closed', async () => {
+    const { world } = setup();
+    await signIn(world, 'fx_acct_states');
+    expect((await failure(world.handle('products.list', { query: '', filter: 'ALL', cursor: null }, GELILA))).code).toBe('PERMISSION_DENIED');
+    expect((await failure(world.handle('inbox.list', { cursor: null }, GELILA))).code).toBe('PERMISSION_DENIED');
+    expect((await failure(world.handle('scenes.list', { tab: 'ALL', cursor: null }, GELILA))).code).toBe('PERMISSION_DENIED');
+  });
+});

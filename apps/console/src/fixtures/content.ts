@@ -82,14 +82,17 @@ interface StoryRec {
 
 export interface Content {
   readonly handlers: Handlers<ContentOps>;
-  /** For the Inbox: this Seller's Scenes with their LIVE publicity and tagged Products. Resolved on each call, never copied. */
-  scenesForContext(sellerId: string): readonly { id: string; label: string; isPublic: boolean; productIds: readonly string[] }[];
+  /** For the Inbox: this Seller's Scenes at their current revision, with their LIVE publicity and tagged Products. Resolved on each call. */
+  scenesForContext(sellerId: string): readonly { id: string; label: string; revision: number; isPublic: boolean; productIds: readonly string[] }[];
+  /** The Products tagged in one exact revision the Inbox has offered (CHAT S4 provenance), or null for a revision never offered. */
+  tagsAtRevision(sellerId: string, sceneId: string, revision: number): readonly string[] | null;
 }
 
 const BLOCKING_MODERATION = new Set(['RESTRICTED', 'REMOVED']);
 
 export function createContent(kit: Kit, catalogue: Catalogue): Content {
   const data = new Map<string, SceneRec[]>();
+  const offered = new Map<string, readonly string[]>();
 
   function seedFor(sellerId: string): SceneRec[] {
     if (sellerId !== 'fx_seller_alem') return [];
@@ -439,7 +442,14 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
   };
 
   return {
-    scenesForContext: (sellerId) => scenesOf(sellerId).map((s) => ({ id: s.id, label: s.caption.trim() === '' ? s.id : s.caption, isPublic: publicScene(sellerId, s.id), productIds: s.tags.map((t) => t.product_id) })),
+    scenesForContext: (sellerId) =>
+      scenesOf(sellerId).map((s) => {
+        const productIds = s.tags.map((t) => t.product_id);
+        // Remember the tag set of every revision that is offered, so a reply can be checked against the EXACT revision it was composed on.
+        offered.set(`${sellerId}|${s.id}@${s.version}`, productIds);
+        return { id: s.id, label: s.caption.trim() === '' ? s.id : s.caption, revision: s.version, isPublic: publicScene(sellerId, s.id), productIds };
+      }),
+    tagsAtRevision: (sellerId, sceneId, revision) => offered.get(`${sellerId}|${sceneId}@${revision}`) ?? null,
     handlers: withIdempotency(kit, handlers, {
       'scenes.create': { dest: 'content', cap: 'content.write' },
       'scenes.media.set': { dest: 'content', cap: 'content.write' },

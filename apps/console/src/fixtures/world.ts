@@ -250,11 +250,14 @@ export interface World {
     delayNext(op: string, ms: number, times?: number): void;
     /** Remove the signed-in account's relationship with a Seller, as if it left the team mid-session. */
     revokeMembership(sellerId: string): void;
-    callLog(): readonly { op: string; sellerId: string | null }[];
+    /** Every call received, with the idempotency key it carried (null for none): tests read retry identity from it. */
+    callLog(): readonly { op: string; sellerId: string | null; key: string | null }[];
     /** Put a Product under restriction, as an Operator decision would. Development only. */
     restrictProduct(sellerId: string, productId: string): boolean;
     /** Move the fixture server's clock forward by `ms`. Development only: the real server owns time. */
     skewClock(ms: number): void;
+    /** A Buyer message arrives in a conversation now, unseen by the Console (read high-water tests). */
+    buyerMessage(sellerId: string, conversationId: string, body: string): boolean;
   };
 }
 
@@ -265,12 +268,14 @@ export function createWorld(options: WorldOptions): World {
   const created = new Map<string, SellerSummary>();
   const revokedDest = new Map<string, Set<DestinationKey>>();
   const revokedCaps = new Map<string, Set<string>>();
-  const log: { op: string; sellerId: string | null }[] = [];
+  const log: { op: string; sellerId: string | null; key: string | null }[] = [];
   const failures = new Map<string, { code: TransportError['code']; times: number }>();
   const slowOps = new Map<string, { ms: number; times: number }>();
   let session: string | null = null;
   let pendingNew: string | null = null;
   let sessionRevoked = false;
+  // Each sign-in issues a new session (a new cookie in a real server). A request sent under an earlier one is answered as unauthenticated.
+  let sessionToken = 0;
   let counter = 0;
   const iso = (ms: number): string => new Date(ms).toISOString();
   // Fixture-only clock skew (hook below): lets a test move past a Story's 24-hour lifetime without waiting.
@@ -303,8 +308,12 @@ export function createWorld(options: WorldOptions): World {
     for (const r of roles) for (const c of ROLE_CAPS[r]) caps.add(c);
     if (roles.some((r) => MANAGER_ROLES.includes(r))) caps.add('readiness.resolve').add('admission.manage');
     if (s.summary.status === 'SUSPENDED') {
-      dests = new Set<DestinationKey>(['home', 'settings'].filter((d) => dests.has(d as DestinationKey)) as DestinationKey[]);
-      caps = new Set(['notifications.view']);
+      // Seller Safety Suspension blocks forward-looking commerce and content (MOD S29): no publication, no discovery, no Inbox, no writes.
+      // It preserves "required historical access" (P-70): read-only Trust and eligible historical Reviews, for the roles that already hold
+      // seller.trust:read and seller.reviews:read (AUTH-02). Nothing else is restored.
+      const kept: DestinationKey[] = ['home', 'trust', 'settings'];
+      dests = new Set<DestinationKey>(kept.filter((d) => dests.has(d)));
+      caps = new Set(['notifications.view', ...['trust.read', 'reviews.read'].filter((c) => caps.has(c))]);
     }
     for (const d of revokedDest.get(id) ?? []) dests.delete(d);
     for (const c of revokedCaps.get(id) ?? []) caps.delete(c);
@@ -478,6 +487,7 @@ export function createWorld(options: WorldOptions): World {
       sessionRevoked = false;
       if (known) {
         session = known.id;
+        sessionToken += 1;
         return { result: 'SIGNED_IN' };
       }
       pendingNew = c.phone;
@@ -490,6 +500,7 @@ export function createWorld(options: WorldOptions): World {
       personas.push(p);
       pendingNew = null;
       session = p.id;
+      sessionToken += 1;
       return { result: 'SIGNED_IN' };
     },
     // Enumeration resistance (AUTH-02 S22): the same answer for every number.
@@ -581,7 +592,8 @@ export function createWorld(options: WorldOptions): World {
     async handle<K extends OpId>(op: K, input: OpInput<K>, ctx: CallContext): Promise<OpOutput<K>> {
       // Fail closed (RN-3): an operation the fixture does not serve, or one on the prohibited list, is refused.
       if (PROHIBITED.test(op) || !Object.hasOwn(handlers, op)) throw new TransportError('REFUSED', { detail: BLOCKED_CODE });
-      log.push({ op, sellerId: ctx.sellerId ?? null });
+      log.push({ op, sellerId: ctx.sellerId ?? null, key: ctx.idempotencyKey ?? null });
+      const sentWith = sessionToken;
       await delay(ctx.sellerId ?? null);
       const slow = slowOps.get(op);
       if (slow && slow.times > 0) {
@@ -597,6 +609,8 @@ export function createWorld(options: WorldOptions): World {
         session = null;
         throw new TransportError('AUTHENTICATION_REQUIRED');
       }
+      // Sent with a session that has since ended (signed out and in again): that cookie is no longer valid. The current session is untouched.
+      if (sentWith !== sessionToken && !op.startsWith('auth.')) throw new TransportError('AUTHENTICATION_REQUIRED');
       return (handlers[op] as (i: OpInput<K>, c: CallContext) => OpOutput<K>)(input, ctx);
     },
     hooks: {
@@ -628,6 +642,7 @@ export function createWorld(options: WorldOptions): World {
         skew += ms;
       },
       restrictProduct: (sellerId, productId) => catalogue.restrict(sellerId, productId),
+      buyerMessage: (sellerId, conversationId, body) => inbox.arrive(sellerId, conversationId, body),
     },
   };
 }

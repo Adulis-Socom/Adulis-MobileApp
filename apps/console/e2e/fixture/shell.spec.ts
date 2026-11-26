@@ -162,7 +162,7 @@ test.describe('SC-FE-01: roles, permission and entitlement', () => {
     await page.getByRole('link', { name: SELLER.gelila.name }).click();
     await expect(page.getByRole('heading', { name: 'This Seller is restricted' })).toBeVisible();
     await expect(page.getByText('The Seller is under review.')).toBeVisible();
-    await expect(sidebar(page).getByRole('link')).toHaveText(['Home', 'Settings']);
+    await expect(sidebar(page).getByRole('link')).toHaveText(['Home', 'Trust', 'Settings']);
     await goInApp(page, `/s/${SELLER.gelila.id}/settings`);
     await expect(page.getByRole('heading', { name: 'This Seller is restricted' })).toBeVisible();
   });

@@ -10,7 +10,8 @@ import { sellerPath } from '../../seller/access';
 import { useSeller } from '../../seller/context';
 import { useSellerQuery } from '../../seller/useSellerQuery';
 import { NotFoundInSeller } from '../unavailable/NotFound';
-import { DirtyProvider, newer, UnsavedNote } from '../shared/dirty';
+import { fresher, tick, type Held } from '../../seller/freshness';
+import { DirtyProvider, UnsavedNote } from '../shared/dirty';
 import { AttributesSection } from './AttributesSection';
 import { AvailabilitySection } from './AvailabilitySection';
 import { AvailabilityBadge, StateBadge } from './badges';
@@ -56,7 +57,8 @@ function Editor({ productId }: { productId: string }) {
   const tree = useSellerQuery('catalogue.categories.get', {});
   const market = useSellerQuery('market.context.get', {});
   const { sellerId } = useSeller();
-  const [detail, setDetail] = useState<ProductDetail | null>(null);
+  const [held, setHeld] = useState<Held<ProductDetail> | null>(null);
+  const detail = held?.value ?? null;
   // Forms re-initialise only when the Seller asked for a reload (a stale version); a quiet refresh never wipes typing.
   const [epoch, setEpoch] = useState(0);
   const reloading = useRef(false);
@@ -64,8 +66,8 @@ function Editor({ productId }: { productId: string }) {
 
   useEffect(() => {
     if (product.state.status !== 'ready' || product.state.refreshing) return;
-    const incoming = product.state.data;
-    setDetail((prev) => newer(prev, incoming));
+    const incoming = { value: product.state.data, stamp: product.state.issued };
+    setHeld((prev) => fresher(prev, incoming));
     if (reloading.current) {
       reloading.current = false;
       setEpoch((n) => n + 1);
@@ -87,7 +89,10 @@ function Editor({ productId }: { productId: string }) {
   if (!detail || tree.state.status !== 'ready') return <Skeleton rows={6} />;
 
   const timezone = market.state.status === 'ready' ? market.state.data.timezone : undefined;
-  const adopt = (next: ProductDetail) => setDetail((prev) => newer(prev, next));
+  const adopt = (next: ProductDetail) => {
+    const acknowledged = { value: next, stamp: tick() };
+    setHeld((prev) => fresher(prev, acknowledged));
+  };
   const shared = { detail, onChange: adopt, onReload, onRefresh, timezone };
   const heading = detail.title.trim() === '' ? t('editor.new_title') : detail.title;
   return (

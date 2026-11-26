@@ -3,11 +3,13 @@ import type { OpInput, OpOutput, SellerOp } from '../contracts/gap-sc';
 import { useSession } from '../session/SessionProvider';
 import { asTransportError, type TransportError } from '../transport/port';
 import { useSeller } from './context';
+import { tick } from './freshness';
 import { runScoped } from './scoped';
 
 export type QueryState<T> =
   | { readonly status: 'loading' }
-  | { readonly status: 'ready'; readonly data: T; readonly refreshing: boolean }
+  /** `issued`: the client-side stamp taken when the request that produced `data` was sent (freshness.ts). */
+  | { readonly status: 'ready'; readonly data: T; readonly refreshing: boolean; readonly issued: number }
   | { readonly status: 'error'; readonly error: TransportError };
 
 /**
@@ -28,10 +30,11 @@ export function useSellerQuery<K extends SellerOp>(op: K, input: OpInput<K>): { 
   useEffect(() => {
     let live = true;
     const controller = new AbortController();
+    const issued = tick();
     setState((prev) => (prev.status === 'ready' ? { ...prev, refreshing: true } : { status: 'loading' }));
     runScoped(transport, op, sellerId, input, controller.signal)
       .then((data) => {
-        if (live) setState({ status: 'ready', data, refreshing: false });
+        if (live) setState({ status: 'ready', data, refreshing: false, issued });
       })
       .catch((error: unknown) => {
         if (!live) return;

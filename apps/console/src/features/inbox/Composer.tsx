@@ -12,8 +12,8 @@ import { useAction } from '../shared/useAction';
  * The reply composer (CON S75, CHAT S5, S9). A human reply only: there is no "write it for me", no suggested text and no automatic sending.
  * Context is chosen Scene first, then a Product: with no Scene the Product list is the Seller's whole eligible catalogue, with a Scene it is only
  * what is tagged in that Scene, and "show all my Products" visibly clears the Scene before an unrelated Product can be used. The server refuses a
- * Product that is not in the Scene, and a Scene that is no longer public. A reply is never shown as sent until the server has confirmed it; a lost
- * answer is shown as uncertain and "Send reply" again reuses the same request identity, so it can make only one message (CHAT S15, S19).
+ * Product that is not tagged in the offered Scene revision, and a Scene that is no longer public. A reply is never shown as sent until the server
+ * has confirmed it; a lost answer is shown as uncertain and "Send reply" again reuses the same request identity while it is held (CHAT S15, S19).
  * The draft lives in memory only. It is never written to browser storage.
  */
 export function Composer({ thread, onSent }: { thread: ThreadView; onSent: (next: ThreadView) => void }) {
@@ -35,7 +35,11 @@ export function Composer({ thread, onSent }: { thread: ThreadView; onSent: (next
   async function send(event: FormEvent) {
     event.preventDefault();
     setSent(false);
-    const next = await action.run(() => run('inbox.reply.send', { conversation_id: thread.id, body, scene_id: sceneId === '' ? null : sceneId, product_id: productId === '' ? null : productId }));
+    // The Scene is sent with the revision this composer offered: the server checks the Product against THAT revision (CHAT S4).
+    const revision = sceneId === '' ? null : (ready?.scenes.find((s) => s.id === sceneId)?.revision ?? null);
+    const next = await action.run(() =>
+      run('inbox.reply.send', { conversation_id: thread.id, body, scene_id: sceneId === '' ? null : sceneId, scene_revision: revision, product_id: productId === '' ? null : productId }),
+    );
     if (next) {
       setBody('');
       setSceneId('');
