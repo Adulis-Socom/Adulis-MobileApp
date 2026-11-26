@@ -27,3 +27,5 @@ and the founder can confirm, change or reject it. None is written into `contract
 Verbatim from the designs (not proposals): "Update stock", "Confirm stock is accurate" (CON S53); Not Available / Low / Available (CATINV S66);
 the content-list tabs including "Restricted / Removed" (CON S59); the moderation state names (CON S68); "All tagged Products are currently out of
 stock." (CON S59, S121); the three fulfilment mode names Buyer Collection, Seller Delivery and Courier Delivery (FUL-01 S1).
+
+Batch 02C: P-30 to P-46 is 17 proposals (not 46). Dispositions, the Private-reason and Courier rulings and proposals P-47 to P-54 are in SC-FE-04-06-CLOSURE-DECISIONS.md.
