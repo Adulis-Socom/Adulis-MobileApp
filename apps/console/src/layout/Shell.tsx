@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Link, NavLink } from 'react-router';
+import { Link, NavLink, useLocation } from 'react-router';
 import { Dialog } from '../components/Dialog';
 import { Icon } from '../components/Icon';
 import { SellerBadges } from '../components/SellerBadges';
@@ -158,9 +158,14 @@ function TopBar() {
 }
 
 function BottomBar({ items, sellerId }: { items: readonly NavItem[]; sellerId: string }) {
+  const { pathname } = useLocation();
+  const base = sellerPath(sellerId);
+  const onTab = (path: string) => (path === '' ? pathname === base : pathname === `${base}/${path}` || pathname.startsWith(`${base}/${path}/`));
+  // Any route that is not one of the tabs lives under "More" (Insights, Store, notifications...), so More is where the person is.
+  const moreCurrent = !items.some((item) => onTab(item.meta.path));
   return (
     <nav className="bottombar" aria-label={t('nav.primary')}>
-      <ul>
+      <ul data-tabs={items.length + 1}>
         {items.map((item) => (
           <li key={item.meta.key}>
             <NavLink className="tab" to={sellerPath(sellerId, item.meta.path)} end={item.meta.path === ''}>
@@ -169,10 +174,10 @@ function BottomBar({ items, sellerId }: { items: readonly NavItem[]; sellerId: s
           </li>
         ))}
         <li>
-          <NavLink className="tab" to={sellerPath(sellerId, 'more')}>
+          <Link className="tab" to={sellerPath(sellerId, 'more')} {...(moreCurrent ? { 'aria-current': 'page' as const } : {})}>
             <Icon name="grid" />
             <span className="nav-label">{t('nav.more')}</span>
-          </NavLink>
+          </Link>
         </li>
       </ul>
     </nav>

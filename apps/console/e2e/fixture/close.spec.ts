@@ -158,3 +158,22 @@ test.describe('C: cold start and reload are safe', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'We could not find that page' })).toBeVisible();
   });
 });
+
+test.describe('D: the narrow bar keeps a meaningful name where one fits', () => {
+  test('at 150% text on a phone, More is current under a route that lives under it and shows its name; the other names stay icons', async ({ page }) => {
+    const { expectTextScale, scaleText } = await import('./helpers');
+    await scaleText(page, 150);
+    await page.setViewportSize({ width: 390, height: 800 });
+    await atSellerHome(page, PHONE.owner, SELLER.alem.name);
+    await expectTextScale(page, 150);
+    await goInApp(page, `/s/${SELLER.alem.id}/insights`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    const bar = mainNav(page);
+    const more = bar.getByRole('link', { name: 'More' });
+    await expect(more).toHaveAttribute('aria-current', 'page');
+    const width = (name: string) => bar.getByRole('link', { name }).locator('.nav-label').evaluate((el) => el.getBoundingClientRect().width);
+    expect(await width('More')).toBeGreaterThan(20); // its name is visible
+    expect(await width('Home')).toBeLessThanOrEqual(2); // the others are icons; their names stay for assistive technology
+    await expect(bar.getByRole('link', { name: 'Home' })).toBeVisible();
+  });
+});

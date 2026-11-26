@@ -381,10 +381,34 @@ h3,
   container-type: inline-size;
 }
 
-/* When four labels no longer fit the bar at the current text size, the bar shows its icons and the names stay for assistive
+/* When the names no longer fit the bar at the current text size, the bar shows its icons and the names stay for assistive
    technology: a label broken mid-word (Hom-e, Prod-ucts) is worse than none. rem scales with the text-size setting. */
 @container (max-width: 19.5rem) {
-  .tab .nav-label {
+  .bottombar ul[data-tabs='4'] .tab .nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@container (max-width: 14.75rem) {
+  .bottombar ul[data-tabs='3'] .tab .nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@container (max-width: 10rem) {
+  .bottombar ul[data-tabs='2'] .tab .nav-label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -427,25 +451,54 @@ h3,
   color: var(--adu-color-primary-text);
 }
 
-/* In the middle range there is room for ONE name: the destination the person is on keeps its label beside its icon and
-   the others stay icons. Below it (doubled text on a small phone) nothing fits and all names are for assistive technology. */
+/* Room for every name depends on how many tabs there are (data-tabs, set by the shell): about 4.9rem each, so the
+   thresholds below scale with the count instead of assuming four. In the middle range there is room for ONE name: the
+   destination the person is on keeps its label beside its icon and the others stay icons. Below it nothing fits, and all
+   names are for assistive technology. "More" counts as current on any route that lives under it. rem follows text size. */
 @container (min-width: 15rem) and (max-width: 19.5rem) {
-  .bottombar ul {
+  .bottombar ul[data-tabs='4'] {
     display: flex;
   }
-  .bottombar li {
+  .bottombar ul[data-tabs='4'] li {
     flex: 0 0 auto;
     min-width: var(--adu-touch-min);
   }
-  .bottombar li:has(> .tab[aria-current='page']) {
+  .bottombar ul[data-tabs='4'] li:has(> .tab[aria-current='page']) {
     flex: 1 1 auto;
     min-width: 0;
   }
-  .tab[aria-current='page'] {
+  .bottombar ul[data-tabs='4'] .tab[aria-current='page'] {
     flex-direction: row;
     gap: var(--adu-space-xs);
   }
-  .tab[aria-current='page'] .nav-label {
+  .bottombar ul[data-tabs='4'] .tab[aria-current='page'] .nav-label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip-path: none;
+    white-space: nowrap;
+  }
+}
+
+@container (min-width: 11.5rem) and (max-width: 14.75rem) {
+  .bottombar ul[data-tabs='3'] {
+    display: flex;
+  }
+  .bottombar ul[data-tabs='3'] li {
+    flex: 0 0 auto;
+    min-width: var(--adu-touch-min);
+  }
+  .bottombar ul[data-tabs='3'] li:has(> .tab[aria-current='page']) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .bottombar ul[data-tabs='3'] .tab[aria-current='page'] {
+    flex-direction: row;
+    gap: var(--adu-space-xs);
+  }
+  .bottombar ul[data-tabs='3'] .tab[aria-current='page'] .nav-label {
     position: static;
     width: auto;
     height: auto;
