@@ -7,7 +7,7 @@ import { atSellerHome, expectTextScale, goInApp, limeCount, noHorizontalOverflow
  * exist; automated entries in the data are fixed, provisional strings.
  */
 const list = (page: Page) => page.getByRole('list', { name: 'Conversations', exact: true });
-const open = async (page: Page, phone: string, seller = SELLER.alem) => {
+const open = async (page: Page, phone: string, seller: { id: string; name: string } = SELLER.alem) => {
   await atSellerHome(page, phone, seller.name);
   await goInApp(page, `/s/${seller.id}/inbox`);
   await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
@@ -89,7 +89,7 @@ test.describe('SC-FE-08: a conversation', () => {
     await page.getByRole('button', { name: 'Send reply' }).click();
     await expect(page.getByText('Your reply was sent.')).toBeVisible();
     await expect(page.getByRole('list', { name: 'Messages' }).getByRole('listitem').last()).toContainText('It comes in black.');
-    await expect(page.getByText('A team member is needed.')).toHaveCount(0);
+    await expect(page.getByText('A team member is needed. Automated replies cannot answer this conversation.')).toHaveCount(0); // the banner is gone; the old system note stays as history
     await goInApp(page, `/s/${SELLER.alem.id}/inbox`);
     await expect(list(page).getByRole('listitem').first()).toContainText('All read');
   });
@@ -111,7 +111,8 @@ test.describe('SC-FE-08: a conversation', () => {
     await page.getByLabel('Your message').fill('Come in any day.');
     await page.evaluate(() => window.__ADULIS_FIXTURE__?.failNext('inbox.reply.send', 'NETWORK'));
     await page.getByRole('button', { name: 'Send reply' }).click();
-    await expect(page.getByRole('alert')).toContainText('We could not confirm whether this was saved.');
+    await expect(page.getByRole('alert')).toContainText('We could not reach the server.');
+    await expect(page.getByText('We could not confirm whether this was saved.')).toBeVisible(); // the uncertain-outcome note sits beside the problem
     await expect(page.getByLabel('Your message')).toHaveValue('Come in any day.');
     await expect(page.getByText('Your reply was sent.')).toHaveCount(0);
     await page.getByRole('button', { name: 'Send reply' }).click();

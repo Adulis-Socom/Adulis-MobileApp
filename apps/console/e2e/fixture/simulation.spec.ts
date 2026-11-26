@@ -100,7 +100,7 @@ test.describe('SC-FE-07: layout and accessibility', () => {
     for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
       await page.setViewportSize(size);
       await open(page);
-      await page.getByRole('button', { name: 'Open fx_sim_ord_003' }).click();
+      await page.getByRole('button', { name: 'Open fx_sim_ord_001' }).click();
       const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).disableRules(['target-size']).analyze();
       expect(results.violations.map((v) => `${v.id}: ${v.nodes[0]?.target.join(' ')}`)).toEqual([]);
     }
