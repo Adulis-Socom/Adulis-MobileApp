@@ -1567,3 +1567,9 @@ legend {
 .ledger-meta {
   overflow-wrap: anywhere;
 }
+
+/* notice text sits beside its icon in a flex row: at doubled text a long word (demonstration) must wrap inside, not push past the window */
+.notice > span {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
