@@ -223,9 +223,13 @@ export interface World {
   readonly hooks: {
     revokeDestination(sellerId: string, key: DestinationKey): void;
     revokeCapability(sellerId: string, capability: string): void;
+    /** Take a destination out of the Seller's plan: the account keeps its permission, the destination becomes NO_ENTITLEMENT. */
+    withdrawEntitlement(sellerId: string, key: DestinationKey): void;
     revokeSession(): void;
     /** Make the next `times` calls of `op` fail with `code` (an outcome the Console must not guess its way past). */
     failNext(op: string, code: TransportError['code'], times?: number): void;
+    /** Make the next `times` calls of `op` take `ms` longer to answer: a deterministic pending request for race tests. */
+    delayNext(op: string, ms: number, times?: number): void;
     /** Remove the signed-in account's relationship with a Seller, as if it left the team mid-session. */
     revokeMembership(sellerId: string): void;
     callLog(): readonly { op: string; sellerId: string | null }[];
@@ -241,6 +245,7 @@ export function createWorld(options: WorldOptions): World {
   const revokedCaps = new Map<string, Set<string>>();
   const log: { op: string; sellerId: string | null }[] = [];
   const failures = new Map<string, { code: TransportError['code']; times: number }>();
+  const slowOps = new Map<string, { ms: number; times: number }>();
   let session: string | null = null;
   let pendingNew: string | null = null;
   let sessionRevoked = false;
@@ -515,6 +520,11 @@ export function createWorld(options: WorldOptions): World {
       if (PROHIBITED.test(op) || !Object.hasOwn(handlers, op)) throw new TransportError('REFUSED', { detail: BLOCKED_CODE });
       log.push({ op, sellerId: ctx.sellerId ?? null });
       await delay(ctx.sellerId ?? null);
+      const slow = slowOps.get(op);
+      if (slow && slow.times > 0) {
+        slow.times -= 1;
+        await new Promise<void>((resolve) => setTimeout(resolve, slow.ms));
+      }
       const planned = failures.get(op);
       if (planned && planned.times > 0) {
         planned.times -= 1;
@@ -533,11 +543,18 @@ export function createWorld(options: WorldOptions): World {
       revokeCapability(sellerId, capability) {
         revokedCaps.set(sellerId, (revokedCaps.get(sellerId) ?? new Set()).add(capability));
       },
+      withdrawEntitlement(sellerId, key) {
+        const record = sellers[sellerId];
+        if (record && !record.entitlementOff.includes(key)) record.entitlementOff.push(key);
+      },
       revokeSession() {
         sessionRevoked = true;
       },
       failNext(op, code, times = 1) {
         failures.set(op, { code, times });
+      },
+      delayNext(op, ms, times = 1) {
+        slowOps.set(op, { ms, times });
       },
       revokeMembership(sellerId) {
         const who = personas.find((p) => p.id === session);

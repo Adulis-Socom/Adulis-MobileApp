@@ -40,6 +40,8 @@ Browser tests: Playwright + `@axe-core/playwright`, run in CI.
 | `pnpm test:e2e` | Playwright journeys, isolation, responsive, axe, screenshots (`pnpm exec playwright install chromium` first) |
 | `pnpm dev:fixtures` | Vite dev server with fixtures on (`ADULIS_FIXTURES=on`) |
 
+`pnpm test:e2e` has three projects: `fixture` (the fixture-control build), `release` (the plain build) and `harness` (`e2e/harness`, a test-only page that throws while rendering to prove the crash panel; not the Console, never a release).
+
 CI job: `Seller Console (rebuild-20261125)` in `.github/workflows/rebuild-ci.yml`. Repository-level checks the Console job
 also runs from the root: `pnpm verify:tokens`, `depcruise apps/console packages --config .dependency-cruiser.cjs`, and
 `bash apps/console/scripts/verify-deps-fires.sh`.
@@ -97,6 +99,8 @@ scripts/                   release scan, dependency-rule fire test
 - Every one-column grid uses `grid-template-columns: minmax(0, 1fr)`, and flex children that hold text carry `min-width: 0`; an `input` is about 368px wide at doubled text.
 - axe `target-size` is evaluated at the END of the page, where the sticky bottom bar covers nothing; everything else is evaluated at the top.
 - `pnpm lint` has `--max-warnings 0` and `jsx-a11y/label-has-associated-control` depth 3; a type-only import counts as an edge for dependency-cruiser (keep shared types in `transport/port.ts`).
+
+- Authorization is per navigation: `SellerScope` serves a grant only for its (account, Seller, path) generation (`seller/grant.ts`); while the answer is pending nothing of the Seller mounts or fetches. Race tests use the fixture hook `delayNext(op, ms)`.
 
 ## Design
 

@@ -62,7 +62,9 @@ const children: RouteObject[] = [
 ];
 
 /** A route that throws while rendering lands on the same crash panel as the app boundary, never React Router's default screen. */
-export const routes: RouteObject[] = [{ errorElement: <CrashPanel />, children }];
+export const rootRoute = (inner: RouteObject[]): RouteObject[] => [{ errorElement: <CrashPanel />, children: inner }];
+
+export const routes: RouteObject[] = rootRoute(children);
 
 export function createRouter() {
   return createBrowserRouter(routes);

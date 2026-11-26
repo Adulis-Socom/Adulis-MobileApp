@@ -427,6 +427,36 @@ h3,
   color: var(--adu-color-primary-text);
 }
 
+/* In the middle range there is room for ONE name: the destination the person is on keeps its label beside its icon and
+   the others stay icons. Below it (doubled text on a small phone) nothing fits and all names are for assistive technology. */
+@container (min-width: 15rem) and (max-width: 19.5rem) {
+  .bottombar ul {
+    display: flex;
+  }
+  .bottombar li {
+    flex: 0 0 auto;
+    min-width: var(--adu-touch-min);
+  }
+  .bottombar li:has(> .tab[aria-current='page']) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .tab[aria-current='page'] {
+    flex-direction: row;
+    gap: var(--adu-space-xs);
+  }
+  .tab[aria-current='page'] .nav-label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip-path: none;
+    white-space: nowrap;
+  }
+}
+
+
 .nav-link {
   display: flex;
   align-items: center;

@@ -10,3 +10,4 @@ screenshots/
 .impeccable/questions/
 .impeccable/mocks/
 .impeccable/hook.cache.json
+dist-harness/

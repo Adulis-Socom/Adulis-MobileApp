@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Outlet, useLocation, useParams } from 'react-router';
-import type { SellerAccess } from '../contracts/gap-sc';
 import { Shell } from '../layout/Shell';
 import { Skeleton } from '../components/Skeleton';
 import { StatePanel } from '../components/StatePanel';
 import { t } from '../i18n/t';
 import { useSession } from '../session/SessionProvider';
-import { asTransportError, type TransportError } from '../transport/port';
 import { SellerContext, type SellerContextValue } from './context';
-import { runScoped } from './scoped';
+import { authorize, failureFor, generationOf, grantFor, type Outcome } from './grant';
 
 /**
  * `/s/:sellerId/*`. KEYED by the id: switching Seller (the switcher, a link, Back or Forward) unmounts the whole
@@ -42,45 +40,38 @@ function SellerScope({ sellerId }: { sellerId: string }) {
   const session = useSession();
   const location = useLocation();
   const membership = session.state.status === 'READY' ? session.state.context.memberships.find((m) => m.seller.id === sellerId) : undefined;
-  const [access, setAccess] = useState<SellerAccess | null>(null);
-  const [failure, setFailure] = useState<TransportError | null>(null);
+  const accountId = session.state.status === 'READY' ? session.state.context.account.id : '';
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [attempt, setAttempt] = useState(0);
   const { transport } = session.selected;
   const expire = session.expire;
   const member = membership !== undefined;
+  // What the server said is valid for this account, this Seller and this navigation only. A grant stamped with an
+  // earlier generation is not served: while the question for THIS screen is open, nothing protected mounts or fetches.
+  const generation = generationOf(accountId, sellerId, location.pathname);
+  const access = grantFor(outcome, generation);
+  const failure = failureFor(outcome, generation);
 
   // Capabilities are re-resolved by the server on every navigation inside the Seller, so a change in what the
   // account may do shows up on the next move instead of being believed from an old answer.
   useEffect(() => {
     if (!member) return;
     let live = true;
-    runScoped(transport, 'seller.access.get', sellerId, {})
-      .then((next) => {
-        if (!live) return;
-        setAccess(next);
-        setFailure(null);
-      })
-      .catch((error: unknown) => {
-        if (!live) return;
-        const e = asTransportError(error);
-        if (e.code === 'AUTHENTICATION_REQUIRED') expire();
-        else {
-          // Fail closed: if the account's access cannot be re-confirmed, the old grants are not served.
-          setAccess(null);
-          setFailure(e);
-        }
-      });
+    authorize({ transport, sellerId, generation, live: () => live, apply: setOutcome, expire });
     return () => {
       live = false;
     };
-  }, [member, transport, sellerId, location.pathname, attempt, expire]);
+  }, [member, transport, sellerId, generation, attempt, expire]);
 
-  const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  const retry = useCallback(() => {
+    setOutcome(null);
+    setAttempt((n) => n + 1);
+  }, []);
   const value = useMemo<SellerContextValue | null>(() => (membership && access ? { sellerId, membership, access } : null), [sellerId, membership, access]);
 
   if (!membership) return <NotYours />;
-  if (failure && !access) {
-    // Fail closed: if we cannot tell what this account may do, show nothing of the Seller.
+  // Fail closed: if we cannot tell what this account may do, show nothing of the Seller.
+  if (failure) {
     return failure.code === 'PERMISSION_DENIED' ? (
       <NotYours />
     ) : (
@@ -108,7 +99,6 @@ function SellerScope({ sellerId }: { sellerId: string }) {
       </main>
     );
   }
-  if (failure?.code === 'PERMISSION_DENIED') return <NotYours />;
   return (
     <SellerContext.Provider value={value}>
       <Shell>

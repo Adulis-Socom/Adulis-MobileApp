@@ -1,40 +1,15 @@
 import { Link } from 'react-router';
-import type { DestinationKey, ReadinessItem, SellerAccess } from '../../contracts/gap-sc';
+import type { ReadinessItem } from '../../contracts/gap-sc';
 import { Badge, type Tone } from '../../components/Badge';
 import { Skeleton } from '../../components/Skeleton';
 import { StatePanel } from '../../components/StatePanel';
 import { codeText, label, t } from '../../i18n/t';
-import { destinationAccess, sellerPath } from '../../seller/access';
 import { useSeller } from '../../seller/context';
 import { useSellerQuery } from '../../seller/useSellerQuery';
+import { actionFor } from './action';
 import { statusOf, type Status } from './status';
 
 const STATUS_TONE: Record<Status, Tone> = { done: 'success', todo: 'warn', waiting: 'neutral', blocked: 'neutral' };
-
-/**
- * Where a resolving action leads. Only the admission step is built in this release; the others lead to destinations
- * that honestly say they arrive later. An unknown kind has no destination, so it shows no action at all.
- */
-const TARGETS: Record<string, { dest: DestinationKey; path: string; built: boolean }> = {
-  CONNECT_SOCIAL_ACCOUNT: { dest: 'home', path: 'admission', built: true },
-  EDIT_COMPANY_DETAILS: { dest: 'store', path: 'store', built: false },
-  EDIT_STORE_PROFILE: { dest: 'store', path: 'store', built: false },
-  CONFIGURE_FULFILMENT: { dest: 'store', path: 'store', built: false },
-  ADD_PRODUCT: { dest: 'products', path: 'products', built: false },
-};
-
-function actionFor(item: ReadinessItem, access: SellerAccess, sellerId: string) {
-  const action = item.resolving_action;
-  if (item.satisfied || !action) return null;
-  // Missing permission hides the control entirely; the row says who can do it instead.
-  if (action.denied === 'NO_PERMISSION') return { kind: 'hidden' as const };
-  const label = codeText('readiness.action', action.kind) ?? t('readiness.action.unknown');
-  if (action.denied === 'NO_ENTITLEMENT') return { kind: 'disabled' as const, label };
-  const target = TARGETS[action.kind];
-  // An action whose destination this account cannot see is not offered: the permission is missing, so it is hidden.
-  if (!target || destinationAccess(access, target.dest) === 'HIDDEN') return { kind: 'hidden' as const };
-  return { kind: 'link' as const, label, to: sellerPath(sellerId, target.path), built: target.built };
-}
 
 function Row({ item, limeHere }: { item: ReadinessItem; limeHere: boolean }) {
   const { sellerId, access } = useSeller();
