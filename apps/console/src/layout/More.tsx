@@ -33,6 +33,16 @@ export function More() {
             </li>
           ),
         )}
+        {can(access, 'chatbot.read') ? (
+          <li>
+            <Link className="ledger-link" to={sellerPath(sellerId, 'inbox/automation')}>
+              <span className="ledger-main">
+                <span className="ledger-title">{t('auto.title')}</span>
+              </span>
+              <Icon name="arrow" />
+            </Link>
+          </li>
+        ) : null}
         {can(access, 'notifications.view') ? (
           <li>
             <Link className="ledger-link" to={sellerPath(sellerId, 'notifications')}>

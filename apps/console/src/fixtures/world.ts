@@ -22,6 +22,7 @@ import type {
   SocialAccountState,
 } from '../contracts/gap-sc';
 import { TransportError, type CallContext } from '../transport/port';
+import { createAutomation } from './automation';
 import { createCatalogue } from './catalogue';
 import { createContent } from './content';
 import { createInbox } from './inbox';
@@ -200,14 +201,16 @@ const ROLE_DEST: Record<SellerRole, DestinationKey[]> = {
 };
 const MANAGER_ROLES: SellerRole[] = ['OWNER', 'ADMIN'];
 /** Capabilities a manager holds beyond the admission ones, and what the other roles hold (CATINV S110, CONSOLE-02 S17). */
-const WRITE_CAPS = ['catalogue.write', 'inventory.write', 'content.write', 'store.manage', 'couriers.manage', 'inbox.read', 'inbox.reply', 'trust.read', 'reviews.read'];
+/** Scripted assistance, AUTH-02 Appendix C: seller.chatbot:read, :configure, :test, :analytics_read. No feedback-submission code exists, so none is granted. */
+const CHATBOT_ALL = ['chatbot.read', 'chatbot.configure', 'chatbot.test', 'chatbot.analytics_read'];
+const WRITE_CAPS = ['catalogue.write', 'inventory.write', 'content.write', 'store.manage', 'couriers.manage', 'inbox.read', 'inbox.reply', 'trust.read', 'reviews.read', ...CHATBOT_ALL];
 const ROLE_CAPS: Record<SellerRole, string[]> = {
   OWNER: WRITE_CAPS,
   ADMIN: WRITE_CAPS,
-  SALES_SUPPORT: ['inbox.read', 'inbox.reply', 'trust.read', 'reviews.read'],
+  SALES_SUPPORT: ['inbox.read', 'inbox.reply', 'trust.read', 'reviews.read', 'chatbot.read'],
   INVENTORY: ['catalogue.write', 'inventory.write', 'trust.read'],
-  ANALYST: [],
-  CAMPAIGN_MANAGER: ['content.write'],
+  ANALYST: ['analytics.chatbot_read'],
+  CAMPAIGN_MANAGER: ['content.write', ...CHATBOT_ALL],
 };
 /** Brief areas whose work order is built (SC-FE-04 Products and Inventory, SC-FE-05 Scenes, SC-FE-05S Stories, SC-FE-08 Inbox). The rest stay DEFERRED. */
 const BUILT_AREAS = new Set(['PRODUCTS', 'INVENTORY', 'SCENES', 'STORIES', 'INBOX']);
@@ -446,6 +449,7 @@ export function createWorld(options: WorldOptions): World {
   const store = createStore(kit);
   const inbox = createInbox(kit, catalogue, content);
   const trust = createTrust(kit, catalogue);
+  const automation = createAutomation(kit, catalogue);
 
   type H = { [K in OpId]: (input: OpInput<K>, ctx: CallContext) => OpOutput<K> };
   const handlers: H = {
@@ -454,6 +458,7 @@ export function createWorld(options: WorldOptions): World {
     ...store.handlers,
     ...inbox.handlers,
     ...trust.handlers,
+    ...automation.handlers,
     'auth.otp.start': ({ phone }) => {
       if (!/^\+?\d{9,15}$/.test(digits(phone))) throw new TransportError('VALIDATION_FAILED', { fields: { phone: 'PHONE_INVALID' } });
       return newChallenge(digits(phone));

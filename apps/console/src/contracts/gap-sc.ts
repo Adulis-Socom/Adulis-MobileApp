@@ -211,6 +211,7 @@ export interface OnboardingMarket {
   readonly timezone: string;
 }
 
+import type { AutomationOperations } from './gap-sc-automation';
 import type { CatalogueOperations } from './gap-sc-catalogue';
 import type { SceneOperations, StoryOperations } from './gap-sc-content';
 import type { InboxOperations } from './gap-sc-inbox';
@@ -218,7 +219,7 @@ import type { StoreOperations } from './gap-sc-store';
 import type { TrustOperations } from './gap-sc-trust';
 
 // ---- the operation table the transport speaks ----------------------------------------------------------------------
-export interface Operations extends CatalogueOperations, SceneOperations, StoryOperations, StoreOperations, InboxOperations, TrustOperations {
+export interface Operations extends CatalogueOperations, SceneOperations, StoryOperations, StoreOperations, InboxOperations, TrustOperations, AutomationOperations {
   readonly 'auth.otp.start': { in: { phone: string }; out: OtpChallenge };
   readonly 'auth.otp.status': { in: { challenge_id: string }; out: OtpStatus };
   readonly 'auth.otp.resend': { in: { challenge_id: string }; out: OtpChallenge };
@@ -302,5 +303,10 @@ export const SELLER_SCOPED_OPS = [
   'standing.get',
   'reviews.summary.get',
   'reviews.list',
+  'automation.overview.get',
+  'automation.knowledge.get',
+  'automation.knowledge.save',
+  'automation.test.options.get',
+  'automation.test.run',
 ] as const satisfies readonly OpId[];
 export type SellerOp = (typeof SELLER_SCOPED_OPS)[number];
