@@ -10,7 +10,7 @@ const axe = async (page: Page) => {
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).disableRules(['target-size']).analyze();
   expect(results.violations.map((v) => `${v.id}: ${v.nodes[0]?.target.join(' ')}`)).toEqual([]);
 };
-const teamPage = async (page: Page, phone = PHONE.owner) => {
+const teamPage = async (page: Page, phone: string = PHONE.owner) => {
   await atSellerHome(page, phone, SELLER.alem.name);
   await goInApp(page, `/s/${SELLER.alem.id}/settings/team`);
   await expect(page.getByRole('heading', { level: 1, name: 'Team' })).toBeVisible();
@@ -64,6 +64,8 @@ test.describe('SC-FE-11 team', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Your Sellers' })).toBeVisible();
     await page.getByRole('link', { name: 'See invitations to join a team' }).click();
     await page.getByRole('button', { name: `Join ${SELLER.alem.name}` }).click();
+    // Wait for the server's answer: leaving earlier would (correctly) discard it, and the Seller list would not be refreshed.
+    await expect(page.getByText('You have no invitations.')).toBeVisible();
     await page.getByRole('link', { name: 'Back to your Sellers' }).click();
     await expect(page.getByRole('link', { name: SELLER.alem.name })).toBeVisible();
   });
@@ -130,7 +132,7 @@ test.describe('SC-FE-11 team', () => {
 });
 
 test.describe('SC-FE-11 your account', () => {
-  const account = async (page: Page, phone = PHONE.owner, sub = '') => {
+  const account = async (page: Page, phone: string = PHONE.owner, sub = '') => {
     await signedInChooser(page, phone);
     await page.getByRole('link', { name: 'Your account and security' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Your account' })).toBeVisible();
@@ -158,7 +160,8 @@ test.describe('SC-FE-11 your account', () => {
     await account(page, PHONE.owner, 'Notifications');
     await expect(page.getByRole('checkbox', { name: /Security notices/ })).toBeDisabled();
     await expect(page.getByRole('checkbox', { name: /Security notices/ })).toBeChecked();
-    await page.getByRole('checkbox', { name: 'Team changes' }).uncheck();
+    // The box changes only when the server confirms the preference, so click and wait rather than assert at once.
+    await page.getByRole('checkbox', { name: 'Team changes' }).click();
     await expect(page.getByRole('checkbox', { name: 'Team changes' })).not.toBeChecked();
     await axe(page);
   });

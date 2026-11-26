@@ -184,7 +184,7 @@ export function createPeople(deps: PeopleDeps): People {
       .map((i) => ({ invitation_id: i.id, seller_label: deps.sellerName(i.sellerId) ?? '', roles: i.roles, blocked: teamSlotTaken(p) ? ('SLOT_OCCUPIED' as const) : null }));
   }
   function privacyOf(p: Persona): PrivacyView {
-    const rec = privacy.get(p.id) ?? { export: 'NONE', deletion: 'NONE', requestedAt: null };
+    const rec: PrivacyRec = privacy.get(p.id) ?? { export: 'NONE', deletion: 'NONE', requestedAt: null };
     privacy.set(p.id, rec);
     const owned = p.memberships.filter((m) => m.relationship === 'OWNER').length;
     const team = p.memberships.some((m) => m.relationship === 'TEAM');

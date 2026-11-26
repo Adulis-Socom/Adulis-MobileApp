@@ -51,7 +51,7 @@ function RoleEditor({ member, action, onSave, onCancel }: { member: TeamMember; 
         else onSave(roles);
       }}
     >
-      <ActionProblem action={action} />
+      {/* The members section shows this action's problem and summary once, above the list. */}
       <RoleChoices value={roles} onChange={setRoles} idPrefix={`edit-${member.membership_id}-`} error={action.fields[`edit-${member.membership_id}-roles`] ?? action.fields['roles']} />
       <div className="actions">
         <button type="submit" className="btn btn-primary" aria-disabled={action.busy}>
