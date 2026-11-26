@@ -54,31 +54,55 @@ test.describe('A: pending authorization serves no outdated grant', () => {
     expect((await ops(page)).slice(before)).toContain('notifications.list');
   });
 
-  test('a late answer for an earlier Seller cannot restore that Seller\'s grants over the current one', async ({ page }) => {
+  test('going back to a path whose old answer is stored still waits for the new answer (A to B to A)', async ({ page }) => {
+    await atSellerHome(page, PHONE.owner, SELLER.alem.name);
+    await goInApp(page, `/s/${SELLER.alem.id}/notifications`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Notifications' })).toBeVisible();
+    // The server now revokes notifications, and both of the next two re-checks are slow.
+    await page.evaluate((id) => {
+      window.__ADULIS_FIXTURE__?.revokeCapability(id, 'notifications.view');
+      window.__ADULIS_FIXTURE__?.delayNext('seller.access.get', 1500, 2);
+    }, SELLER.alem.id);
+    const before = (await ops(page)).length;
+    await goInApp(page, `/s/${SELLER.alem.id}`);
+    await goInApp(page, `/s/${SELLER.alem.id}/notifications`); // Back to the path whose old grant is still stored
+    await expect(banner(page)).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1, name: 'Notifications' })).toHaveCount(0);
+    expect((await ops(page)).slice(before).filter((op) => op !== 'seller.access.get')).toEqual([]);
+    await expect(banner(page)).toBeVisible();
+  });
+
+  test('a late answer for an earlier Seller cannot restore that Seller grants over the current one', async ({ page }) => {
     await atSellerHome(page, PHONE.mixed, SELLER.lemlem.name);
     await expect(mainNav(page).getByRole('link')).toHaveCount(8);
     await page.evaluate(() => window.__ADULIS_FIXTURE__?.delayNext('seller.access.get', 1500));
     // Alem (where this account is only Inventory) is asked and left before it answers; Lemlem (Owner) answers at once.
     await goInApp(page, `/s/${SELLER.alem.id}/products`);
+    await expect.poll(() => page.evaluate((id) => (window.__ADULIS_FIXTURE__?.callLog() ?? []).some((c) => c.op === 'seller.access.get' && c.sellerId === id), SELLER.alem.id)).toBe(true);
     await goInApp(page, `/s/${SELLER.lemlem.id}`);
-    await expect(page.getByRole('heading', { level: 1, name: SELLER.lemlem.name })).toBeVisible();
+    // Lemlem is shown well inside the 1.5 s Alem's answer takes, so the slow call really was Alem's.
+    await expect(page.getByRole('heading', { level: 1, name: SELLER.lemlem.name })).toBeVisible({ timeout: 1200 });
     await expect(mainNav(page).getByRole('link')).toHaveCount(8);
-    // Let Alem's late answer arrive (1.5 s after it was asked) and prove it changed nothing.
+    // Let Alem's late answer arrive and prove it changed nothing.
     await page.waitForTimeout(1800);
     await expect(page.getByRole('heading', { level: 1, name: SELLER.lemlem.name })).toBeVisible();
     await expect(mainNav(page).getByRole('link')).toHaveCount(8);
     await expect(page.getByText('You are signed in as Owner.')).toBeVisible();
-    await expect(page.getByText(SELLER.alem.name)).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1, name: SELLER.alem.name })).toHaveCount(0);
   });
 
-  test('a session that ends while the re-check is pending cannot be reopened by that answer', async ({ page }) => {
+  test('a successful answer that arrives after the session ended cannot reopen the Seller', async ({ page }) => {
     await atSellerHome(page, PHONE.owner, SELLER.alem.name);
     await page.evaluate(() => window.__ADULIS_FIXTURE__?.delayNext('seller.access.get', 1500));
-    await goInApp(page, `/s/${SELLER.alem.id}/more`);
-    await expect(banner(page)).toHaveCount(0);
-    await page.evaluate(() => window.__ADULIS_FIXTURE__?.revokeSession());
+    const asked = () => ops(page).then((all) => all.filter((op) => op === 'seller.access.get').length);
+    const askedBefore = await asked();
+    await goInApp(page, `/s/${SELLER.alem.id}/more`); // call 1: slow, will answer with a success
+    await expect.poll(asked).toBeGreaterThan(askedBefore);
+    await page.evaluate(() => window.__ADULIS_FIXTURE__?.failNext('seller.access.get', 'AUTHENTICATION_REQUIRED'));
+    await goInApp(page, `/s/${SELLER.alem.id}/inbox`); // call 2: fast, the server says the session is over
     await expect(page.getByRole('heading', { name: 'Your session ended' })).toBeVisible();
-    await page.waitForTimeout(500);
+    // Call 1's success now arrives (it was asked before the session ended) and must change nothing.
+    await page.waitForTimeout(1800);
     await expect(page.getByRole('heading', { name: 'Your session ended' })).toBeVisible();
     await expect(mainNav(page)).toHaveCount(0);
     await expect(page.getByRole('heading', { level: 1, name: SELLER.alem.name })).toHaveCount(0);

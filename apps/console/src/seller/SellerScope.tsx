@@ -41,7 +41,7 @@ function SellerScope({ sellerId }: { sellerId: string }) {
   const location = useLocation();
   const membership = session.state.status === 'READY' ? session.state.context.memberships.find((m) => m.seller.id === sellerId) : undefined;
   const accountId = session.state.status === 'READY' ? session.state.context.account.id : '';
-  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [stored, setOutcome] = useState<Outcome | null>(null);
   const [attempt, setAttempt] = useState(0);
   const { transport } = session.selected;
   const expire = session.expire;
@@ -49,6 +49,14 @@ function SellerScope({ sellerId }: { sellerId: string }) {
   // What the server said is valid for this account, this Seller and this navigation only. A grant stamped with an
   // earlier generation is not served: while the question for THIS screen is open, nothing protected mounts or fetches.
   const generation = generationOf(accountId, sellerId, location.pathname);
+  // The generation is a key, not a token: going A -> B -> A returns to a key whose old answer is still stored. So every
+  // move clears the stored answer (during render, before anything is served) and nothing is served until it is asked again.
+  const [seen, setSeen] = useState(generation);
+  const outcome = seen === generation ? stored : null;
+  if (seen !== generation) {
+    setSeen(generation);
+    setOutcome(null);
+  }
   const access = grantFor(outcome, generation);
   const failure = failureFor(outcome, generation);
 
