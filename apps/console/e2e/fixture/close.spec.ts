@@ -134,7 +134,8 @@ test.describe('B: a readiness action respects entitlement, permission and the de
     await expect(store.getByRole('button')).toHaveCount(0);
     await expect(store.getByRole('link')).toHaveCount(0);
     // Other requirements are not affected.
-    await expect(row(page, 'First Product').getByRole('button', { name: 'Create your first Product' })).toHaveAttribute('aria-disabled', 'true');
+    // Products is built (SC-FE-04), so this account's action is an active link; the Store destination it lost does not touch it.
+    await expect(row(page, 'First Product').getByRole('link', { name: 'Create your first Product' })).toHaveAttribute('href', `/s/${SELLER.biruk.id}/products`);
   });
 });
 

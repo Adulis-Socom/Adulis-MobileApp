@@ -1183,3 +1183,71 @@ textarea.text-input {
   min-height: calc(var(--adu-touch-min) * 2);
   resize: vertical;
 }
+
+/* ---- SC-FE-05: Scene stage, hotspot markers, pressed tabs ------------------------------------------------------- */
+/* The image presentation: only a box with the right aspect ratio, because hotspots are fractions of it (SCN S22). */
+.stage {
+  position: relative;
+  width: 100%;
+  max-width: 28rem;
+  border: 1px solid var(--adu-color-border-strong);
+  border-radius: var(--adu-radius-lg);
+  background: var(--adu-color-secondary);
+  overflow: hidden;
+}
+
+.stage-name {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--adu-space-md);
+  text-align: center;
+  overflow-wrap: anywhere;
+  color: var(--adu-color-text-secondary);
+}
+
+/* a real button over the whole stage, so placing a hotspot works from the keyboard as well as by pointer */
+.stage-hit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  cursor: crosshair;
+}
+
+.marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  min-width: var(--adu-touch-min);
+  min-height: var(--adu-touch-min);
+  border: 2px solid var(--adu-color-primary-text);
+  border-radius: var(--adu-radius-full);
+  background: var(--adu-color-primary);
+  color: var(--adu-color-primary-text);
+  font-weight: var(--adu-font-weight-bold);
+}
+
+button.marker {
+  cursor: grab;
+}
+
+.marker[data-current='true'] {
+  box-shadow: 0 0 0 3px var(--adu-color-surface), 0 0 0 5px var(--adu-color-primary);
+}
+
+.btn[aria-pressed='true'] {
+  background: var(--adu-color-primary);
+  color: var(--adu-color-primary-text);
+  border-color: var(--adu-color-primary);
+}
+
+h4 {
+  margin: 0;
+  font-weight: var(--adu-font-weight-semibold);
+}
+

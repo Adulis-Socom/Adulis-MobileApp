@@ -208,9 +208,10 @@ export interface OnboardingMarket {
 }
 
 import type { CatalogueOperations } from './gap-sc-catalogue';
+import type { SceneOperations } from './gap-sc-content';
 
 // ---- the operation table the transport speaks ----------------------------------------------------------------------
-export interface Operations extends CatalogueOperations {
+export interface Operations extends CatalogueOperations, SceneOperations {
   readonly 'auth.otp.start': { in: { phone: string }; out: OtpChallenge };
   readonly 'auth.otp.status': { in: { challenge_id: string }; out: OtpStatus };
   readonly 'auth.otp.resend': { in: { challenge_id: string }; out: OtpChallenge };
@@ -260,5 +261,13 @@ export const SELLER_SCOPED_OPS = [
   'inventory.set',
   'inventory.confirm',
   'inventory.history.get',
+  'scenes.list',
+  'scenes.create',
+  'scenes.get',
+  'scenes.update',
+  'scenes.media.set',
+  'scenes.publish',
+  'scenes.archive',
+  'scenes.tag_candidates.get',
 ] as const satisfies readonly OpId[];
 export type SellerOp = (typeof SELLER_SCOPED_OPS)[number];

@@ -23,6 +23,7 @@ import type {
 } from '../contracts/gap-sc';
 import { TransportError, type CallContext } from '../transport/port';
 import { createCatalogue } from './catalogue';
+import { createContent } from './content';
 import type { Authz, Kit } from './kit';
 
 /**
@@ -205,8 +206,8 @@ const ROLE_CAPS: Record<SellerRole, string[]> = {
   ANALYST: [],
   CAMPAIGN_MANAGER: ['content.write'],
 };
-/** Brief areas whose work order is built (SC-FE-04: Products and Inventory). The rest stay DEFERRED. */
-const BUILT_AREAS = new Set(['PRODUCTS', 'INVENTORY']);
+/** Brief areas whose work order is built (SC-FE-04 Products and Inventory, SC-FE-05 Scenes). The rest stay DEFERRED. */
+const BUILT_AREAS = new Set(['PRODUCTS', 'INVENTORY', 'SCENES']);
 const VIEW_PRIORITY: [SellerRole, RoleView][] = [
   ['OWNER', 'OWNER_ADMIN'], ['ADMIN', 'OWNER_ADMIN'], ['SALES_SUPPORT', 'SALES_SUPPORT'],
   ['INVENTORY', 'INVENTORY'], ['CAMPAIGN_MANAGER', 'CAMPAIGN_MANAGER'], ['ANALYST', 'ANALYST'],
@@ -417,10 +418,12 @@ export function createWorld(options: WorldOptions): World {
     },
   };
   const catalogue = createCatalogue(kit);
+  const content = createContent(kit, catalogue);
 
   type H = { [K in OpId]: (input: OpInput<K>, ctx: CallContext) => OpOutput<K> };
   const handlers: H = {
     ...catalogue.handlers,
+    ...content.handlers,
     'auth.otp.start': ({ phone }) => {
       if (!/^\+?\d{9,15}$/.test(digits(phone))) throw new TransportError('VALIDATION_FAILED', { fields: { phone: 'PHONE_INVALID' } });
       return newChallenge(digits(phone));

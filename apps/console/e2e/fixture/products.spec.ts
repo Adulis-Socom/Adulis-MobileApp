@@ -47,7 +47,7 @@ test.describe('SC-FE-04: the Products list', () => {
     expect(await limeCount(page)).toBe(1);
     await atSellerHome(page, PHONE.campaign, SELLER.alem.name);
     await goInApp(page, `/s/${SELLER.alem.id}/products`);
-    await expect(page.getByRole('link', { name: /Linen wrap dress/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Canvas backpack/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add a Product' })).toHaveCount(0);
   });
 
@@ -91,7 +91,7 @@ test.describe('SC-FE-04: the Product editor', () => {
 
     await page.getByRole('button', { name: 'Update stock' }).click();
     await page.getByLabel('New quantity in stock').fill('3');
-    await page.getByRole('button', { name: 'Save stock' }).click();
+    await page.getByRole('button', { name: 'Save stock', exact: true }).click();
     await expect(page.getByText('In stock: 3')).toBeVisible();
     await expect(page.getByRole('list', { name: 'Stock by Variant' })).toContainText('Low');
 
@@ -163,7 +163,7 @@ test.describe('SC-FE-04: Inventory keeps two distinct controls and a ledger', ()
     await expect(card).toContainText('In stock: 8');
     await card.getByRole('button', { name: 'Update stock' }).click();
     await page.getByLabel('New quantity in stock').fill('6');
-    await page.getByRole('button', { name: 'Save stock' }).click();
+    await page.getByRole('button', { name: 'Save stock', exact: true }).click();
     await expect(card).toContainText('In stock: 6');
     await card.getByRole('button', { name: 'History' }).click();
     const history = page.getByRole('dialog', { name: 'Stock history for Black / S' });
@@ -177,7 +177,7 @@ test.describe('SC-FE-04: Inventory keeps two distinct controls and a ledger', ()
     await openProduct(page, PHONE.owner, SELLER.alem, 'fx_prod_alem_1', 'Linen wrap dress');
     await page.getByRole('button', { name: 'Update stock' }).first().click();
     await page.getByLabel('New quantity in stock').fill('-3');
-    await page.getByRole('button', { name: 'Save stock' }).click();
+    await page.getByRole('button', { name: 'Save stock', exact: true }).click();
     await expect(page.getByText('Enter a whole number, zero or more.').first()).toBeVisible();
     await expect(page.getByLabel('New quantity in stock')).toHaveAttribute('aria-invalid', 'true');
   });
@@ -186,7 +186,7 @@ test.describe('SC-FE-04: Inventory keeps two distinct controls and a ledger', ()
     await openProduct(page, PHONE.owner, SELLER.alem, 'fx_prod_alem_2', 'Cotton shirt dress');
     await page.getByRole('button', { name: 'Update stock' }).click();
     await page.getByLabel('New quantity in stock').fill('0');
-    await page.getByRole('button', { name: 'Save stock' }).click();
+    await page.getByRole('button', { name: 'Save stock', exact: true }).click();
     await expect(page.getByText('In stock: 0')).toBeVisible();
     await expect(page.locator('.badges').first()).toContainText('Published');
     await expect(page.locator('.badges').first()).toContainText('Not Available');
@@ -194,12 +194,12 @@ test.describe('SC-FE-04: Inventory keeps two distinct controls and a ledger', ()
 });
 
 test.describe('SC-FE-04: roles see what the server says they may do', () => {
-  test('Inventory may set and confirm stock, but the Product fields are read-only and there is no publish control', async ({ page }) => {
+  test('Inventory edits Products and stock (CATINV S110), so it also holds the withdraw control for a published Product', async ({ page }) => {
     await openProduct(page, PHONE.inventory, SELLER.alem, 'fx_prod_alem_1', 'Linen wrap dress');
-    await expect(page.getByLabel('Product name', { exact: true })).toBeDisabled();
+    await expect(page.getByLabel('Product name', { exact: true })).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Update stock' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Confirm stock is accurate' }).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Withdraw Product' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Withdraw Product' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Publish Product' })).toHaveCount(0);
   });
 

@@ -234,7 +234,7 @@ export const SCENES: readonly Scene[] = [
       await atSellerHome(p, PHONE.owner, SELLER.alem.name);
       await goInApp(p, `/s/${SELLER.alem.id}/products`);
       await expect(p.getByRole('heading', { level: 1, name: 'Products and Inventory' })).toBeVisible();
-      await expect(p.getByRole('link', { name: /Linen wrap dress/ })).toBeVisible();
+      await expect(p.getByRole('link', { name: /Canvas backpack/ })).toBeVisible();
     },
   },
   {
@@ -273,6 +273,51 @@ export const SCENES: readonly Scene[] = [
       await expect(p.getByRole('heading', { level: 1, name: 'Linen wrap dress' })).toBeVisible();
       await p.getByRole('button', { name: 'Update stock' }).first().click();
       await expect(p.getByRole('dialog', { name: 'Update stock for Black / S' })).toBeVisible();
+    },
+  },
+  {
+    name: 'scenes-list-private',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/content`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Scenes' })).toBeVisible();
+      await p.getByRole('button', { name: 'Private', exact: true }).click();
+      await expect(p.getByText('All tagged Products are currently out of stock.')).toBeVisible();
+    },
+  },
+  {
+    name: 'scene-editor-public',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/content/scenes/fx_scene_alem_1`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Linen wrap dress styled for the rainy season' })).toBeVisible();
+      await expect(p.getByRole('button', { name: /^Hotspot 1 for Linen wrap dress/ })).toBeVisible();
+    },
+  },
+  {
+    name: 'scene-editor-private',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/content/scenes/fx_scene_alem_2`);
+      await expect(p.getByRole('heading', { level: 1, name: 'The silk slip dress, evening edit' })).toBeVisible();
+      await expect(p.getByText('You do not need to publish it again.')).toBeVisible();
+    },
+  },
+  {
+    name: 'scene-editor-draft-blockers',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/content/scenes/fx_scene_alem_3`);
+      await expect(p.getByRole('heading', { level: 1, name: 'New Scene' })).toBeVisible();
+      await expect(p.getByRole('heading', { level: 3, name: 'Needs attention before publication: 3' })).toBeVisible();
+    },
+  },
+  {
+    name: 'scene-editor-restricted',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/content/scenes/fx_scene_alem_5`);
+      await expect(p.getByRole('heading', { level: 3, name: 'Moderation' })).toBeVisible();
     },
   },
 ];

@@ -13,11 +13,12 @@ test.describe('SC-FE-03: the daily operating Home', () => {
     await expect(page.getByRole('region', { name: 'Alerts' })).toContainText('Your admission is due to be checked again under the current policy.');
     await expect(page.getByRole('region', { name: 'Things to do' })).toContainText('Accept the updated Seller policy.');
     await expect(page.getByRole('region', { name: 'Things to do' }).locator('time')).toHaveCount(1);
-    for (const name of ['Scenes', 'Seller Stories', 'Inbox', 'Insights', 'Settings']) {
+    for (const name of ['Seller Stories', 'Inbox', 'Insights', 'Settings']) {
       await expect(area(page, name).first()).toContainText('Arrives later');
     }
-    // Products is built (SC-FE-04): open, and a link
+    // Products (SC-FE-04) and Scenes (SC-FE-05) are built: open, and links
     await expect(area(page, 'Products').first()).toContainText('Open');
+    await expect(area(page, 'Scenes').first()).toContainText('Open');
     await expect(area(page, 'Notification centre')).toContainText('Open');
     // Published, so no readiness hub competes with the brief
     await expect(page.getByRole('heading', { name: 'Publication readiness' })).toHaveCount(0);
@@ -35,10 +36,11 @@ test.describe('SC-FE-03: the daily operating Home', () => {
   test('area rows lead to honest destinations the role may open, and nothing else', async ({ page }) => {
     await atSellerHome(page, PHONE.owner, SELLER.alem.name);
     // an area that only arrives later is a row that says so: no link, no chevron promising a destination
-    await expect(area(page, 'Scenes').getByRole('link')).toHaveCount(0);
-    await expect(area(page, 'Scenes').locator('svg.icon').first()).toBeVisible(); // only the status badge icon
-    await expect(area(page, 'Scenes').locator('.ledger-link')).toHaveCount(0);
+    await expect(area(page, 'Seller Stories').getByRole('link')).toHaveCount(0);
+    await expect(area(page, 'Seller Stories').locator('svg.icon').first()).toBeVisible(); // only the status badge icon
+    await expect(area(page, 'Seller Stories').locator('.ledger-link')).toHaveCount(0);
     await expect(area(page, 'Products').getByRole('link')).toHaveCount(1);
+    await expect(area(page, 'Scenes').getByRole('link')).toHaveCount(1);
     await area(page, 'Notification centre').getByRole('link').click();
     await expect(page.getByRole('heading', { level: 1, name: 'Notifications' })).toBeVisible();
   });

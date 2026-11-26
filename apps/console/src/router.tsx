@@ -7,6 +7,8 @@ import { SignIn } from './features/auth/SignIn';
 import { Verify } from './features/auth/Verify';
 import { Chooser } from './features/entry/Chooser';
 import { Home } from './features/home/Home';
+import { SceneEditor } from './features/content/SceneEditor';
+import { Scenes } from './features/content/Scenes';
 import { Notifications } from './features/notifications/Notifications';
 import { ProductEditor } from './features/products/ProductEditor';
 import { Products } from './features/products/Products';
@@ -50,6 +52,8 @@ const children: RouteObject[] = [
           { path: 'more', element: <More /> },
           { path: 'products', element: <Gate dest="products"><Products /></Gate> },
           { path: 'products/:productId', element: <Gate dest="products"><ProductEditor /></Gate> },
+          { path: 'content', element: <Gate dest="content"><Scenes /></Gate> },
+          { path: 'content/scenes/:postId', element: <Gate dest="content"><SceneEditor /></Gate> },
           deferred('content/*', 'content'),
           deferred('inbox/*', 'inbox'),
           deferred('insights/*', 'insights'),
