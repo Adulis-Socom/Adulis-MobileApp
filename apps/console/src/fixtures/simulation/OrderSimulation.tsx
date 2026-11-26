@@ -149,7 +149,7 @@ export function OrderSimulation() {
               <p className="empty">{COPY.pick}</p>
             ) : (
               <>
-                <dl className="facts">
+                <dl className="facts facts-compact">
                   <dt>{COPY.reference}</dt>
                   <dd>{order.id}</dd>
                   <dt>{COPY.buyer}</dt>
