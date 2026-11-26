@@ -24,6 +24,7 @@ import type {
 import { TransportError, type CallContext } from '../transport/port';
 import { createCatalogue } from './catalogue';
 import { createContent } from './content';
+import { createStore } from './store';
 import type { Authz, Kit } from './kit';
 
 /**
@@ -323,6 +324,8 @@ export function createWorld(options: WorldOptions): World {
     const canResolve = caps.includes('readiness.resolve');
     // Resolved from the data the Console can change, never from a stored flag: publishing the first Product satisfies it.
     const product = catalogue.hasPublishedProduct(s.summary.id);
+    const profile = store.profileComplete(s.summary.id);
+    const fulfilment = store.fulfilmentConfigured(s.summary.id);
     const act = (kind: string): ReadinessItem['resolving_action'] => ({ kind, denied: canResolve ? null : 'NO_PERMISSION' });
     const items: ReadinessItem[] = [
       { code: 'ACCOUNT_CREATED', satisfied: true, workflow_state: null, reason_codes: [], resolving_action: null },
@@ -345,8 +348,8 @@ export function createWorld(options: WorldOptions): World {
       });
     }
     items.push(
-      { code: 'STORE_PROFILE', satisfied: s.store, workflow_state: null, reason_codes: s.store ? [] : ['STORE_PROFILE_INCOMPLETE'], resolving_action: s.store ? null : act('EDIT_STORE_PROFILE') },
-      { code: 'FULFILMENT_CONFIG', satisfied: s.fulfilment, workflow_state: null, reason_codes: s.fulfilment ? [] : ['FULFILMENT_REQUIRED'], resolving_action: s.fulfilment ? null : act('CONFIGURE_FULFILMENT') },
+      { code: 'STORE_PROFILE', satisfied: profile, workflow_state: null, reason_codes: profile ? [] : ['STORE_PROFILE_INCOMPLETE'], resolving_action: profile ? null : act('EDIT_STORE_PROFILE') },
+      { code: 'FULFILMENT_CONFIG', satisfied: fulfilment, workflow_state: null, reason_codes: fulfilment ? [] : ['FULFILMENT_REQUIRED'], resolving_action: fulfilment ? null : act('CONFIGURE_FULFILMENT') },
       { code: 'AT_LEAST_ONE_PRODUCT', satisfied: product, workflow_state: null, reason_codes: product ? [] : ['PRODUCT_REQUIRED'], resolving_action: product ? null : act('ADD_PRODUCT') },
     );
     return { seller_id: s.summary.id, ready: items.every((i) => i.satisfied), policy_version: 'fx_policy_1', items };
@@ -423,11 +426,13 @@ export function createWorld(options: WorldOptions): World {
   };
   const catalogue = createCatalogue(kit);
   const content = createContent(kit, catalogue);
+  const store = createStore(kit);
 
   type H = { [K in OpId]: (input: OpInput<K>, ctx: CallContext) => OpOutput<K> };
   const handlers: H = {
     ...catalogue.handlers,
     ...content.handlers,
+    ...store.handlers,
     'auth.otp.start': ({ phone }) => {
       if (!/^\+?\d{9,15}$/.test(digits(phone))) throw new TransportError('VALIDATION_FAILED', { fields: { phone: 'PHONE_INVALID' } });
       return newChallenge(digits(phone));

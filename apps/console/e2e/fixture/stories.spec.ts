@@ -60,6 +60,8 @@ test.describe('SC-FE-05S: the Stories list shows what the server decided', () =>
 test.describe('SC-FE-05S: composing, previewing, publishing and withdrawing', () => {
   test('a Story with a Product link: composed, previewed, published; it is the one lime action at each step', async ({ page }) => {
     await openStories(page, PHONE.owner);
+    // the button depends on what the server says this account may do, so wait for it before counting
+    await expect(page.getByRole('button', { name: 'Add a Story' })).toBeVisible();
     expect(await limeCount(page)).toBe(1);
     await page.getByRole('button', { name: 'Add a Story' }).click();
     await expect(page.getByRole('heading', { level: 2, name: 'New Story' })).toBeVisible();

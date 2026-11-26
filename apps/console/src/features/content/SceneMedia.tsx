@@ -72,7 +72,7 @@ export function SceneImageSection({ scene, onChange, onReload, onRefresh }: Scen
 /** The caption (SCN S20): required to publish, plain text, never a second source of Product facts. */
 export function SceneCaptionSection({ scene, onChange, onReload }: SceneSectionProps) {
   const run = useSellerCommand();
-  const action = useAction();
+  const action = useAction(true);
   const editable = canDo(scene, 'EDIT');
   const [caption, setCaption] = useState(scene.caption);
 

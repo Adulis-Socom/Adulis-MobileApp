@@ -352,6 +352,67 @@ export const SCENES: readonly Scene[] = [
       await expect(p.getByText('This Story will link to the Product: Canvas backpack.')).toBeVisible();
     },
   },
+  {
+    name: 'store-profile',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/store`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Store', exact: true })).toBeVisible();
+    },
+  },
+  {
+    name: 'store-location',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/store/location`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Store location', exact: true })).toBeVisible();
+      await expect(p.locator('dl.facts')).toContainText('Demonstration place 1');
+    },
+  },
+  {
+    name: 'store-coverage',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/store/coverage`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Service coverage', exact: true })).toBeVisible();
+    },
+  },
+  {
+    name: 'store-hours',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/store/hours`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Opening hours', exact: true })).toBeVisible();
+      await expect(p.getByLabel('Monday, hours 1: opens at')).toHaveValue('08:30');
+    },
+  },
+  {
+    name: 'store-fulfilment',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/store/fulfilment`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Fulfilment', exact: true })).toBeVisible();
+    },
+  },
+  {
+    name: 'store-couriers',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/store/couriers`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Couriers', exact: true })).toBeVisible();
+      await expect(p.getByRole('list', { name: 'Courier relationships' }).getByRole('listitem')).toHaveCount(3);
+    },
+  },
+  {
+    name: 'dialog-courier-revoke',
+    dialog: true,
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/store/couriers`);
+      await p.getByRole('button', { name: 'Revoke Meseret (demonstration)' }).click();
+      await expect(p.getByRole('dialog', { name: 'Revoke this Courier?' })).toBeVisible();
+    },
+  },
 ];
 
 export { CODE };

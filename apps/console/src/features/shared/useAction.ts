@@ -16,6 +16,8 @@ export interface ActionApi {
   readonly summary: readonly FieldError[];
   readonly token: number;
   readonly conflict: boolean;
+  /** True after a successful run of a form that announces its save (`useAction(true)`); cleared by the next run or reset. */
+  readonly saved: boolean;
   /** Runs `fn`; resolves with its result, or undefined after recording the failure. */
   run<T>(fn: () => Promise<T>): Promise<T | undefined>;
   /** Record a validation failure found before anything was sent: field id to a `field_error.*` code. Same summary, same field messages, same focus. */
@@ -23,8 +25,9 @@ export interface ActionApi {
   reset(): void;
 }
 
-export function useAction(): ActionApi {
+export function useAction(announceSaved = false): ActionApi {
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<TransportError | null>(null);
   const [token, setToken] = useState(0);
   const inFlight = useRef(false);
@@ -35,8 +38,11 @@ export function useAction(): ActionApi {
     inFlight.current = true;
     setBusy(true);
     setError(null);
+    setSaved(false);
     try {
-      return await fn();
+      const result = await fn();
+      if (announceSaved) setSaved(true);
+      return result;
     } catch (e) {
       setError(asTransportError(e));
       setToken((n) => n + 1);
@@ -45,8 +51,11 @@ export function useAction(): ActionApi {
       inFlight.current = false;
       setBusy(false);
     }
+  }, [announceSaved]);
+  const reset = useCallback(() => {
+    setError(null);
+    setSaved(false);
   }, []);
-  const reset = useCallback(() => setError(null), []);
   const fail = useCallback((fields: Readonly<Record<string, string>>) => {
     setError(new TransportError('VALIDATION_FAILED', { fields: { ...fields } }));
     setToken((n) => n + 1);
@@ -58,5 +67,5 @@ export function useAction(): ActionApi {
     return { fields: map, summary: Object.entries(map).map(([fieldId, message]) => ({ fieldId, message })) };
   }, [error]);
 
-  return { busy, error, fields, summary, token, conflict: error?.code === 'CONFLICT', run, fail, reset };
+  return { busy, error, fields, summary, token, conflict: error?.code === 'CONFLICT', saved, run, fail, reset };
 }

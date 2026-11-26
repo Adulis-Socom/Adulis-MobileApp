@@ -14,6 +14,13 @@ import { Notifications } from './features/notifications/Notifications';
 import { ProductEditor } from './features/products/ProductEditor';
 import { Products } from './features/products/Products';
 import { Admission } from './features/onboarding/Admission';
+import { Couriers } from './features/store/Couriers';
+import { StoreCoverage } from './features/store/StoreCoverage';
+import { StoreFulfilment } from './features/store/StoreFulfilment';
+import { StoreLayout } from './features/store/StoreFrame';
+import { StoreHours } from './features/store/StoreHours';
+import { StoreLocation } from './features/store/StoreLocation';
+import { StoreProfile } from './features/store/StoreProfile';
 import { BecomeSeller } from './features/onboarding/BecomeSeller';
 import { Gate, Deferred } from './features/unavailable/Gate';
 import { NotFound, NotFoundInSeller } from './features/unavailable/NotFound';
@@ -59,7 +66,22 @@ const children: RouteObject[] = [
           deferred('content/*', 'content'),
           deferred('inbox/*', 'inbox'),
           deferred('insights/*', 'insights'),
-          deferred('store/*', 'store'),
+          {
+            path: 'store',
+            element: (
+              <Gate dest="store">
+                <StoreLayout />
+              </Gate>
+            ),
+            children: [
+              { index: true, element: <StoreProfile /> },
+              { path: 'location', element: <StoreLocation /> },
+              { path: 'coverage', element: <StoreCoverage /> },
+              { path: 'hours', element: <StoreHours /> },
+              { path: 'fulfilment', element: <StoreFulfilment /> },
+              { path: 'couriers', element: <Couriers /> },
+            ],
+          },
           deferred('trust/*', 'trust'),
           deferred('settings/*', 'settings'),
           { path: '*', element: <NotFoundInSeller /> },

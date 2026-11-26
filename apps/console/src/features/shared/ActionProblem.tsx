@@ -14,6 +14,9 @@ export function ActionProblem({ action, onReload }: { action: ActionApi; onReloa
     <>
       <ErrorSummary errors={action.summary} focusToken={action.token} />
       <Problem error={hasFields ? null : action.error} />
+      <p role="status" className="hint">
+        {action.saved ? t('action.saved') : ''}
+      </p>
       {action.conflict && onReload ? (
         <div className="actions">
           <button type="button" className="btn btn-quiet" onClick={onReload}>

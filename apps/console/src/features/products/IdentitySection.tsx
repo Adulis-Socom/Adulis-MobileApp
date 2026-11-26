@@ -11,7 +11,7 @@ import { Section } from './Section';
 /** Core identity and category (CON S49 step 1). A draft may stay uncategorised; the server asks for a category before first publication. */
 export function IdentitySection({ detail, categories, onChange, onReload }: CategorySectionProps) {
   const run = useSellerCommand();
-  const action = useAction();
+  const action = useAction(true);
   const editable = can(detail, 'EDIT');
   const [title, setTitle] = useState(detail.title);
   const [description, setDescription] = useState(detail.description);

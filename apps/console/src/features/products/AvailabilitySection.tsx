@@ -16,7 +16,7 @@ const MODES: readonly StockVisibility[] = ['STATUS_ONLY', 'EXACT'];
  */
 export function AvailabilitySection({ detail, onChange, onReload }: SectionProps) {
   const run = useSellerCommand();
-  const action = useAction();
+  const action = useAction(true);
   const editable = can(detail, 'EDIT');
   const [mode, setMode] = useState<StockVisibility>(detail.stock_visibility_mode);
 

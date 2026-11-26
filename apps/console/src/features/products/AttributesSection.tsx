@@ -50,7 +50,7 @@ function Control({ def, value, onChange, error }: { def: AttributeDef; value: re
  */
 export function AttributesSection({ detail, attributes, onChange, onReload }: AttributeSectionProps) {
   const run = useSellerCommand();
-  const action = useAction();
+  const action = useAction(true);
   const editable = can(detail, 'EDIT');
   const [values, setValues] = useState<Record<string, readonly string[]>>({ ...detail.attributes });
   const defs = (attributes?.attributes ?? []).filter((d) => d.scope === 'PRODUCT');

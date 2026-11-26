@@ -95,7 +95,7 @@ function Candidates({ tagged, onTag, editable }: { tagged: ReadonlySet<string>; 
  */
 export function SceneTagsSection({ scene, onChange, onReload }: SceneSectionProps) {
   const run = useSellerCommand();
-  const action = useAction();
+  const action = useAction(true);
   const editable = canDo(scene, 'EDIT');
   const [tags, setTags] = useState<LocalTag[]>(() => fromScene(scene.tags));
   const [active, setActive] = useState<string | null>(scene.tags[0]?.product_id ?? null);
