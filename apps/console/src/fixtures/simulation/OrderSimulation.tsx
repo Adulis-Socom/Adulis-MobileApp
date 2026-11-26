@@ -135,8 +135,8 @@ export function OrderSimulation() {
                       {o.buyerLabel}, {MODE_LABEL[o.mode]}
                     </span>
                   </span>
-                  <button type="button" className="btn btn-quiet" aria-current={selected === o.id ? 'true' : undefined} onClick={() => { setSelected(o.id); setStale(false); setDone(false); }}>
-                    {`Open ${o.id}`}
+                  <button type="button" className="btn btn-quiet" aria-label={`${COPY.open} ${o.id}`} aria-current={selected === o.id ? 'true' : undefined} onClick={() => { setSelected(o.id); setStale(false); setDone(false); }}>
+                    {COPY.open}
                   </button>
                 </li>
               ))}

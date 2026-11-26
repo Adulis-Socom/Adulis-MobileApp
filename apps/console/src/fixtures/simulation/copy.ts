@@ -17,6 +17,7 @@ export const COPY = {
   screenState: 'Screen state',
   reset: 'Start the demonstration again',
   listLabel: 'Synthetic Orders',
+  open: 'Open',
   detail: 'Order detail',
   pick: 'Choose an Order to see it here.',
   reference: 'Reference',

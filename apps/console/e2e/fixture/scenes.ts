@@ -411,8 +411,8 @@ export const SCENES: readonly Scene[] = [
     setup: async (p) => {
       await p.goto('/internal/order-simulation');
       await expect(p.getByRole('heading', { level: 1, name: 'Order experience demonstration' })).toBeVisible();
-      await p.getByRole('button', { name: 'Open fx_sim_ord_003' }).click();
-      await expect(p.getByRole('button', { name: 'Mark ready' })).toBeVisible();
+      await p.getByRole('button', { name: 'Open fx_sim_ord_001' }).click();
+      await expect(p.getByRole('button', { name: 'Start preparing' })).toBeVisible();
     },
   },
   {
@@ -429,7 +429,7 @@ export const SCENES: readonly Scene[] = [
       await atSellerHome(p, PHONE.owner, SELLER.alem.name);
       await goInApp(p, `/s/${SELLER.alem.id}/inbox/fx_conv_alem_2`);
       await expect(p.getByRole('heading', { level: 1, name: 'Demonstration buyer B' })).toBeVisible();
-      await expect(p.getByText('A team member is needed.')).toBeVisible();
+      await expect(p.getByText('A team member is needed. Automated replies cannot answer this conversation.')).toBeVisible();
     },
   },
   {
