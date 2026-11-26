@@ -10,7 +10,7 @@ route map and authorization matrix): ADU-CONSOLE-02 v4.3, ADU-ONB-01 v3.2, ADU-A
 ADU-MKT-01 v3.3; founder decisions D24-01..D24-18, RB25-D01..D14, B02-D03, B02B-D01..D03. `docs/rebuild/GOV-06-FIXTURE-AND-RELEASE-BOUNDARY.md`
 governs fixtures. Where this file and a citation disagree, the citation governs.
 
-## Scope of the workstream (Batch 02A: SC-FE-01 to SC-FE-03, Batch 02B: SC-FE-04 to SC-FE-06)
+## Scope of the workstream (Batch 02A: SC-FE-01 to SC-FE-03, Batch 02B: SC-FE-04 to SC-FE-06, Batch 02C/02D: SC-FE-07 to SC-FE-11)
 
 Built: shell, routing, Seller context, session boundary, sign-in/OTP/recovery/declarations, Seller chooser and switcher,
 Seller admission (`/become-seller`), Publication Readiness Hub, Home (role-aware, readiness or operating brief),
@@ -18,8 +18,13 @@ Notification centre (read); **SC-FE-04** Products, Variants and Inventory (`prod
 publication blockers); **SC-FE-05** Scene Post authoring (`content/`: tagged Products, accessible hotspots, resolved visibility);
 **SC-FE-05S** Seller Stories (`content/stories`: one photo, optional eligible link, server-authored lifetime);
 **SC-FE-06** Store settings and Courier relationships (`store/`: profile, structured location, explicit service coverage,
-opening hours, the three fulfilment modes, invite and revoke). **Not built, and the routes show an honest "arrives later" state:**
-Inbox and chatbot (SC-FE-08), Insights, Trust, team/settings screens, company details. **Never build here:** payment, payout, Order,
+opening hours, the three fulfilment modes, invite and revoke); **SC-FE-07** the internal Order experience simulation (fixture builds only);
+**SC-FE-08** Inbox (one subject plus Scene provenance per message, high-water read mark) and scripted-assistance administration
+(`inbox/automation`, gated by the chatbot capabilities, deterministic, provisional dialogue); **SC-FE-09** Trust and Reviews (read only,
+kept for a safety-suspended Seller); **SC-FE-10** nonfinancial Insights and Plan status (`settings/plan`, Option B, nothing to buy);
+**SC-FE-11** Team, ownership transfer and closure (`settings/team`, `settings/closure`) and the Account's own pages (`/account/*`: sessions,
+notifications, privacy and deletion, invitations) with purpose-bound step-up. Nothing deletes, closes or transfers for real. **Not built,
+and the routes show an honest "arrives later" state:** company details, other `settings/*` and `insights/*` sub-pages. **Never build here:** payment, payout, Order,
 Reservation, revenue, GMV, paid-Order counts, delivery tracking, trust advancement, Government-ID capture, any backend feature, Mobile,
 Storefront, Operator. Courier work is relationship management only: no assignment, handoff, delivery states or compensation (B02B-D02).
 The taxonomy is submitted and unratified (`docs/rebuild/taxonomy/`): the editor hard-codes no category, attribute, value or required rule,
