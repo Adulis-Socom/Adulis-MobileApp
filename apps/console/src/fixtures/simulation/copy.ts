@@ -15,7 +15,8 @@ export const COPY = {
   controls: 'Demonstration controls',
   role: 'View as',
   screenState: 'Screen state',
-  reset: 'Start the demonstration again',
+  // Short on purpose: at 200% text a button cannot be narrower than its longest word plus padding, and "demonstration" alone overflowed a phone panel.
+  reset: 'Start again',
   listLabel: 'Synthetic Orders',
   open: 'Open',
   detail: 'Order detail',
