@@ -156,11 +156,11 @@ export const SCENES: readonly Scene[] = [
     },
   },
   {
-    name: 'unavailable-inbox',
+    name: 'unavailable-insights',
     setup: async (p) => {
       await atSellerHome(p, PHONE.owner, SELLER.alem.name);
-      await goInApp(p, `/s/${SELLER.alem.id}/inbox`);
-      await expect(p.getByText('Inbox arrives in a later release')).toBeVisible();
+      await goInApp(p, `/s/${SELLER.alem.id}/insights`);
+      await expect(p.getByText('Insights arrives in a later release')).toBeVisible();
     },
   },
   {
@@ -413,6 +413,32 @@ export const SCENES: readonly Scene[] = [
       await expect(p.getByRole('heading', { level: 1, name: 'Order experience demonstration' })).toBeVisible();
       await p.getByRole('button', { name: 'Open fx_sim_ord_003' }).click();
       await expect(p.getByRole('button', { name: 'Mark ready' })).toBeVisible();
+    },
+  },
+  {
+    name: 'inbox-list',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox`);
+      await expect(p.getByRole('list', { name: 'Conversations', exact: true }).getByRole('listitem')).toHaveCount(4);
+    },
+  },
+  {
+    name: 'inbox-thread-waiting',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox/fx_conv_alem_2`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Demonstration buyer B' })).toBeVisible();
+      await expect(p.getByText('A team member is needed.')).toBeVisible();
+    },
+  },
+  {
+    name: 'inbox-thread-scene',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox/fx_conv_alem_1`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Demonstration buyer A' })).toBeVisible();
+      await p.getByLabel('Scene (optional)').selectOption({ label: 'Linen wrap dress styled for the rainy season' });
     },
   },
   {

@@ -1496,3 +1496,32 @@ legend {
   margin-bottom: var(--adu-space-md);
 }
 
+/* ---- SC-FE-08 Inbox ----------------------------------------------------------------------------------------------- */
+.messages {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.message {
+  padding: var(--adu-space-md) 0;
+  border-top: 1px solid var(--adu-color-border);
+}
+
+.message:first-child {
+  border-top: 0;
+}
+
+/* a message says who sent it with words, never with colour or side alone; automated ones are set apart by a rule at the start */
+.message[data-sender='AUTOMATED'] {
+  border-inline-start: 3px solid var(--adu-color-border-strong);
+  padding-inline-start: var(--adu-space-md);
+}
+
+.message-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
