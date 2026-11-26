@@ -1561,3 +1561,14 @@ legend {
   padding-inline-start: var(--adu-space-lg);
 }
 
+
+/* SC-FE-10: a server figure reads as the figure; its definition version follows in small type */
+.metric-value {
+  font-size: var(--adu-font-size-lg);
+  font-weight: var(--adu-font-weight-semibold);
+}
+
+.metric-value .hint {
+  font-size: var(--adu-font-size-base);
+  font-weight: var(--adu-font-weight-regular);
+}

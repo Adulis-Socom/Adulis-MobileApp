@@ -588,6 +588,31 @@ export const SCENES: readonly Scene[] = [
       await expect(p.getByRole('heading', { level: 2, name: 'Test result' })).toBeVisible();
     },
   },
+  // ---- SC-FE-10 nonfinancial Insights and Plan ----
+  {
+    name: 'insights-owner',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/insights`);
+      await expect(p.getByRole('region', { name: 'Not measured in this release' })).toBeVisible();
+    },
+  },
+  {
+    name: 'insights-stale',
+    setup: async (p) => {
+      await statesAccountAt(p, SELLER.iman.name);
+      await goInApp(p, `/s/${SELLER.iman.id}/insights`);
+      await expect(p.getByText('These figures are older than usual.')).toBeVisible();
+    },
+  },
+  {
+    name: 'settings-plan',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.biruk.name);
+      await goInApp(p, `/s/${SELLER.biruk.id}/settings/plan`);
+      await expect(p.getByRole('region', { name: 'What this Seller includes' })).toBeVisible();
+    },
+  },
 ];
 
 export { CODE };

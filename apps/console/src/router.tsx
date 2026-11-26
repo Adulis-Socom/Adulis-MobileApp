@@ -12,6 +12,8 @@ import { Scenes } from './features/content/Scenes';
 import { Stories } from './features/content/Stories';
 import { AutomationKnowledgePage, AutomationLayout, AutomationOverviewPage, AutomationTestRoute } from './features/automation/Automation';
 import { Inbox } from './features/inbox/Inbox';
+import { Insights } from './features/insights/Insights';
+import { Plan, SettingsIndex } from './features/settings/Settings';
 import { Thread } from './features/inbox/Thread';
 import { Notifications } from './features/notifications/Notifications';
 import { Trust } from './features/trust/Trust';
@@ -81,6 +83,7 @@ const children: RouteObject[] = [
             ],
           },
           { path: 'inbox/:conversationId', element: <Gate dest="inbox"><Thread /></Gate> },
+          { path: 'insights', element: <Gate dest="insights"><Insights /></Gate> },
           deferred('insights/*', 'insights'),
           {
             path: 'store',
@@ -100,6 +103,8 @@ const children: RouteObject[] = [
             ],
           },
           { path: 'trust', element: <Gate dest="trust"><Trust /></Gate> },
+          { path: 'settings', element: <Gate dest="settings"><SettingsIndex /></Gate> },
+          { path: 'settings/plan', element: <Gate dest="settings"><Plan /></Gate> },
           deferred('settings/*', 'settings'),
           { path: '*', element: <NotFoundInSeller /> },
         ],
