@@ -1525,3 +1525,18 @@ legend {
   overflow-wrap: anywhere;
 }
 
+/* ---- SC-FE-09 Trust and Reviews ---------------------------------------------------------------------------------- */
+.fact-pair {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--adu-space-xs) var(--adu-space-md);
+  border-top: 1px solid var(--adu-color-border);
+  padding-top: var(--adu-space-xs);
+}
+
+.fact-pair > dt,
+.fact-pair > dd {
+  margin: 0;
+}
+

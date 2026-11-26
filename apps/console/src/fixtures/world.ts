@@ -26,6 +26,7 @@ import { createCatalogue } from './catalogue';
 import { createContent } from './content';
 import { createInbox } from './inbox';
 import { createStore } from './store';
+import { createTrust } from './trust';
 import type { Authz, Kit } from './kit';
 
 /**
@@ -192,19 +193,19 @@ const ALL_DEST: DestinationKey[] = ['home', 'products', 'content', 'inbox', 'ins
 const ROLE_DEST: Record<SellerRole, DestinationKey[]> = {
   OWNER: ALL_DEST,
   ADMIN: ALL_DEST,
-  SALES_SUPPORT: ['home', 'inbox'],
-  INVENTORY: ['home', 'products'],
+  SALES_SUPPORT: ['home', 'inbox', 'trust'],
+  INVENTORY: ['home', 'products', 'trust'],
   ANALYST: ['home', 'insights'],
   CAMPAIGN_MANAGER: ['home', 'content', 'products', 'insights'],
 };
 const MANAGER_ROLES: SellerRole[] = ['OWNER', 'ADMIN'];
 /** Capabilities a manager holds beyond the admission ones, and what the other roles hold (CATINV S110, CONSOLE-02 S17). */
-const WRITE_CAPS = ['catalogue.write', 'inventory.write', 'content.write', 'store.manage', 'couriers.manage', 'inbox.read', 'inbox.reply'];
+const WRITE_CAPS = ['catalogue.write', 'inventory.write', 'content.write', 'store.manage', 'couriers.manage', 'inbox.read', 'inbox.reply', 'trust.read', 'reviews.read'];
 const ROLE_CAPS: Record<SellerRole, string[]> = {
   OWNER: WRITE_CAPS,
   ADMIN: WRITE_CAPS,
-  SALES_SUPPORT: ['inbox.read', 'inbox.reply'],
-  INVENTORY: ['catalogue.write', 'inventory.write'],
+  SALES_SUPPORT: ['inbox.read', 'inbox.reply', 'trust.read', 'reviews.read'],
+  INVENTORY: ['catalogue.write', 'inventory.write', 'trust.read'],
   ANALYST: [],
   CAMPAIGN_MANAGER: ['content.write'],
 };
@@ -435,6 +436,7 @@ export function createWorld(options: WorldOptions): World {
   const content = createContent(kit, catalogue);
   const store = createStore(kit);
   const inbox = createInbox(kit, catalogue, content);
+  const trust = createTrust(kit, catalogue);
 
   type H = { [K in OpId]: (input: OpInput<K>, ctx: CallContext) => OpOutput<K> };
   const handlers: H = {
@@ -442,6 +444,7 @@ export function createWorld(options: WorldOptions): World {
     ...content.handlers,
     ...store.handlers,
     ...inbox.handlers,
+    ...trust.handlers,
     'auth.otp.start': ({ phone }) => {
       if (!/^\+?\d{9,15}$/.test(digits(phone))) throw new TransportError('VALIDATION_FAILED', { fields: { phone: 'PHONE_INVALID' } });
       return newChallenge(digits(phone));

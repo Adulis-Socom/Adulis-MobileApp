@@ -13,6 +13,7 @@ import { Stories } from './features/content/Stories';
 import { Inbox } from './features/inbox/Inbox';
 import { Thread } from './features/inbox/Thread';
 import { Notifications } from './features/notifications/Notifications';
+import { Trust } from './features/trust/Trust';
 import { ProductEditor } from './features/products/ProductEditor';
 import { Products } from './features/products/Products';
 import { Admission } from './features/onboarding/Admission';
@@ -89,7 +90,7 @@ const children: RouteObject[] = [
               { path: 'couriers', element: <Couriers /> },
             ],
           },
-          deferred('trust/*', 'trust'),
+          { path: 'trust', element: <Gate dest="trust"><Trust /></Gate> },
           deferred('settings/*', 'settings'),
           { path: '*', element: <NotFoundInSeller /> },
         ],
