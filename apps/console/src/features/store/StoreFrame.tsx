@@ -18,8 +18,8 @@ export interface StoreProps {
   readonly editable: boolean;
 }
 
-/** The six parts of the Store, as links. The router marks the current one with aria-current. */
-export function StoreLayout() {
+/** The six parts of the Store, as links, shown BELOW the page title like the Content switcher. The router marks the current one with aria-current. */
+export function StoreNav() {
   const { sellerId } = useSeller();
   const link = (path: string, text: string, end = false) => (
     <NavLink className="btn btn-quiet" to={sellerPath(sellerId, path === '' ? 'store' : `store/${path}`)} end={end}>
@@ -36,9 +36,13 @@ export function StoreLayout() {
         {link('fulfilment', t('store.nav_fulfilment'))}
         {link('couriers', t('store.nav_couriers'))}
       </nav>
-      <Outlet />
     </>
   );
+}
+
+/** The Store pages render their own title and switcher, so the layout is only the place the router puts them. */
+export function StoreLayout() {
+  return <Outlet />;
 }
 
 /**
@@ -69,6 +73,7 @@ export function StoreFrame({ title, lead, children }: { title: string; lead?: st
     <>
       <PageTitle title={title}>{title}</PageTitle>
       {lead ? <p className="lead">{lead}</p> : null}
+      <StoreNav />
       {query.state.status === 'error' ? (
         <StatePanel
           kind="danger"

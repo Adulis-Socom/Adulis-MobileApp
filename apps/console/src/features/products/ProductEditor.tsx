@@ -90,7 +90,7 @@ function Editor({ productId }: { productId: string }) {
       <PageTitle title={t('editor.page_title')}>{heading}</PageTitle>
       <p>
         <Link className="btn btn-link" to={sellerPath(sellerId, 'products')}>
-          <Icon name="arrow" />
+          <span className="flip" aria-hidden="true"><Icon name="arrow" /></span>
           <span>{t('editor.back')}</span>
         </Link>
       </p>

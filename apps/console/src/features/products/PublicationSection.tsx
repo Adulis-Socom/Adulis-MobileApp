@@ -61,7 +61,7 @@ export function PublicationSection({ detail, onChange, onReload, timezone }: Sec
             {blockers.map((b, i) => {
               const text = codeText('blocker', b.code) ?? t('blocker.unknown', { code: b.code });
               return (
-                <li key={`${b.code}-${b.field ?? i}-${i}`} className="row">
+                <li key={`${b.code}-${b.field ?? i}-${i}`} className="row-start">
                   <Icon name="alert" />
                   {b.field ? (
                     <a className="btn btn-link" href={`#${b.field}`}>

@@ -31,7 +31,7 @@ function Row({ story, timezone, onDone }: { story: StoryView; timezone: string |
   return (
     <li className="ledger-row">
       <div className="stack">
-        <div className="row">
+        <div className="row-start">
           <span className="ledger-title">{story.text ?? t('stories.no_text')}</span>
           <span className="badges">
             <Badge tone={live ? 'success' : 'neutral'} icon={live ? 'check' : 'x'}>
@@ -46,7 +46,7 @@ function Row({ story, timezone, onDone }: { story: StoryView; timezone: string |
                 {t('stories.not_public')}
               </Badge>
             )}
-            {story.moderation ? (
+            {story.moderation && story.moderation.state !== story.state ? (
               <Badge tone="warn" icon="alert">
                 {label('moderation.state', story.moderation.state)}
               </Badge>

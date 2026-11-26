@@ -1196,14 +1196,16 @@ textarea.text-input {
   overflow: hidden;
 }
 
+/* the file name sits at the top edge, away from the markers, and is small: it is a stand-in for the photo */
 .stage-name {
   position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: var(--adu-space-md);
-  text-align: center;
+  top: var(--adu-space-sm);
+  left: var(--adu-space-sm);
+  right: var(--adu-space-sm);
+  padding: 0;
+  text-align: start;
   overflow-wrap: anywhere;
+  font-size: var(--adu-font-size-sm);
   color: var(--adu-color-text-secondary);
 }
 
@@ -1250,5 +1252,42 @@ button.marker {
 h4 {
   margin: 0;
   font-weight: var(--adu-font-weight-semibold);
+}
+
+/* ---- design review fixes (SC-FE-04..06) ------------------------------------------------------------------------- */
+/* a header row whose badges and message stay beside the title instead of floating to the widest sibling */
+.row-start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--adu-space-xs) var(--adu-space-smd);
+}
+
+.row-start > * {
+  min-width: 0;
+}
+
+/* Opens and Closes side by side; each keeps its full label, so nothing changes for a screen reader */
+.interval {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--adu-space-smd);
+}
+
+/* a day, a closure or a method is a ruled block with a hairline above it, not a floating run of fields */
+.plain-fieldset > .group + .group {
+  border-top: 1px solid var(--adu-color-border);
+  padding-top: var(--adu-space-md);
+}
+
+/* a back link points back */
+.flip {
+  display: inline-flex;
+  transform: scaleX(-1);
+}
+
+legend {
+  padding: 0;
 }
 

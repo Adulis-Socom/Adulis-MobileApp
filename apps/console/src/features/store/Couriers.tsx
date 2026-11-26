@@ -12,6 +12,7 @@ import { formatInstant, label, t } from '../../i18n/t';
 import { useSellerCommand } from '../../seller/useSellerCommand';
 import { useSellerQuery } from '../../seller/useSellerQuery';
 import { ActionProblem } from '../shared/ActionProblem';
+import { StoreNav } from './StoreFrame';
 import { useAction } from '../shared/useAction';
 
 const LOOK: Record<RelationshipStatus, { tone: Tone; icon: IconName }> = {
@@ -37,7 +38,7 @@ function Row({ item, timezone, onChange }: { item: CourierRelationship; timezone
   return (
     <li className="ledger-row">
       <div className="stack">
-        <div className="row">
+        <div className="row-start">
           <span className="ledger-title">{item.courier_display_name}</span>
           <Badge tone={look.tone} icon={look.icon}>
             {label('courier.status', item.status)}
@@ -111,6 +112,7 @@ export function Couriers() {
     <>
       <PageTitle title={t('couriers.page')}>{t('couriers.page')}</PageTitle>
       <p className="lead">{t('couriers.lead')}</p>
+      <StoreNav />
       {state.status === 'error' ? (
         <StatePanel kind="danger" alert title={t('couriers.error_title')} actions={<button type="button" className="btn btn-primary" onClick={retry}>{t('state.retry')}</button>}>
           <p>{t('state.transport_error_body')}</p>

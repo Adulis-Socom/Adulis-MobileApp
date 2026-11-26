@@ -41,7 +41,7 @@ function VariantRow({ detail, variant, onChange, onReload }: SectionProps & { va
   return (
     <li className="ledger-row">
       <div className="stack">
-        <div className="row">
+        <div className="row-start">
           <h3 className="ledger-title">{variant.summary}</h3>
           {variant.active ? null : (
             <Badge tone="neutral" icon="x">

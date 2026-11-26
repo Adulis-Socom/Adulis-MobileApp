@@ -38,6 +38,7 @@ function Body({ view, onChange, onReload, editable }: StoreProps) {
                 {d.intervals.length === 0 ? <p className="empty">{t('hours.closed', { day: dayName })}</p> : null}
                 {d.intervals.map((interval, n) => (
                   <div key={n} className="stack">
+                    <div className="interval">
                     <Field id={`${d.day}-${n}-open`} label={t('hours.opens', { day: dayName, n: n + 1 })}>
                       {(control) => (
                         <input
@@ -60,6 +61,7 @@ function Body({ view, onChange, onReload, editable }: StoreProps) {
                         />
                       )}
                     </Field>
+                    </div>
                     {editable ? (
                       <div className="actions">
                         <button type="button" className="btn btn-quiet" onClick={() => editDay(d.day, (list) => list.filter((_, i) => i !== n))}>

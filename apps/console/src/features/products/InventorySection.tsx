@@ -91,7 +91,7 @@ function StockCard({ detail, variant, onChange, onReload, timezone }: SectionPro
   return (
     <li className="ledger-row" aria-labelledby={titleId}>
       <div className="stack">
-        <div className="row">
+        <div className="row-start">
           <h3 id={titleId} className="ledger-title">
             {variant.summary}
           </h3>

@@ -68,7 +68,7 @@ export function ScenePublication({ scene, onChange, onReload, timezone }: SceneS
             {scene.blockers.map((b, i) => {
               const text = codeText('scene.blocker', b.code) ?? t('scene.blocker.unknown', { code: b.code });
               return (
-                <li key={`${b.code}-${i}`} className="row">
+                <li key={`${b.code}-${i}`} className="row-start">
                   <Icon name="alert" />
                   {b.field ? (
                     <a className="btn btn-link" href={`#${b.field}`}>
