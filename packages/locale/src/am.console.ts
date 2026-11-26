@@ -827,4 +827,18 @@ export const amConsole: { readonly [K in keyof typeof enConsole]: AmEntry } = {
   'store.map_none': PENDING,
   'store.map_alt': PENDING,
   'store.map_coordinates': PENDING,
+
+  // ---- Batch 02C closure (review fixes) ----
+  'stock.last_confirmed_sentence': PENDING,
+  'stock.never_confirmed_sentence': PENDING,
+  'hours.opens_short': PENDING,
+  'hours.closes_short': PENDING,
+  'hours.remove_short': PENDING,
+  'hours.add_short': PENDING,
+  'media.earlier': PENDING,
+  'media.later': PENDING,
+  'media.remove_short': PENDING,
+  'stage.image_failed': PENDING,
+  'store.map_label_unsaved': PENDING,
+  'store.map_label_saved': PENDING,
 };
