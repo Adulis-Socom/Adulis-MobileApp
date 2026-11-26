@@ -1502,3 +1502,13 @@ legend {
   overflow-wrap: anywhere;
 }
 
+/* a run of facts where the label is quiet and the value is what the eye lands on */
+.facts-compact dt {
+  font-size: var(--adu-font-size-sm);
+  margin-top: var(--adu-space-xs);
+}
+
+.facts-compact dd {
+  font-weight: var(--adu-font-weight-semibold);
+}
+
