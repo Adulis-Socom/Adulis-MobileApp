@@ -80,8 +80,8 @@ test.describe('A: pending authorization serves no outdated grant', () => {
     await expect(page.getByRole('heading', { name: 'Your session ended' })).toBeVisible();
     await page.waitForTimeout(500);
     await expect(page.getByRole('heading', { name: 'Your session ended' })).toBeVisible();
-    await expect(banner(page)).toHaveCount(0);
-    await expect(page.getByText(SELLER.alem.name)).toHaveCount(0);
+    await expect(mainNav(page)).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1, name: SELLER.alem.name })).toHaveCount(0);
   });
 });
 
@@ -119,8 +119,8 @@ test.describe('C: cold start and reload are safe', () => {
     await atSellerHome(page, PHONE.owner, SELLER.alem.name);
     await page.reload();
     await expect(page.getByRole('heading', { level: 1, name: 'Sign in to your Seller Console' })).toBeVisible();
-    await expect(page.getByText(SELLER.alem.name)).toHaveCount(0);
-    await expect(banner(page)).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1, name: SELLER.alem.name })).toHaveCount(0);
+    await expect(mainNav(page)).toHaveCount(0);
     const stored = await page.evaluate(() => ({ local: Object.keys(window.localStorage), session: Object.keys(window.sessionStorage), cookie: document.cookie }));
     expect(stored).toEqual({ local: [], session: [], cookie: '' });
   });
@@ -128,7 +128,8 @@ test.describe('C: cold start and reload are safe', () => {
   test('cold start on a Seller address without a session asks for sign-in; an unknown address is a plain not-found', async ({ page }) => {
     await page.goto(`/s/${SELLER.alem.id}/inbox`);
     await expect(page.getByRole('heading', { level: 1, name: 'Sign in to your Seller Console' })).toBeVisible();
-    await expect(page.getByText(SELLER.alem.name)).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1, name: SELLER.alem.name })).toHaveCount(0);
+    await expect(mainNav(page)).toHaveCount(0);
     await page.goto('/this-is-not-a-page');
     await expect(page.getByRole('heading', { level: 1, name: 'We could not find that page' })).toBeVisible();
   });

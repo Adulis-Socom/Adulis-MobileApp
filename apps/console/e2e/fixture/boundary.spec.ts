@@ -27,6 +27,8 @@ test.describe('fixture boundary (development build only)', () => {
     await atSellerHome(page, PHONE.owner, SELLER.alem.name);
     await expect(strip).toBeVisible();
     await goInApp(page, `/s/${SELLER.alem.id}/products`);
+    // Each move re-asks the server what the account may do; wait for the destination so the page is its real height.
+    await expect(page.getByRole('heading', { level: 1, name: /Products/ })).toBeVisible();
     await expect(strip).toBeVisible();
     await page.setViewportSize({ width: 390, height: 300 });
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
