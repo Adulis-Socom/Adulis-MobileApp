@@ -160,3 +160,46 @@ test.describe('Store: company details, a phone-width section picker, the map pre
     await expect(page.getByText('This is a demonstration preview, not a real map.')).toBeVisible();
   });
 });
+
+test.describe('Scene and Story: pointer dragging and a link that stops being eligible', () => {
+  test('a hotspot can be dragged with the pointer, and the keyboard and the fields still agree with it', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await atSellerHome(page, PHONE.owner, SELLER.alem.name);
+    await goInApp(page, `/s/${SELLER.alem.id}/content/scenes/fx_scene_alem_1`);
+    const marker = page.getByRole('button', { name: /^Hotspot 1 for Linen wrap dress/ });
+    await expect(marker).toBeVisible();
+    const stage = page.locator('.stage').first();
+    const box = await stage.boundingBox();
+    const from = await marker.boundingBox();
+    if (!box || !from) throw new Error('the stage and the marker must have a box');
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.8, box.y + box.height * 0.2, { steps: 6 });
+    await page.mouse.up();
+    await expect(page.getByRole('button', { name: /^Hotspot 1 for Linen wrap dress, (79|80|81) percent across, (19|20|21) percent down$/ })).toBeVisible();
+    await expect(page.getByLabel('Hotspot 1: percent across')).toHaveValue(/^(79|80|81)$/);
+    await expect(page.getByText('You have changes that are not saved yet.')).toBeVisible();
+    // the keyboard still moves the same marker
+    await page.getByRole('button', { name: /^Hotspot 1 for Linen wrap dress/ }).focus();
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.getByLabel('Hotspot 1: percent across')).toHaveValue(/^(78|79|80)$/);
+  });
+
+  test('a Story link that is no longer offered is not dropped silently: the Seller is returned to the field', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await atSellerHome(page, PHONE.owner, SELLER.alem.name);
+    await goInApp(page, `/s/${SELLER.alem.id}/content/stories`);
+    await page.getByRole('button', { name: 'Add a Story' }).click();
+    await page.getByLabel('Photo', { exact: true }).setInputFiles({ name: 'rain.png', mimeType: 'image/png', buffer: Buffer.from('demonstration photo bytes') });
+    await page.getByRole('radio', { name: 'A Product' }).check();
+    await page.getByLabel('Product', { exact: true }).selectOption({ label: 'Canvas backpack' });
+    await page.getByRole('button', { name: 'Preview Story' }).click();
+    await expect(page.getByText('This Story will link to the Product: Canvas backpack.')).toBeVisible();
+    // moderation restricts the Product while the Story is being composed
+    await page.evaluate((id) => window.__ADULIS_FIXTURE__?.restrictProduct(id, 'fx_prod_alem_4'), SELLER.alem.id);
+    await page.getByRole('button', { name: 'Publish Story' }).click();
+    await expect(page.getByRole('alert').getByRole('link', { name: 'This item cannot be linked right now.' })).toBeVisible();
+    await expect(page.getByRole('radio', { name: 'A Product' })).toBeChecked(); // still a Product link: never turned into an unlinked Story
+    await expect(page.getByText('The Story is published.')).toHaveCount(0);
+  });
+});
