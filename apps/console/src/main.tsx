@@ -27,7 +27,7 @@ async function start() {
       </a>
       <ErrorBoundary>
         <SessionProvider selected={selected}>
-          <RouterProvider router={createRouter()} />
+          <RouterProvider router={createRouter(selected.fixtureUi?.simulationRoute ?? null)} />
         </SessionProvider>
       </ErrorBoundary>
     </StrictMode>,

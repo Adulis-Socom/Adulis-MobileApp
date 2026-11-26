@@ -99,6 +99,10 @@ export const rootRoute = (inner: RouteObject[]): RouteObject[] => [{ errorElemen
 
 export const routes: RouteObject[] = rootRoute(children);
 
-export function createRouter() {
-  return createBrowserRouter(routes);
+/**
+ * `simulationRoute` is the internal Order experience demonstration (SC-FE-07). Only a fixture build can supply it, so in a release build the
+ * route does not exist, its path is not in the bundle, and the URL falls through to the not-found page. It is outside every Seller and every nav.
+ */
+export function createRouter(simulationRoute: RouteObject | null = null) {
+  return createBrowserRouter(simulationRoute === null ? routes : rootRoute([simulationRoute, ...children]));
 }

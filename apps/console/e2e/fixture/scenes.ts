@@ -407,6 +407,15 @@ export const SCENES: readonly Scene[] = [
     },
   },
   {
+    name: 'order-simulation',
+    setup: async (p) => {
+      await p.goto('/internal/order-simulation');
+      await expect(p.getByRole('heading', { level: 1, name: 'Order experience demonstration' })).toBeVisible();
+      await p.getByRole('button', { name: 'Open fx_sim_ord_003' }).click();
+      await expect(p.getByRole('button', { name: 'Mark ready' })).toBeVisible();
+    },
+  },
+  {
     name: 'dialog-courier-revoke',
     dialog: true,
     setup: async (p) => {
