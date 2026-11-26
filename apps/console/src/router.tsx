@@ -9,6 +9,7 @@ import { Chooser } from './features/entry/Chooser';
 import { Home } from './features/home/Home';
 import { SceneEditor } from './features/content/SceneEditor';
 import { Scenes } from './features/content/Scenes';
+import { Stories } from './features/content/Stories';
 import { Notifications } from './features/notifications/Notifications';
 import { ProductEditor } from './features/products/ProductEditor';
 import { Products } from './features/products/Products';
@@ -54,6 +55,7 @@ const children: RouteObject[] = [
           { path: 'products/:productId', element: <Gate dest="products"><ProductEditor /></Gate> },
           { path: 'content', element: <Gate dest="content"><Scenes /></Gate> },
           { path: 'content/scenes/:postId', element: <Gate dest="content"><SceneEditor /></Gate> },
+          { path: 'content/stories', element: <Gate dest="content"><Stories /></Gate> },
           deferred('content/*', 'content'),
           deferred('inbox/*', 'inbox'),
           deferred('insights/*', 'insights'),

@@ -62,24 +62,21 @@ function StockCard({ detail, variant, onChange, onReload, timezone }: SectionPro
   const action = useAction();
   const [open, setOpen] = useState<'set' | 'history' | null>(null);
   const [quantity, setQuantity] = useState(String(variant.quantity));
-  const [local, setLocal] = useState<string | undefined>();
   const canSet = can(detail, 'ADJUST_STOCK');
   const canConfirm = can(detail, 'CONFIRM_STOCK');
   const titleId = `stock-${variant.id}`;
 
   function show(next: 'set' | 'history') {
     action.reset();
-    setLocal(undefined);
     setQuantity(String(variant.quantity));
     setOpen(next);
   }
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!/^\d+$/.test(quantity.trim())) {
-      setLocal(t('field_error.STOCK_INVALID'));
+      action.fail({ quantity: 'STOCK_INVALID' });
       return;
     }
-    setLocal(undefined);
     const next = await action.run(() => run('inventory.set', { variant_id: variant.id, stock_version: variant.stock_version, quantity: Number(quantity.trim()) }));
     if (next) {
       onChange(next);
@@ -122,7 +119,7 @@ function StockCard({ detail, variant, onChange, onReload, timezone }: SectionPro
       <Dialog open={open === 'set'} onClose={() => setOpen(null)} title={t('stock.update_title', { variant: variant.summary })}>
         <form onSubmit={(e) => void save(e)} noValidate className="stack">
           <ActionProblem action={action} onReload={() => { onReload(); setOpen(null); }} />
-          <Field id="quantity" label={t('stock.quantity_label')} hint={t('stock.quantity_hint')} error={local ?? action.fields['quantity']}>
+          <Field id="quantity" label={t('stock.quantity_label')} hint={t('stock.quantity_hint')} error={action.fields['quantity']}>
             {(control) => <input {...control} className="text-input" type="text" inputMode="numeric" value={quantity} onChange={(e) => setQuantity(e.target.value)} />}
           </Field>
           <div className="actions">

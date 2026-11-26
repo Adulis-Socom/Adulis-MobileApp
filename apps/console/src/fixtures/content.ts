@@ -6,10 +6,12 @@ import type {
   SceneTab,
   SceneTag,
   SceneVisibility,
+  StoryState,
+  StoryView,
 } from '../contracts/gap-sc-content';
 import type { CallContext } from '../transport/port';
 import type { Catalogue } from './catalogue';
-import { conflict, DAY_MS, invalid, need, needCap, notFound, replayable, type Authz, type Handlers, type Kit } from './kit';
+import { conflict, DAY_MS, HOUR_MS, invalid, need, needCap, notFound, replayable, type Authz, type Handlers, type Kit } from './kit';
 
 /**
  * Fixture Content (GAP-SC-11): Scene Posts. DEVELOPMENT ONLY. A Scene's visibility is RESOLVED on every read from the
@@ -48,14 +50,36 @@ interface SceneRec {
   moderation: ModerationView | null;
 }
 
-type SceneOps = 'scenes.list' | 'scenes.create' | 'scenes.get' | 'scenes.update' | 'scenes.media.set' | 'scenes.publish' | 'scenes.archive' | 'scenes.tag_candidates.get';
+type ContentOps =
+  | 'scenes.list'
+  | 'scenes.create'
+  | 'scenes.get'
+  | 'scenes.update'
+  | 'scenes.media.set'
+  | 'scenes.publish'
+  | 'scenes.archive'
+  | 'scenes.tag_candidates.get'
+  | 'stories.list'
+  | 'stories.targets.get'
+  | 'stories.create'
+  | 'stories.withdraw';
+
+/** The fixed public lifetime of a Story, founder-approved (STORY contract). Authored by the SERVER; the Console never computes or extends it. */
+export const STORY_LIFETIME_MS = 24 * HOUR_MS;
+
+interface StoryRec {
+  id: string;
+  version: number;
+  state: Exclude<StoryState, 'EXPIRED'>;
+  photo_name: string;
+  text: string | null;
+  target: { kind: 'PRODUCT' | 'SCENE'; id: string } | null;
+  publishedAt: number;
+  moderation: ModerationView | null;
+}
 
 export interface Content {
-  readonly handlers: Handlers<SceneOps>;
-  /** Current public eligibility of one Scene, for Stories that link to it. Undefined when the Scene does not exist for this Seller. */
-  sceneFact(sellerId: string, sceneId: string): { readonly id: string; readonly caption: string; readonly public: boolean } | undefined;
-  /** Scenes a Story may link to right now: published, public, not moderated. */
-  linkableScenes(sellerId: string): readonly { readonly id: string; readonly label: string }[];
+  readonly handlers: Handlers<ContentOps>;
 }
 
 const BLOCKING_MODERATION = new Set(['RESTRICTED', 'REMOVED']);
@@ -206,7 +230,121 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
     return { a, s };
   }
 
+  // ---- Stories (GAP-SC-12) ---------------------------------------------------------------------------------------------
+  const storyData = new Map<string, StoryRec[]>();
+  const storyCreated = new Map<string, StoryView>();
+  function storySeed(sellerId: string): StoryRec[] {
+    if (sellerId !== 'fx_seller_alem') return [];
+    const story = (n: number, hoursAgo: number, text: string | null, target: StoryRec['target'], state: StoryRec['state'] = 'PUBLISHED', moderation: ModerationView | null = null): StoryRec => ({
+      id: `fx_story_alem_${n}`,
+      version: 1,
+      state,
+      photo_name: `story-${n}.jpg`,
+      text,
+      target,
+      publishedAt: kit.now() - hoursAgo * HOUR_MS,
+      moderation,
+    });
+    // Newest first. 1h, 2h and 20h are inside the lifetime; 30h is past it.
+    return [
+      story(6, 3, 'Held back for review', null, 'RESTRICTED', { state: 'RESTRICTED', reason_code: 'POLICY_REVIEW', updated_at: kit.iso(kit.now() - 2 * HOUR_MS) }),
+      story(5, 1, 'Evening edit', { kind: 'SCENE', id: 'fx_scene_alem_2' }),
+      story(4, 5, 'Sold out already', null, 'WITHDRAWN'),
+      story(3, 30, 'Last weekend only', null),
+      story(2, 20, null, null),
+      story(1, 2, 'New arrivals', { kind: 'PRODUCT', id: 'fx_prod_alem_4' }),
+    ];
+  }
+  const storiesOf = (sellerId: string): StoryRec[] => {
+    let list = storyData.get(sellerId);
+    if (!list) {
+      list = storySeed(sellerId);
+      storyData.set(sellerId, list);
+    }
+    return list;
+  };
+  const publicScene = (sellerId: string, id: string): boolean => {
+    const s = scenesOf(sellerId).find((x) => x.id === id);
+    return s !== undefined && s.state === 'PUBLISHED' && resolve(sellerId, s).visibility === 'PUBLIC';
+  };
+  /** Product link: published and still available. A link that stops being eligible suppresses the Story: fail closed (STORY contract). */
+  function targetOk(sellerId: string, target: StoryRec['target']): boolean {
+    if (target === null) return true;
+    if (target.kind === 'PRODUCT') {
+      const f = catalogue.fact(sellerId, target.id);
+      return f !== undefined && f.state === 'PUBLISHED' && f.availability !== 'NOT_AVAILABLE';
+    }
+    return publicScene(sellerId, target.id);
+  }
+  const targetLabel = (sellerId: string, target: NonNullable<StoryRec['target']>): string =>
+    target.kind === 'PRODUCT' ? (catalogue.fact(sellerId, target.id)?.title ?? '') : (scenesOf(sellerId).find((x) => x.id === target.id)?.caption ?? '');
+  function storyView(sellerId: string, s: StoryRec, a: Authz): StoryView {
+    const expiresAt = s.publishedAt + STORY_LIFETIME_MS;
+    const expired = s.state === 'PUBLISHED' && kit.now() >= expiresAt;
+    const state: StoryState = expired ? 'EXPIRED' : s.state;
+    const reason = state !== 'PUBLISHED' ? state : !targetOk(sellerId, s.target) ? 'TARGET_NOT_ELIGIBLE' : null;
+    return {
+      seller_id: sellerId,
+      id: s.id,
+      version: s.version,
+      state,
+      photo_name: s.photo_name,
+      text: s.text,
+      target: s.target === null ? null : { kind: s.target.kind, id: s.target.id, label: targetLabel(sellerId, s.target) },
+      published_at: kit.iso(s.publishedAt),
+      expires_at: kit.iso(expiresAt),
+      public: reason === null,
+      not_public_reason: reason,
+      moderation: s.moderation,
+      allowed_actions: a.caps.has('content.write') && state === 'PUBLISHED' ? ['WITHDRAW'] : [],
+    };
+  }
+
   const handlers: Content['handlers'] = {
+    'stories.list': (_i, ctx) => {
+      const a = kit.authz(ctx);
+      need(a, 'content');
+      return { seller_id: a.sellerId, items: storiesOf(a.sellerId).map((s) => storyView(a.sellerId, s, a)), allowed_actions: a.caps.has('content.write') ? ['CREATE'] : [] };
+    },
+    'stories.targets.get': (_i, ctx) => {
+      const a = kit.authz(ctx);
+      need(a, 'content');
+      return {
+        seller_id: a.sellerId,
+        products: catalogue.facts(a.sellerId).filter((f) => f.state === 'PUBLISHED' && f.availability !== 'NOT_AVAILABLE').map((f) => ({ id: f.id, label: f.title })),
+        scenes: scenesOf(a.sellerId).filter((s) => publicScene(a.sellerId, s.id)).map((s) => ({ id: s.id, label: s.caption })),
+      };
+    },
+    'stories.create': (input, ctx) => {
+      const a = kit.authz(ctx);
+      need(a, 'content');
+      needCap(a, 'content.write');
+      return replayable(storyCreated, ctx, () => {
+        const errors: Record<string, string> = {};
+        if (input.photo_name.trim() === '') errors['photo'] = 'MEDIA_FILE_REQUIRED';
+        else if (!input.content_type.startsWith('image/')) errors['photo'] = 'MEDIA_REJECTED'; // exactly one still photo: no video, no other file
+        // Same Seller, same Market, publicly eligible. A foreign or unknown id is just "not eligible": existence is not disclosed.
+        if (input.target !== null && !targetOk(a.sellerId, input.target)) errors['target'] = 'TARGET_NOT_ELIGIBLE';
+        if (Object.keys(errors).length > 0) throw invalid(errors);
+        const text = input.text === null || input.text.trim() === '' ? null : input.text;
+        const s: StoryRec = { id: kit.next('fx_story'), version: 1, state: 'PUBLISHED', photo_name: input.photo_name, text, target: input.target, publishedAt: kit.now(), moderation: null };
+        storiesOf(a.sellerId).unshift(s);
+        return storyView(a.sellerId, s, a);
+      });
+    },
+    'stories.withdraw': ({ story_id, version }, ctx) => {
+      const a = kit.authz(ctx);
+      need(a, 'content');
+      needCap(a, 'content.write');
+      const s = storiesOf(a.sellerId).find((x) => x.id === story_id);
+      if (!s) throw notFound();
+      if (s.version !== version) throw conflict();
+      // An expired or already ended Story cannot be acted on, and withdrawal is final: nothing here brings it back.
+      if (!storyView(a.sellerId, s, a).allowed_actions.includes('WITHDRAW')) throw conflict();
+      s.state = 'WITHDRAWN';
+      s.version += 1;
+      return storyView(a.sellerId, s, a);
+    },
     'scenes.list': ({ tab, cursor }, ctx) => {
       const a = kit.authz(ctx);
       need(a, 'content');
@@ -295,13 +433,5 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
 
   return {
     handlers,
-    sceneFact: (sellerId, sceneId) => {
-      const s = scenesOf(sellerId).find((x) => x.id === sceneId);
-      return s ? { id: s.id, caption: s.caption, public: s.state === 'PUBLISHED' && resolve(sellerId, s).visibility === 'PUBLIC' } : undefined;
-    },
-    linkableScenes: (sellerId) =>
-      scenesOf(sellerId)
-        .filter((s) => s.state === 'PUBLISHED' && resolve(sellerId, s).visibility === 'PUBLIC')
-        .map((s) => ({ id: s.id, label: s.caption })),
   };
 }

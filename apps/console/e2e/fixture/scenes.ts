@@ -320,6 +320,38 @@ export const SCENES: readonly Scene[] = [
       await expect(p.getByRole('heading', { level: 3, name: 'Moderation' })).toBeVisible();
     },
   },
+  {
+    name: 'stories-list',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/content/stories`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Seller Stories' })).toBeVisible();
+      await expect(p.getByText('Held back for review')).toBeVisible();
+    },
+  },
+  {
+    name: 'story-compose',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/content/stories`);
+      await p.getByRole('button', { name: 'Add a Story' }).click();
+      await expect(p.getByRole('heading', { level: 2, name: 'New Story' })).toBeVisible();
+    },
+  },
+  {
+    name: 'story-preview',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/content/stories`);
+      await p.getByRole('button', { name: 'Add a Story' }).click();
+      await p.getByLabel('Photo', { exact: true }).setInputFiles({ name: 'rain.png', mimeType: 'image/png', buffer: Buffer.from('demonstration photo bytes') });
+      await p.getByLabel('Text', { exact: true }).fill('Fresh stock');
+      await p.getByRole('radio', { name: 'A Product' }).check();
+      await p.getByLabel('Product', { exact: true }).selectOption({ label: 'Canvas backpack' });
+      await p.getByRole('button', { name: 'Preview Story' }).click();
+      await expect(p.getByText('This Story will link to the Product: Canvas backpack.')).toBeVisible();
+    },
+  },
 ];
 
 export { CODE };

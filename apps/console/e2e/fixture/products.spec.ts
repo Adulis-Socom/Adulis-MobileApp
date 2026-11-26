@@ -188,8 +188,9 @@ test.describe('SC-FE-04: Inventory keeps two distinct controls and a ledger', ()
     await page.getByLabel('New quantity in stock').fill('0');
     await page.getByRole('button', { name: 'Save stock', exact: true }).click();
     await expect(page.getByText('In stock: 0')).toBeVisible();
-    await expect(page.locator('.badges').first()).toContainText('Published');
-    await expect(page.locator('.badges').first()).toContainText('Not Available');
+    const productBadges = page.getByRole('main').locator('.badges').first();
+    await expect(productBadges).toContainText('Published');
+    await expect(productBadges).toContainText('Not Available');
   });
 });
 

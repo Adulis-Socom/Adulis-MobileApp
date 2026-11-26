@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { FieldError } from '../../components/Form';
 import { codeText, t } from '../../i18n/t';
-import { asTransportError, type TransportError } from '../../transport/port';
+import { asTransportError, TransportError } from '../../transport/port';
 
 /**
  * One write in flight and what came back. A validation failure becomes a summary of anchor links plus a message per field
@@ -18,6 +18,8 @@ export interface ActionApi {
   readonly conflict: boolean;
   /** Runs `fn`; resolves with its result, or undefined after recording the failure. */
   run<T>(fn: () => Promise<T>): Promise<T | undefined>;
+  /** Record a validation failure found before anything was sent: field id to a `field_error.*` code. Same summary, same field messages, same focus. */
+  fail(fields: Readonly<Record<string, string>>): void;
   reset(): void;
 }
 
@@ -45,6 +47,10 @@ export function useAction(): ActionApi {
     }
   }, []);
   const reset = useCallback(() => setError(null), []);
+  const fail = useCallback((fields: Readonly<Record<string, string>>) => {
+    setError(new TransportError('VALIDATION_FAILED', { fields: { ...fields } }));
+    setToken((n) => n + 1);
+  }, []);
 
   const { fields, summary } = useMemo(() => {
     const map: Record<string, string> = {};
@@ -52,5 +58,5 @@ export function useAction(): ActionApi {
     return { fields: map, summary: Object.entries(map).map(([fieldId, message]) => ({ fieldId, message })) };
   }, [error]);
 
-  return { busy, error, fields, summary, token, conflict: error?.code === 'CONFLICT', run, reset };
+  return { busy, error, fields, summary, token, conflict: error?.code === 'CONFLICT', run, fail, reset };
 }

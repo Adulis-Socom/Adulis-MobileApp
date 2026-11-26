@@ -206,8 +206,8 @@ const ROLE_CAPS: Record<SellerRole, string[]> = {
   ANALYST: [],
   CAMPAIGN_MANAGER: ['content.write'],
 };
-/** Brief areas whose work order is built (SC-FE-04 Products and Inventory, SC-FE-05 Scenes). The rest stay DEFERRED. */
-const BUILT_AREAS = new Set(['PRODUCTS', 'INVENTORY', 'SCENES']);
+/** Brief areas whose work order is built (SC-FE-04 Products and Inventory, SC-FE-05 Scenes, SC-FE-05S Stories). The rest stay DEFERRED. */
+const BUILT_AREAS = new Set(['PRODUCTS', 'INVENTORY', 'SCENES', 'STORIES']);
 const VIEW_PRIORITY: [SellerRole, RoleView][] = [
   ['OWNER', 'OWNER_ADMIN'], ['ADMIN', 'OWNER_ADMIN'], ['SALES_SUPPORT', 'SALES_SUPPORT'],
   ['INVENTORY', 'INVENTORY'], ['CAMPAIGN_MANAGER', 'CAMPAIGN_MANAGER'], ['ANALYST', 'ANALYST'],
@@ -248,6 +248,8 @@ export interface World {
     /** Remove the signed-in account's relationship with a Seller, as if it left the team mid-session. */
     revokeMembership(sellerId: string): void;
     callLog(): readonly { op: string; sellerId: string | null }[];
+    /** Move the fixture server's clock forward by `ms`. Development only: the real server owns time. */
+    skewClock(ms: number): void;
   };
 }
 
@@ -266,7 +268,9 @@ export function createWorld(options: WorldOptions): World {
   let sessionRevoked = false;
   let counter = 0;
   const iso = (ms: number): string => new Date(ms).toISOString();
-  const nowMs = options.now;
+  // Fixture-only clock skew (hook below): lets a test move past a Story's 24-hour lifetime without waiting.
+  let skew = 0;
+  const nowMs = (): number => options.now() + skew;
 
   function persona(): Persona {
     if (session === null || sessionRevoked) {
@@ -603,6 +607,9 @@ export function createWorld(options: WorldOptions): World {
         if (who) who.memberships = who.memberships.filter((m) => m.sellerId !== sellerId);
       },
       callLog: () => log,
+      skewClock(ms) {
+        skew += ms;
+      },
     },
   };
 }

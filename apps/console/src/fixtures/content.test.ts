@@ -50,7 +50,8 @@ describe('SC-FE-05 fixture Scenes: lifecycle, visibility and moderation are thre
   it('keeps publication, visibility and moderation apart, and gives each Private Scene its own typed reason', async () => {
     const { world } = setup();
     await signIn(world, 'fx_acct_owner');
-    const all = (await list(world, 'ALL')).items;
+    const firstPage = await list(world, 'ALL');
+    const all = [...firstPage.items, ...(await list(world, 'ALL', firstPage.next_cursor)).items];
     const by = (n: number) => all.find((s) => s.id === `fx_scene_alem_${n}`);
     expect(by(2)).toMatchObject({ publication_state: 'PUBLISHED', visibility: 'PRIVATE', private_reason: 'ALL_TAGGED_PRODUCTS_OUT_OF_STOCK', moderation: null, available_tag_count: 0, tag_count: 1 });
     expect(by(6)).toMatchObject({ publication_state: 'PUBLISHED', visibility: 'PRIVATE', private_reason: 'ALL_TAGGED_PRODUCTS_UNAVAILABLE' });

@@ -246,7 +246,7 @@ describe('fixture world: readiness, admission and Seller creation', () => {
     const world = fresh();
     await signIn(world, 'fx_acct_owner');
     const brief = await world.handle('seller.home.get', {}, { sellerId: 'fx_seller_alem' });
-    const built = ['NOTIFICATIONS', 'PRODUCTS', 'INVENTORY', 'SCENES'];
+    const built = ['NOTIFICATIONS', 'PRODUCTS', 'INVENTORY', 'SCENES', 'STORIES'];
     expect(brief.areas.filter((a) => !built.includes(a.key)).every((a) => a.state !== 'AVAILABLE')).toBe(true);
     expect(brief.areas.filter((a) => built.includes(a.key)).every((a) => a.state === 'AVAILABLE')).toBe(true);
     expect(JSON.stringify(brief)).not.toMatch(/revenue|gmv|payment|paid|order|delivery/i);

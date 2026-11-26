@@ -22,7 +22,6 @@ function VariantRow({ detail, variant, onChange, onReload }: SectionProps & { va
   const action = useAction();
   const editable = can(detail, 'EDIT_VARIANT');
   const [price, setPrice] = useState(variant.price_minor === null ? '' : minorToInput(variant.price_minor, detail.currency));
-  const [local, setLocal] = useState<string | undefined>();
   const fieldId = `variant-${variant.id}-price`;
 
   async function update(change: { price_minor: number | null } | { active: boolean }) {
@@ -33,10 +32,9 @@ function VariantRow({ detail, variant, onChange, onReload }: SectionProps & { va
     event.preventDefault();
     const minor = parsePrice(price, detail.currency);
     if (minor === undefined) {
-      setLocal(t('variants.price_invalid'));
+      action.fail({ [fieldId]: 'PRICE_INVALID' });
       return;
     }
-    setLocal(undefined);
     void update({ price_minor: minor });
   }
 
@@ -54,7 +52,7 @@ function VariantRow({ detail, variant, onChange, onReload }: SectionProps & { va
         {editable ? (
           <form onSubmit={savePrice} noValidate className="stack">
             <ActionProblem action={action} onReload={onReload} />
-            <Field id={fieldId} label={t('variants.price_label', { currency: detail.currency })} error={local ?? action.fields[fieldId]}>
+            <Field id={fieldId} label={t('variants.price_label', { currency: detail.currency })} error={action.fields[fieldId]}>
               {(control) => <input {...control} className="text-input" type="text" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />}
             </Field>
             <div className="actions">
@@ -80,16 +78,14 @@ function AddVariant({ detail, attributes, onChange, onReload }: AttributeSection
   const defs = (attributes?.attributes ?? []).filter((d) => d.scope === 'VARIANT');
   const [options, setOptions] = useState<Record<string, string>>({});
   const [price, setPrice] = useState('');
-  const [local, setLocal] = useState<string | undefined>();
 
   async function add(event: FormEvent) {
     event.preventDefault();
     const minor = parsePrice(price, detail.currency);
     if (minor === undefined) {
-      setLocal(t('variants.price_invalid'));
+      action.fail({ price: 'PRICE_INVALID' });
       return;
     }
-    setLocal(undefined);
     const chosen = Object.fromEntries(Object.entries(options).filter(([, v]) => v !== ''));
     const next = await action.run(() => run('variants.create', { product_id: detail.id, version: detail.version, options: chosen, price_minor: minor }));
     if (next) {
@@ -131,7 +127,7 @@ function AddVariant({ detail, attributes, onChange, onReload }: AttributeSection
           ))}
         </Group>
       )}
-      <Field id="price" label={t('variants.price_label', { currency: detail.currency })} error={local ?? action.fields['price']}>
+      <Field id="price" label={t('variants.price_label', { currency: detail.currency })} error={action.fields['price']}>
         {(control) => <input {...control} className="text-input" type="text" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />}
       </Field>
       <div className="actions">

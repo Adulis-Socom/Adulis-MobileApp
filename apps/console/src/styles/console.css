@@ -1240,6 +1240,7 @@ button.marker {
   box-shadow: 0 0 0 3px var(--adu-color-surface), 0 0 0 5px var(--adu-color-primary);
 }
 
+.btn[aria-current='page'],
 .btn[aria-pressed='true'] {
   background: var(--adu-color-primary);
   color: var(--adu-color-primary-text);

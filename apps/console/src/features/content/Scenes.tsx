@@ -11,6 +11,7 @@ import { useSellerCommand } from '../../seller/useSellerCommand';
 import { useSellerQuery } from '../../seller/useSellerQuery';
 import { ActionProblem } from '../shared/ActionProblem';
 import { useAction } from '../shared/useAction';
+import { ContentNav } from './ContentNav';
 import { PrivateReason, SceneBadges } from './sceneBadges';
 
 /** The content-list tabs of CONSOLE-02 S59, in that order. */
@@ -68,6 +69,7 @@ export function Scenes() {
     <>
       <PageTitle title={t('scenes.title')}>{t('scenes.title')}</PageTitle>
       <p className="lead">{t('scenes.lead')}</p>
+      <ContentNav />
       <div role="group" aria-label={t('scenes.tabs_label')} className="actions">
         {TABS.map((id) => (
           <button key={id} type="button" className="btn btn-quiet" aria-pressed={tab === id} onClick={() => pick(id)}>

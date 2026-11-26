@@ -75,8 +75,9 @@ test.describe('SC-FE-05: the Scenes inventory', () => {
 
   test('"Add a Scene" is the one lime action, and only for a role that may create', async ({ page }) => {
     await openContent(page, PHONE.owner);
-    expect(await limeCount(page)).toBe(1);
+    // the button depends on what the server says this account may do, so wait for it before counting
     await expect(page.getByRole('button', { name: 'Add a Scene' })).toBeVisible();
+    expect(await limeCount(page)).toBe(1);
     await openContent(page, PHONE.campaign);
     await expect(page.getByRole('button', { name: 'Add a Scene' })).toBeVisible();
     await atSellerHome(page, PHONE.inventory, SELLER.alem.name);
@@ -147,7 +148,7 @@ test.describe('SC-FE-05: the Scene editor', () => {
     await marker.focus();
     await page.keyboard.press('Delete');
     await expect(marker).toHaveCount(0);
-    await page.getByRole('button', { name: 'Add a hotspot for Linen wrap dress' }).click();
+    await page.getByRole('button', { name: 'Add a hotspot for Linen wrap dress', exact: true }).click();
     await page.getByRole('button', { name: 'Remove hotspot 1' }).click();
     await expect(page.getByText('No hotspots for Linen wrap dress yet.')).toBeVisible();
     await page.getByRole('button', { name: 'Remove Cotton shirt dress from this Scene' }).click();
