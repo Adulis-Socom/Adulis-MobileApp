@@ -776,7 +776,7 @@ export const enConsole = {
   'action.saved': 'Saved.',
 
   // ---- Batch 02C closure (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
-  'error.uncertain': 'We could not confirm whether this was saved. You can try again: it will not be done twice.',
+  'error.uncertain': 'We could not confirm whether this was saved. Check the current status before trying again.',
   'private_reason.ALL_TAGGED_PRODUCTS_UNAVAILABLE': 'None of the Products tagged in this Scene are currently available.',
 
   // ---- Batch 02C closure (UI) (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
@@ -908,10 +908,11 @@ export const enConsole = {
   'inbox.sending': 'Sending...',
   'inbox.send': 'Send reply',
   'inbox.read_only': 'Your role can read conversations but not reply to them.',
-  'field_error.MESSAGE_BODY_REQUIRED': 'Write a message before sending.',
-  'field_error.MESSAGE_PRODUCT_NOT_IN_SCENE': 'This Product is not tagged in the chosen Scene.',
-  'field_error.CONTEXT_SCENE_NOT_AVAILABLE': 'This Scene cannot be used right now.',
-  'field_error.CONTEXT_PRODUCT_NOT_AVAILABLE': 'This Product cannot be used right now.',
+  'field_error.MESSAGE_EMPTY': 'Write a message before sending.',
+  'field_error.MESSAGE_PRODUCT_NOT_IN_SCENE_POST': 'This Product is not tagged in the chosen Scene.',
+  'field_error.MESSAGE_SCENE_POST_INVALID': 'This Scene cannot be used right now.',
+  'field_error.MESSAGE_PRODUCT_POST_INVALID': 'This Product cannot be used right now.',
+  'field_error.MESSAGE_CONTEXT_CONFLICT': 'Choose the Scene again before sending.',
 
   // ---- SC-FE-09 Trust and Reviews (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
   'trust.lead': 'Your Trust level, and the reviews Buyers have written about your Products and your service.',

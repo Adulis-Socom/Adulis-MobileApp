@@ -888,10 +888,11 @@ export const amConsole: { readonly [K in keyof typeof enConsole]: AmEntry } = {
   'inbox.sending': PENDING,
   'inbox.send': PENDING,
   'inbox.read_only': PENDING,
-  'field_error.MESSAGE_BODY_REQUIRED': PENDING,
-  'field_error.MESSAGE_PRODUCT_NOT_IN_SCENE': PENDING,
-  'field_error.CONTEXT_SCENE_NOT_AVAILABLE': PENDING,
-  'field_error.CONTEXT_PRODUCT_NOT_AVAILABLE': PENDING,
+  'field_error.MESSAGE_EMPTY': PENDING,
+  'field_error.MESSAGE_PRODUCT_NOT_IN_SCENE_POST': PENDING,
+  'field_error.MESSAGE_SCENE_POST_INVALID': PENDING,
+  'field_error.MESSAGE_PRODUCT_POST_INVALID': PENDING,
+  'field_error.MESSAGE_CONTEXT_CONFLICT': PENDING,
 
   // ---- SC-FE-09 Trust and Reviews ----
   'trust.lead': PENDING,
