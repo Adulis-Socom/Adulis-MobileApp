@@ -100,7 +100,7 @@ function AddVariant({ detail, attributes, onChange, onReload }: AttributeSection
 
   return (
     <form onSubmit={(e) => void add(e)} noValidate className="stack">
-      <h3>{t('variants.add_title')}</h3>
+      <h3 className="subhead">{t('variants.add_title')}</h3>
       <ActionProblem action={action} onReload={onReload} />
       {attributes !== null && attributes.definition_status !== 'DEFINED' ? (
         <p className="notice">

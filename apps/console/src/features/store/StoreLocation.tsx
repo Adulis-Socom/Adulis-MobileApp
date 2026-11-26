@@ -54,7 +54,7 @@ function Search({ onPick, onPreview, previewed, busy }: { onPick: (c: LocationCa
       <h3>{t('store.location_search_title')}</h3>
       <form
         role="search"
-        className="row"
+        className="row search-row"
         onSubmit={(e: FormEvent) => {
           e.preventDefault();
           setQuery(draft);

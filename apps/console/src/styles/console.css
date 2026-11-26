@@ -1471,7 +1471,8 @@ legend {
 
 /* Scene editor: a sub-section heading is heavier than a field label; the search is one row; the finder sits above what it feeds */
 .subhead {
-  font-size: var(--adu-font-size-lg);
+  font-size: var(--adu-font-size-xl);
+  font-weight: var(--adu-font-weight-bold);
 }
 
 .search-row {

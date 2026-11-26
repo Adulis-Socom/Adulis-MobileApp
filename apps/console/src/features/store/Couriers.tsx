@@ -111,8 +111,8 @@ export function Couriers() {
   return (
     <>
       <PageTitle title={t('couriers.page')}>{t('couriers.page')}</PageTitle>
-      <p className="lead">{t('couriers.lead')}</p>
       <StoreNav />
+      <p className="lead">{t('couriers.lead')}</p>
       {state.status === 'error' ? (
         <StatePanel kind="danger" alert title={t('couriers.error_title')} actions={<button type="button" className="btn btn-primary" onClick={retry}>{t('state.retry')}</button>}>
           <p>{t('state.transport_error_body')}</p>

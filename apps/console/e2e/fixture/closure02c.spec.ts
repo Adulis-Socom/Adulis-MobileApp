@@ -131,8 +131,8 @@ test.describe('Store: company details, a phone-width section picker, the map pre
     await atSellerHome(page, PHONE.states, SELLER.eden.name);
     await goInApp(page, `/s/${SELLER.eden.id}/store`);
     const nav = page.getByRole('navigation', { name: 'Store settings', exact: true });
-    await expect(nav.getByRole('link', { name: 'Company details' })).toBeVisible();
-    await nav.getByRole('link', { name: 'Company details' }).click();
+    await expect(nav.getByRole('link', { name: 'Company', exact: true })).toBeVisible();
+    await nav.getByRole('link', { name: 'Company', exact: true }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Company details' })).toBeVisible();
     await expect(page.getByText('does not mean Adulis has verified the company')).toBeVisible();
     await expect(page.getByText('Adulis does not ask for a Government ID here.')).toBeVisible();

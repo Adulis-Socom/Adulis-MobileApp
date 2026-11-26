@@ -43,12 +43,13 @@ function History({ variantId, timezone }: { variantId: string; timezone: string 
 
 function Confidence({ variant, timezone }: { variant: VariantView; timezone: string | undefined }) {
   const c = variant.confidence;
-  const confirmed = c.last_confirmed_at === null ? t('stock.never_confirmed_sentence') : t('stock.last_confirmed_sentence', { when: formatInstant(c.last_confirmed_at, timezone) });
+  // A never-confirmed state already says so in its own word; a second sentence would only repeat it.
+  const confirmed = c.last_confirmed_at === null ? '' : ` ${t('stock.last_confirmed_sentence', { when: formatInstant(c.last_confirmed_at, timezone) })}`;
   // The effect is shown per Variant only when it says something; "none defined yet" is said once for the whole section.
   const effect = c.effect_code === 'NONE_DEFINED' ? null : (codeText('confidence.effect', c.effect_code) ?? c.effect_code);
   return (
     <>
-      <p className="ledger-meta">{t('stock.confidence_line', { state: label('confidence', c.state) })} {confirmed}</p>
+      <p className="ledger-meta">{t('stock.confidence_line', { state: label('confidence', c.state) })}{confirmed}</p>
       <details className="more">
         <summary>{t('stock.details')}</summary>
         <dl className="facts">
