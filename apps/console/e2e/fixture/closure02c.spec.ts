@@ -168,15 +168,16 @@ test.describe('Scene and Story: pointer dragging and a link that stops being eli
     await goInApp(page, `/s/${SELLER.alem.id}/content/scenes/fx_scene_alem_1`);
     const marker = page.getByRole('button', { name: /^Hotspot 1 for Linen wrap dress/ });
     await expect(marker).toBeVisible();
-    const stage = page.locator('.stage').first();
+    const stage = marker.locator('xpath=ancestor::div[contains(@class, "stage")][1]'); // the stage that holds THIS marker
+    await stage.scrollIntoViewIfNeeded();
     const box = await stage.boundingBox();
     const from = await marker.boundingBox();
     if (!box || !from) throw new Error('the stage and the marker must have a box');
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
-    await page.mouse.move(box.x + box.width * 0.8, box.y + box.height * 0.2, { steps: 6 });
+    await page.mouse.move(box.x + box.width * 0.8, box.y + box.height * 0.3, { steps: 6 });
     await page.mouse.up();
-    await expect(page.getByRole('button', { name: /^Hotspot 1 for Linen wrap dress, (79|80|81) percent across, (19|20|21) percent down$/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Hotspot 1 for Linen wrap dress, (79|80|81) percent across, (29|30|31) percent down$/ })).toBeVisible();
     await expect(page.getByLabel('Hotspot 1: percent across')).toHaveValue(/^(79|80|81)$/);
     await expect(page.getByText('You have changes that are not saved yet.')).toBeVisible();
     // the keyboard still moves the same marker
