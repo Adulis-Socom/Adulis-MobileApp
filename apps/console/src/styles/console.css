@@ -816,8 +816,15 @@ legend {
 
 .state-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: var(--adu-space-smd);
+}
+
+/* Where the title cannot get a line of its own beside the icon (large text on a phone) it drops below the icon and
+   takes the full width, instead of being squeezed until a word breaks (restricte-d, connecte-d). */
+.state-head > :is(h1, h2) {
+  flex: 1 1 12rem;
 }
 
 .state-head .icon {
