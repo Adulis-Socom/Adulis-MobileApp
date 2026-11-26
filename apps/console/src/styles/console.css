@@ -1496,3 +1496,9 @@ legend {
   margin-bottom: var(--adu-space-md);
 }
 
+/* a long unbroken identifier or word wraps instead of widening the row (200% text, Amharic) */
+.ledger-title,
+.ledger-meta {
+  overflow-wrap: anywhere;
+}
+

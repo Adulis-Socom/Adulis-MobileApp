@@ -70,8 +70,11 @@ const NEXT: Record<SimAction, SimBucket> = { START_PREPARING: 'PREPARING', MARK_
 export function apply(orders: readonly SimOrder[], role: SimRole, id: string, version: number, action: SimAction): readonly SimOrder[] {
   const order = orders.find((o) => o.id === id);
   if (!order) throw new SimRefused('NOT_FOUND');
-  if (!allowedActions(role, order).includes(action)) throw new SimRefused('NOT_ALLOWED');
+  // The role is checked first, then the version, THEN whether the step still applies: an Order that has moved on since this screen
+  // read it is a stale write (CONSOLE-02 S28), not a forbidden one, and the Seller must be told to reload.
+  if (!canPrepare(role)) throw new SimRefused('NOT_ALLOWED');
   if (order.version !== version) throw new SimConflict();
+  if (!allowedActions(role, order).includes(action)) throw new SimRefused('NOT_ALLOWED');
   return orders.map((o) => (o.id === id ? { ...o, version: o.version + 1, bucket: NEXT[action] } : o));
 }
 
