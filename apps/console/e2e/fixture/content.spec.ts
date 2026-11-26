@@ -30,9 +30,9 @@ test.describe('SC-FE-05: the Scenes inventory', () => {
     await tab(page, 'Private').click();
     await expect(tab(page, 'Private')).toHaveAttribute('aria-pressed', 'true');
     await expect(sceneList(page).getByRole('listitem')).toHaveCount(2);
-    // the one sentence the design quotes, for the stock reason; an honest neutral line for a reason with no approved sentence
+    // the sentence the design quotes, for stock depletion alone; the approved general sentence for a withdrawn, restricted or mixed cause
     await expect(sceneList(page).getByRole('listitem').filter({ hasText: 'The silk slip dress, evening edit' })).toContainText(OUT_OF_STOCK);
-    await expect(sceneList(page).getByRole('listitem').filter({ hasText: 'The old kaftan, styled two ways' })).toContainText('This Scene is private for a reason this version cannot describe yet.');
+    await expect(sceneList(page).getByRole('listitem').filter({ hasText: 'The old kaftan, styled two ways' })).toContainText('None of the Products tagged in this Scene are currently available.');
     for (const row of await sceneList(page).getByRole('listitem').all()) {
       await expect(row).toContainText('Published');
       await expect(row).toContainText('Private');

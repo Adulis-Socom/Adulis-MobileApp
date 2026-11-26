@@ -5,12 +5,14 @@ import { useSellerCommand } from '../../seller/useSellerCommand';
 import { Section } from '../products/Section';
 import { ActionProblem } from '../shared/ActionProblem';
 import { useAction } from '../shared/useAction';
+import { useDirty } from '../shared/dirty';
 import { StoreFrame, type StoreProps } from './StoreFrame';
 
 function Body({ view, onChange, onReload, editable }: StoreProps) {
   const run = useSellerCommand();
   const action = useAction(true);
   const [selected, setSelected] = useState<readonly string[]>(view.coverage.selected);
+  useDirty('coverage', JSON.stringify([...selected].sort()) !== JSON.stringify([...view.coverage.selected].sort()));
 
   async function save(event: FormEvent) {
     event.preventDefault();

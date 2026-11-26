@@ -6,9 +6,10 @@
  * GAP-SC-11 Scene Post authoring: image, caption, same-Seller Product tags, hotspots, publish blockers, visibility
  * GAP-SC-12 Seller Stories: one photo, optional text, zero or one same-Seller target, server-authored 24-hour lifetime
  *
- * Conflicts RB-B02B-09 (report 17): the code for "zero tags" is PRODUCT_TAG_REQUIRED in SCN and SCENE_PRODUCT_TAG_REQUIRED in CATINV, and the
- * Private reason is ALL_TAGGED_PRODUCTS_UNAVAILABLE in SCN and ALL_TAGGED_PRODUCTS_OUT_OF_STOCK in CON/CATINV. These shapes
- * carry an OPAQUE code: the Console branches on neither spelling for behaviour, only for the one sentence CON quotes.
+ * Founder rulings (Batch 02C): PRODUCT_TAG_REQUIRED is the canonical zero-tag blocker (SCENE_PRODUCT_TAG_REQUIRED is not kept as a duplicate);
+ * NO_AVAILABLE_TAGGED_PRODUCT is separate. The Private reason is ALL_TAGGED_PRODUCTS_OUT_OF_STOCK only when stock depletion is the sole
+ * cause, and ALL_TAGGED_PRODUCTS_UNAVAILABLE for withdrawal, restriction, other eligibility loss or mixed causes. The reason codes stay
+ * OPAQUE strings in these shapes; the Console maps each to approved copy.
  */
 
 // ---- GAP-SC-11 -----------------------------------------------------------------------------------------------------
@@ -60,6 +61,8 @@ export interface SceneImage {
   readonly state: 'PROCESSING' | 'READY' | 'REJECTED';
   /** Width over height of the canonical presentation, so hotspots can be placed before real pixels exist. */
   readonly aspect: number;
+  /** The server's derivative once READY. Null when the server holds no bytes (fixtures): the Console shows the Seller's own selected file. */
+  readonly preview_url: string | null;
 }
 export interface SceneDetail {
   readonly seller_id: string;
@@ -107,6 +110,7 @@ export interface StoryView {
   readonly version: number;
   readonly state: StoryState;
   readonly photo_name: string;
+  readonly preview_url: string | null;
   readonly text: string | null;
   /** Zero or one. A Story with no target shows no Product or Scene call to action. */
   readonly target: StoryTarget | null;

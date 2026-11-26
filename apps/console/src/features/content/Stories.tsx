@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { StoryView } from '../../contracts/gap-sc-content';
 import { Badge } from '../../components/Badge';
 import { Dialog } from '../../components/Dialog';
@@ -11,12 +11,13 @@ import { useSellerQuery } from '../../seller/useSellerQuery';
 import { ActionProblem } from '../shared/ActionProblem';
 import { useAction } from '../shared/useAction';
 import { ContentNav } from './ContentNav';
+import { DirtyProvider, UnsavedNote } from '../shared/dirty';
 import { StoryComposer } from './StoryComposer';
 
 /** The longest delay setTimeout accepts. Only used to schedule a re-read; the time itself is never decided here. */
 const MAX_TIMER_MS = 2_147_483_647;
 
-function Row({ story, timezone, onDone }: { story: StoryView; timezone: string | undefined; onDone: () => void }) {
+function Row({ story, thumb, timezone, onDone }: { story: StoryView; thumb: string | null; timezone: string | undefined; onDone: () => void }) {
   const run = useSellerCommand();
   const action = useAction();
   const [confirm, setConfirm] = useState(false);
@@ -31,6 +32,7 @@ function Row({ story, timezone, onDone }: { story: StoryView; timezone: string |
   return (
     <li className="ledger-row">
       <div className="stack">
+        {thumb ? <img className="story-photo story-thumb" src={thumb} alt={t('stories.thumb_alt', { name: story.photo_name })} draggable={false} /> : null}
         <div className="row-start">
           <span className="ledger-title">{story.text ?? t('stories.no_text')}</span>
           <span className="badges">
@@ -94,6 +96,15 @@ export function Stories() {
   const market = useSellerQuery('market.context.get', {});
   const [composing, setComposing] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  // Photos the Seller just published are shown from their own selected files, in memory only, and revoked when this page closes.
+  const thumbs = useRef(new Map<string, string>());
+  useEffect(() => {
+    const held = thumbs.current;
+    return () => {
+      for (const url of held.values()) URL.revokeObjectURL(url);
+      held.clear();
+    };
+  }, []);
   const timezone = market.state.status === 'ready' ? market.state.data.timezone : undefined;
 
   // At the next end time, read again. The clock only schedules the question; the displayed state is always the server's.
@@ -111,8 +122,9 @@ export function Stories() {
 
   const canCreate = state.status === 'ready' && state.data.allowed_actions.includes('CREATE');
   return (
-    <>
+    <DirtyProvider>
       <PageTitle title={t('stories.title')}>{t('stories.title')}</PageTitle>
+      <UnsavedNote />
       <p className="lead">{t('stories.lead')}</p>
       <ContentNav />
       <p role="status" className="hint">
@@ -121,7 +133,8 @@ export function Stories() {
       {composing ? (
         <StoryComposer
           onCancel={() => setComposing(false)}
-          onPublished={() => {
+          onPublished={(story, url) => {
+            thumbs.current.set(story.id, url);
             setComposing(false);
             setNote(t('stories.published_note'));
             retry();
@@ -153,11 +166,11 @@ export function Stories() {
       {state.status === 'ready' && state.data.items.length > 0 ? (
         <ul className="ledger" aria-label={t('stories.list_label')} aria-busy={state.refreshing}>
           {state.data.items.map((s) => (
-            <Row key={s.id} story={s} timezone={timezone} onDone={retry} />
+            <Row key={s.id} story={s} thumb={s.preview_url ?? thumbs.current.get(s.id) ?? null} timezone={timezone} onDone={retry} />
           ))}
         </ul>
       ) : null}
       {state.status === 'ready' ? <p className="hint">{t('stories.no_edit_note')}</p> : null}
-    </>
+    </DirtyProvider>
   );
 }

@@ -9,11 +9,42 @@ import { useSellerQuery } from '../../seller/useSellerQuery';
 import { Section } from '../products/Section';
 import { ActionProblem } from '../shared/ActionProblem';
 import { useAction } from '../shared/useAction';
+import { useDirty } from '../shared/dirty';
 import { StoreFrame, type StoreProps } from './StoreFrame';
 
 const asCandidate = (l: Location): LocationCandidate => ({ provider: l.provider, provider_reference: l.provider_reference, display_address: l.display_address, latitude: l.latitude, longitude: l.longitude });
 
-function Search({ onPick, busy }: { onPick: (c: LocationCandidate) => void; busy: boolean }) {
+/** Where a point falls inside Ethiopia's rough bounding box, as a 0..1 position on the demonstration outline. Not a map projection to be trusted. */
+const place = (lat: number, lon: number): { x: number; y: number } => ({ x: Math.min(1, Math.max(0, (lon - 33) / 15)), y: Math.min(1, Math.max(0, (15 - lat) / 12)) });
+
+/**
+ * A demonstration map preview (CON S98 asks for one). No map provider is connected, and the figure says so: it plots the provider-resolved
+ * coordinates on a plain outline, so the Seller can see that choosing a different place moves the pin. Never presented as a real map.
+ */
+function MapPreview({ target }: { target: LocationCandidate | null }) {
+  if (target === null) return <p className="hint">{t('store.map_none')}</p>;
+  const p = place(target.latitude, target.longitude);
+  return (
+    <figure className="map-preview">
+      <svg viewBox="0 0 300 200" role="img" aria-label={t('store.map_alt', { address: target.display_address })}>
+        <rect className="map-bg" x="0" y="0" width="300" height="200" />
+        {[1, 2, 3].map((i) => (
+          <line key={`v${i}`} className="map-line" x1={i * 75} y1="0" x2={i * 75} y2="200" />
+        ))}
+        {[1, 2, 3].map((i) => (
+          <line key={`h${i}`} className="map-line" x1="0" y1={i * 50} x2="300" y2={i * 50} />
+        ))}
+        <circle className="map-pin" cx={p.x * 300} cy={p.y * 200} r="9" />
+      </svg>
+      <figcaption>
+        <strong>{target.display_address}</strong>
+        <span className="hint block">{t('store.map_coordinates', { latitude: target.latitude.toFixed(4), longitude: target.longitude.toFixed(4) })}</span>
+      </figcaption>
+    </figure>
+  );
+}
+
+function Search({ onPick, onPreview, previewed, busy }: { onPick: (c: LocationCandidate) => void; onPreview: (c: LocationCandidate) => void; previewed: string | null; busy: boolean }) {
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
   const { state, retry } = useSellerQuery('store.location.search', { query });
@@ -50,9 +81,14 @@ function Search({ onPick, busy }: { onPick: (c: LocationCandidate) => void; busy
                 <span className="ledger-title">{c.display_address}</span>
                 <span className="ledger-meta">{label('store.provider', c.provider)}</span>
               </span>
-              <button type="button" className="btn btn-quiet" aria-disabled={busy} onClick={() => onPick(c)}>
-                {t('store.location_use', { address: c.display_address })}
-              </button>
+              <span className="actions">
+                <button type="button" className="btn btn-quiet" aria-pressed={previewed === c.provider_reference} onClick={() => onPreview(c)}>
+                  {t('store.location_preview', { address: c.display_address })}
+                </button>
+                <button type="button" className="btn btn-quiet" aria-disabled={busy} onClick={() => onPick(c)}>
+                  {t('store.location_use', { address: c.display_address })}
+                </button>
+              </span>
             </li>
           ))}
         </ul>
@@ -66,11 +102,14 @@ function Body({ view, onChange, onReload, editable }: StoreProps) {
   const action = useAction(true);
   const location = view.location;
   const [isPublic, setPublic] = useState(location?.public ?? false);
+  const [previewed, setPreviewed] = useState<LocationCandidate | null>(null);
+  useDirty('location', location !== null && isPublic !== location.public);
 
   async function set(candidate: LocationCandidate | null, visible: boolean) {
     const next = await action.run(() => run('store.location.set', { version: view.version, candidate, public: visible }));
     if (next) {
       onChange(next);
+      setPreviewed(null);
       setPublic(next.location?.public ?? false);
     }
   }
@@ -109,8 +148,9 @@ function Body({ view, onChange, onReload, editable }: StoreProps) {
           ) : null}
         </div>
       )}
+      <MapPreview target={previewed ?? (location ? asCandidate(location) : null)} />
       <p className="hint">{t('store.map_note')}</p>
-      {editable ? <Search busy={action.busy} onPick={(c) => void set(c, isPublic)} /> : null}
+      {editable ? <Search busy={action.busy} previewed={previewed?.provider_reference ?? null} onPreview={setPreviewed} onPick={(c) => void set(c, isPublic)} /> : null}
     </Section>
   );
 }

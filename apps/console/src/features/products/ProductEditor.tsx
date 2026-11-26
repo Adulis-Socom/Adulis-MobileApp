@@ -10,6 +10,7 @@ import { sellerPath } from '../../seller/access';
 import { useSeller } from '../../seller/context';
 import { useSellerQuery } from '../../seller/useSellerQuery';
 import { NotFoundInSeller } from '../unavailable/NotFound';
+import { DirtyProvider, newer, UnsavedNote } from '../shared/dirty';
 import { AttributesSection } from './AttributesSection';
 import { AvailabilitySection } from './AvailabilitySection';
 import { AvailabilityBadge, StateBadge } from './badges';
@@ -17,6 +18,8 @@ import { IdentitySection } from './IdentitySection';
 import { InventorySection } from './InventorySection';
 import { MediaSection } from './MediaSection';
 import { PublicationSection } from './PublicationSection';
+import { TikTokSection } from './TikTokSection';
+import { SectionNav } from '../shared/SectionNav';
 import { VariantsSection } from './VariantsSection';
 
 function Failed({ title, retry }: { title: string; retry: () => void }) {
@@ -61,7 +64,8 @@ function Editor({ productId }: { productId: string }) {
 
   useEffect(() => {
     if (product.state.status !== 'ready' || product.state.refreshing) return;
-    setDetail(product.state.data);
+    const incoming = product.state.data;
+    setDetail((prev) => newer(prev, incoming));
     if (reloading.current) {
       reloading.current = false;
       setEpoch((n) => n + 1);
@@ -83,11 +87,13 @@ function Editor({ productId }: { productId: string }) {
   if (!detail || tree.state.status !== 'ready') return <Skeleton rows={6} />;
 
   const timezone = market.state.status === 'ready' ? market.state.data.timezone : undefined;
-  const shared = { detail, onChange: setDetail, onReload, onRefresh, timezone };
+  const adopt = (next: ProductDetail) => setDetail((prev) => newer(prev, next));
+  const shared = { detail, onChange: adopt, onReload, onRefresh, timezone };
   const heading = detail.title.trim() === '' ? t('editor.new_title') : detail.title;
   return (
-    <>
+    <DirtyProvider>
       <PageTitle title={t('editor.page_title')}>{heading}</PageTitle>
+      <UnsavedNote />
       <p>
         <Link className="btn btn-link" to={sellerPath(sellerId, 'products')}>
           <span className="flip" aria-hidden="true"><Icon name="arrow" /></span>
@@ -98,6 +104,18 @@ function Editor({ productId }: { productId: string }) {
         <StateBadge state={detail.publication.state} />
         {detail.variants.length > 0 ? <AvailabilityBadge availability={detail.availability} /> : null}
       </div>
+      <SectionNav
+        links={[
+          { id: 'identity', label: t('onpage.details') },
+          { id: 'attributes', label: t('onpage.attributes') },
+          { id: 'variants', label: t('onpage.variants') },
+          { id: 'inventory', label: t('onpage.stock') },
+          { id: 'media', label: t('onpage.images') },
+          { id: 'tiktok-section', label: t('onpage.tiktok') },
+          { id: 'availability', label: t('onpage.display') },
+          { id: 'publication', label: t('onpage.publication') },
+        ]}
+      />
       <IdentitySection key={`identity-${epoch}`} {...shared} categories={tree.state.data.categories} />
       <WithAttributes categoryId={detail.category_id}>
         {(attributes) => (
@@ -109,9 +127,10 @@ function Editor({ productId }: { productId: string }) {
       </WithAttributes>
       <InventorySection key={`inventory-${epoch}`} {...shared} />
       <MediaSection key={`media-${epoch}`} {...shared} />
+      <TikTokSection key={`tiktok-${epoch}`} {...shared} />
       <AvailabilitySection key={`availability-${epoch}`} {...shared} />
       <PublicationSection key={`publication-${epoch}`} {...shared} />
-    </>
+    </DirtyProvider>
   );
 }
 

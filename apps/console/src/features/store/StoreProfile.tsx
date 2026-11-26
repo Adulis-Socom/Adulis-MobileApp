@@ -5,6 +5,7 @@ import { useSellerCommand } from '../../seller/useSellerCommand';
 import { Section } from '../products/Section';
 import { ActionProblem } from '../shared/ActionProblem';
 import { useAction } from '../shared/useAction';
+import { useDirty } from '../shared/dirty';
 import { StoreFrame, type StoreProps } from './StoreFrame';
 
 function Form({ view, onChange, onReload, editable }: StoreProps) {
@@ -12,6 +13,7 @@ function Form({ view, onChange, onReload, editable }: StoreProps) {
   const action = useAction(true);
   const [name, setName] = useState(view.profile.display_name);
   const [bio, setBio] = useState(view.profile.bio);
+  useDirty('profile', name !== view.profile.display_name || bio !== view.profile.bio);
 
   async function save(event: FormEvent) {
     event.preventDefault();

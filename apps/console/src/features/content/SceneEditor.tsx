@@ -10,11 +10,13 @@ import { sellerPath } from '../../seller/access';
 import { useSeller } from '../../seller/context';
 import { useSellerQuery } from '../../seller/useSellerQuery';
 import { NotFoundInSeller } from '../unavailable/NotFound';
+import { DirtyProvider, newer, UnsavedNote } from '../shared/dirty';
 import { SceneImageSection, SceneCaptionSection } from './SceneMedia';
 import { ScenePreview } from './ScenePreview';
 import { ScenePublication } from './ScenePublication';
 import { SceneTagsSection } from './SceneTags';
 import { SceneBadges } from './sceneBadges';
+import { SectionNav } from '../shared/SectionNav';
 
 function Editor({ sceneId }: { sceneId: string }) {
   const scene = useSellerQuery('scenes.get', { scene_id: sceneId });
@@ -25,10 +27,25 @@ function Editor({ sceneId }: { sceneId: string }) {
   const [epoch, setEpoch] = useState(0);
   const reloading = useRef(false);
   const retry = scene.retry;
+  // The Seller's own selected image, kept only in browser memory: replaced or dropped means revoked, and closing the editor revokes it too.
+  const [local, setLocal] = useState<{ name: string; url: string } | null>(null);
+  const localUrl = useRef<string | null>(null);
+  const onLocalImage = useCallback((file: File | null) => {
+    if (localUrl.current) URL.revokeObjectURL(localUrl.current);
+    localUrl.current = file ? URL.createObjectURL(file) : null;
+    setLocal(file && localUrl.current ? { name: file.name, url: localUrl.current } : null);
+  }, []);
+  useEffect(
+    () => () => {
+      if (localUrl.current) URL.revokeObjectURL(localUrl.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (scene.state.status !== 'ready' || scene.state.refreshing) return;
-    setDetail(scene.state.data);
+    const incoming = scene.state.data;
+    setDetail((prev) => newer(prev, incoming));
     if (reloading.current) {
       reloading.current = false;
       setEpoch((n) => n + 1);
@@ -64,11 +81,13 @@ function Editor({ sceneId }: { sceneId: string }) {
   if (!detail) return <Skeleton rows={6} />;
 
   const timezone = market.state.status === 'ready' ? market.state.data.timezone : undefined;
-  const shared = { scene: detail, onChange: setDetail, onReload, onRefresh, timezone };
+  const adopt = (next: SceneDetail) => setDetail((prev) => newer(prev, next));
+  const shared = { scene: detail, onChange: adopt, onReload, onRefresh, timezone, localImage: local, onLocalImage };
   const heading = detail.caption.trim() === '' ? t('scenes.new_title') : detail.caption;
   return (
-    <>
+    <DirtyProvider>
       <PageTitle title={t('scenes.page_title')}>{heading}</PageTitle>
+      <UnsavedNote />
       <p>
         <Link className="btn btn-link" to={sellerPath(sellerId, 'content')}>
           <span className="flip" aria-hidden="true"><Icon name="arrow" /></span>
@@ -76,12 +95,21 @@ function Editor({ sceneId }: { sceneId: string }) {
         </Link>
       </p>
       <SceneBadges publication={detail.publication_state} visibility={detail.visibility} moderation={detail.moderation} />
+      <SectionNav
+        links={[
+          { id: 'image', label: t('onpage.scene_image') },
+          { id: 'caption-section', label: t('onpage.scene_caption') },
+          { id: 'tags', label: t('onpage.scene_tags') },
+          { id: 'preview', label: t('onpage.scene_preview') },
+          { id: 'publication', label: t('onpage.publication') },
+        ]}
+      />
       <SceneImageSection key={`image-${epoch}`} {...shared} />
       <SceneCaptionSection key={`caption-${epoch}`} {...shared} />
       <SceneTagsSection key={`tags-${epoch}`} {...shared} />
       <ScenePreview {...shared} />
       <ScenePublication key={`publication-${epoch}`} {...shared} />
-    </>
+    </DirtyProvider>
   );
 }
 

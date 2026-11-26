@@ -9,10 +9,11 @@ import { useSellerCommand } from '../../seller/useSellerCommand';
 import { useSellerQuery } from '../../seller/useSellerQuery';
 import { ActionProblem } from '../shared/ActionProblem';
 import { useAction } from '../shared/useAction';
+import { useDirty } from '../shared/dirty';
 import { AvailabilityBadge } from '../products/badges';
 import { Section } from '../products/Section';
 import { CENTRE, fromPercent, toPercent, type Point } from './hotspot';
-import { canDo, type SceneSectionProps } from './sceneEditor';
+import { canDo, imageSrc, type SceneSectionProps } from './sceneEditor';
 import { Stage, type Marker } from './Stage';
 
 interface LocalHotspot {
@@ -93,7 +94,7 @@ function Candidates({ tagged, onTag, editable }: { tagged: ReadonlySet<string>; 
  * Products (the server enforces ownership: a foreign id is just ineligible); order is independent of hotspot geometry; a
  * hotspot is an optional point on the image, normalised to its presentation. Edits are local until saved, in one command.
  */
-export function SceneTagsSection({ scene, onChange, onReload }: SceneSectionProps) {
+export function SceneTagsSection({ scene, onChange, onReload, localImage }: SceneSectionProps) {
   const run = useSellerCommand();
   const action = useAction(true);
   const editable = canDo(scene, 'EDIT');
@@ -101,8 +102,10 @@ export function SceneTagsSection({ scene, onChange, onReload }: SceneSectionProp
   const [active, setActive] = useState<string | null>(scene.tags[0]?.product_id ?? null);
   const live = useMemo(() => new Map(scene.tags.map((tag) => [tag.product_id, tag] as const)), [scene.tags]);
   const dirty = shape(tags) !== shape(scene.tags);
+  useDirty('tags', dirty);
   const tagged = useMemo(() => new Set(tags.map((tag) => tag.product_id)), [tags]);
   const image = scene.image;
+  const src = imageSrc(scene, localImage);
 
   const activeTag = tags.find((tag) => tag.product_id === active) ?? null;
   const markers: Marker[] = tags.flatMap((tag) => tag.hotspots.map((h) => ({ id: h.id, title: tag.title, x_norm: h.x_norm, y_norm: h.y_norm, current: tag.product_id === active, n: 0 }))).map((m, i) => ({ ...m, n: i + 1 }));
@@ -181,7 +184,7 @@ export function SceneTagsSection({ scene, onChange, onReload }: SceneSectionProp
         )}
 
         {editable && tags.length > 0 ? (
-          <div id="hotspots" className="stack">
+          <div id="hotspots" className="stack subsection">
             <h3>{t('scenes.hotspots_title')}</h3>
             {image === null ? (
               <p className="empty">{t('scenes.hotspots_need_image')}</p>
@@ -201,6 +204,8 @@ export function SceneTagsSection({ scene, onChange, onReload }: SceneSectionProp
                 <Stage
                   aspect={image.aspect}
                   imageName={image.file_name}
+                  imageUrl={src.url}
+                  measure={src.measure}
                   markers={markers}
                   placeLabel={activeTag ? t('scenes.place_for', { title: activeTag.title }) : undefined}
                   describedBy="stage-help"
@@ -280,7 +285,11 @@ export function SceneTagsSection({ scene, onChange, onReload }: SceneSectionProp
           </div>
         ) : null}
       </form>
-      {editable ? <Candidates tagged={tagged} editable={editable} onTag={tag} /> : null}
+      {editable ? (
+        <div className="subsection">
+          <Candidates tagged={tagged} editable={editable} onTag={tag} />
+        </div>
+      ) : null}
     </Section>
   );
 }

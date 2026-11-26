@@ -34,7 +34,7 @@ describe('SC-FE-06 fixture Store: who sees and who changes it', () => {
     const world = setup();
     await signIn(world, 'fx_acct_owner');
     const v = await get(world);
-    expect(v).toMatchObject({ seller_id: 'fx_seller_alem', timezone: 'Africa/Addis_Ababa', allowed_actions: ['EDIT'], profile: { handle: 'alem' } });
+    expect(v).toMatchObject({ seller_id: 'fx_seller_alem', timezone: 'Africa/Addis_Ababa', allowed_actions: ['EDIT', 'EDIT_REPRESENTATIVE'], profile: { handle: 'alem' } });
     expect(v.hours.weekly.map((d) => d.day)).toEqual(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']);
     expect(v.fulfilment.map((f) => f.mode)).toEqual(['BUYER_COLLECTION', 'SELLER_DELIVERY', 'COURIER_DELIVERY']);
     expect(v.coverage.options.length).toBeGreaterThan(1);

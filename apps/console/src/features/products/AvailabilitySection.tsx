@@ -5,6 +5,7 @@ import { t } from '../../i18n/t';
 import { useSellerCommand } from '../../seller/useSellerCommand';
 import { ActionProblem } from '../shared/ActionProblem';
 import { useAction } from '../shared/useAction';
+import { useDirty } from '../shared/dirty';
 import { can, type SectionProps } from './editor';
 import { Section } from './Section';
 
@@ -19,6 +20,7 @@ export function AvailabilitySection({ detail, onChange, onReload }: SectionProps
   const action = useAction(true);
   const editable = can(detail, 'EDIT');
   const [mode, setMode] = useState<StockVisibility>(detail.stock_visibility_mode);
+  useDirty('availability', mode !== detail.stock_visibility_mode);
 
   async function save(event: FormEvent) {
     event.preventDefault();

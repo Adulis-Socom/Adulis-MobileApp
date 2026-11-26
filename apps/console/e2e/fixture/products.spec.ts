@@ -158,7 +158,8 @@ test.describe('SC-FE-04: Inventory keeps two distinct controls and a ledger', ()
     const card = page.getByRole('listitem', { name: 'Black / S' });
     await expect(card).toContainText('In stock: 8');
     await expect(card).toContainText('Recently confirmed');
-    await expect(card).toContainText('No effect on what Buyers see has been defined yet.');
+    // one shared explanation for the whole section, not repeated on every row
+    await expect(page.getByText('No effect on what Buyers see has been defined yet.')).toHaveCount(1);
     await card.getByRole('button', { name: 'Confirm stock is accurate' }).click();
     await expect(card).toContainText('In stock: 8');
     await card.getByRole('button', { name: 'Update stock' }).click();

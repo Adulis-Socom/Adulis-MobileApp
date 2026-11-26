@@ -64,6 +64,16 @@ export interface FulfilmentSetting {
   readonly enabled: boolean;
   readonly instructions: string;
 }
+/**
+ * Company details (ONB-01 S71, S73, S178): conditional business metadata for a COMPANY Seller. NOT identity verification and never
+ * presented as such; no Government ID, no payout. Ordinary metadata is Owner or Admin; the representative is Owner-only.
+ */
+export interface CompanyDetails {
+  readonly company_name: string;
+  readonly description: string;
+  readonly representative_name: string;
+  readonly contact_phone: string;
+}
 export interface StoreView {
   readonly seller_id: string;
   readonly version: number;
@@ -74,7 +84,9 @@ export interface StoreView {
   readonly coverage: { readonly selected: readonly string[]; readonly options: readonly CoverageOption[] };
   readonly hours: { readonly weekly: readonly DayHours[]; readonly closures: readonly Closure[] };
   readonly fulfilment: readonly FulfilmentSetting[];
-  /** Known members: EDIT. Unknown members are ignored. */
+  /** Null for a Seller that is not a Company. */
+  readonly company: CompanyDetails | null;
+  /** Known members: EDIT, EDIT_REPRESENTATIVE (Owner only). Unknown members are ignored. */
   readonly allowed_actions: readonly string[];
 }
 
@@ -104,6 +116,7 @@ export interface StoreOperations {
   readonly 'store.location.set': { in: { version: number; candidate: LocationCandidate | null; public: boolean }; out: StoreView };
   readonly 'store.coverage.set': { in: { version: number; selected: readonly string[] }; out: StoreView };
   readonly 'store.hours.set': { in: { version: number; weekly: readonly DayHours[]; closures: readonly Closure[] }; out: StoreView };
+  readonly 'store.company.update': { in: { version: number; details: CompanyDetails }; out: StoreView };
   readonly 'store.fulfilment.set': { in: { version: number; settings: readonly { mode: FulfilmentMode; enabled: boolean; instructions: string }[] }; out: StoreView };
   readonly 'couriers.list': { in: Record<string, never>; out: CourierList };
   readonly 'couriers.invite': { in: { phone: string }; out: CourierList };

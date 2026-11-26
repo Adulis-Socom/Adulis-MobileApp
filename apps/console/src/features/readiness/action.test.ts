@@ -21,8 +21,8 @@ describe('a readiness action respects permission, entitlement, destination and w
     expect(actionFor(item('CONNECT_SOCIAL_ACCOUNT'), access(all), 'fx_s')).toMatchObject({ kind: 'link', built: true, to: '/s/fx_s/admission' });
   });
 
-  it('leads to an unbuilt destination as a link flagged unbuilt (rendered disabled, with the reason it arrives later)', () => {
-    expect(actionFor(item('EDIT_COMPANY_DETAILS'), access(all), 'fx_s')).toMatchObject({ kind: 'link', built: false });
+  it('leads to Company details now that it is built: an active link', () => {
+    expect(actionFor(item('EDIT_COMPANY_DETAILS'), access(all), 'fx_s')).toMatchObject({ kind: 'link', built: true, to: '/s/fx_s/store/company' });
   });
 
   it('leads to Products now that it is built: an active link', () => {

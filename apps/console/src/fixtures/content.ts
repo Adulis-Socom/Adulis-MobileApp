@@ -11,16 +11,16 @@ import type {
 } from '../contracts/gap-sc-content';
 import type { CallContext } from '../transport/port';
 import type { Catalogue } from './catalogue';
-import { conflict, DAY_MS, HOUR_MS, invalid, need, needCap, notFound, replayable, type Authz, type Handlers, type Kit } from './kit';
+import { conflict, DAY_MS, demoImage, HOUR_MS, invalid, need, needCap, notFound, withIdempotency, type Authz, type Handlers, type Kit } from './kit';
 
 /**
  * Fixture Content (GAP-SC-11): Scene Posts. DEVELOPMENT ONLY. A Scene's visibility is RESOLVED on every read from the
  * current Product facts (CATINV S21, SCN S29): it is never stored, so a stock change or a withdrawn Product changes it with no
  * Console involvement, and restock restores it automatically when every other gate passes.
  *
- * Reason codes (report 17, C-1 and C-2): this fixture emits PRODUCT_TAG_REQUIRED (SCN) for zero tags; for a Private Scene it
- * emits ALL_TAGGED_PRODUCTS_OUT_OF_STOCK when some tagged Product is still eligible but out of stock, and
- * ALL_TAGGED_PRODUCTS_UNAVAILABLE when none is eligible. The Console branches on neither spelling.
+ * Reason codes (founder rulings, Batch 02C): PRODUCT_TAG_REQUIRED is the canonical zero-tag blocker; NO_AVAILABLE_TAGGED_PRODUCT is separate.
+ * A Private Scene gets ALL_TAGGED_PRODUCTS_OUT_OF_STOCK ONLY when every tagged Product is out of stock and nothing else is wrong, and
+ * ALL_TAGGED_PRODUCTS_UNAVAILABLE for a withdrawn, restricted or otherwise ineligible Product or a mix of causes.
  */
 const PAGE_SIZE = 5; // demonstration value: the real page size is the server's
 const IMAGE_PROCESSING_MS = 1500; // demonstration value only
@@ -39,6 +39,7 @@ interface ImageRec {
   file_name: string;
   content_type: string;
   addedAt: number;
+  seeded: boolean;
 }
 interface SceneRec {
   id: string;
@@ -72,6 +73,7 @@ interface StoryRec {
   version: number;
   state: Exclude<StoryState, 'EXPIRED'>;
   photo_name: string;
+  seeded: boolean;
   text: string | null;
   target: { kind: 'PRODUCT' | 'SCENE'; id: string } | null;
   publishedAt: number;
@@ -86,12 +88,11 @@ const BLOCKING_MODERATION = new Set(['RESTRICTED', 'REMOVED']);
 
 export function createContent(kit: Kit, catalogue: Catalogue): Content {
   const data = new Map<string, SceneRec[]>();
-  const created = new Map<string, SceneDetail>();
 
   function seedFor(sellerId: string): SceneRec[] {
     if (sellerId !== 'fx_seller_alem') return [];
     const p = (n: number) => `fx_prod_alem_${n}`;
-    const img = (name: string): ImageRec => ({ file_name: name, content_type: 'image/jpeg', addedAt: kit.now() - 12 * DAY_MS });
+    const img = (name: string): ImageRec => ({ file_name: name, content_type: 'image/jpeg', addedAt: kit.now() - 12 * DAY_MS, seeded: true });
     const scene = (n: number, caption: string, state: ScenePublication, tags: TagRec[], extra: Partial<Pick<SceneRec, 'moderation' | 'image'>> = {}): SceneRec => ({
       id: `fx_scene_alem_${n}`,
       version: 1,
@@ -149,7 +150,10 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
     if (s.state !== 'PUBLISHED') return { visibility: 'PRIVATE', reason: null, tags, available };
     if (blockedByModeration(s)) return { visibility: 'PRIVATE', reason: null, tags, available };
     if (available > 0) return { visibility: 'PUBLIC', reason: null, tags, available };
-    return { visibility: 'PRIVATE', reason: tags.some((t) => t.eligible) ? 'ALL_TAGGED_PRODUCTS_OUT_OF_STOCK' : 'ALL_TAGGED_PRODUCTS_UNAVAILABLE', tags, available };
+    // SCN S29 / CATINV S12 / report 17 C-2: the stock-specific reason is only for a loss attributable SOLELY to stock depletion. Any
+    // other cause (withdrawn, restricted, no sellable Variant) or a mix of causes is the general reason.
+    const onlyStock = s.tags.length > 0 && s.tags.every((t) => catalogue.fact(sellerId, t.product_id)?.stockDepleted === true);
+    return { visibility: 'PRIVATE', reason: onlyStock ? 'ALL_TAGGED_PRODUCTS_OUT_OF_STOCK' : 'ALL_TAGGED_PRODUCTS_UNAVAILABLE', tags, available };
   }
   function blockersOf(sellerId: string, s: SceneRec): { code: string; field: string | null }[] {
     if (s.state !== 'DRAFT') return [];
@@ -178,7 +182,7 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
       id: s.id,
       version: s.version,
       caption: s.caption,
-      image: s.image === null ? null : { file_name: s.image.file_name, state: imageState(s.image), aspect: IMAGE_ASPECT },
+      image: s.image === null ? null : { file_name: s.image.file_name, state: imageState(s.image), aspect: IMAGE_ASPECT, preview_url: s.image.seeded && imageState(s.image) === 'READY' ? demoImage(s.image.file_name, IMAGE_ASPECT) : null },
       tags: r.tags,
       publication_state: s.state,
       visibility: r.visibility,
@@ -232,7 +236,6 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
 
   // ---- Stories (GAP-SC-12) ---------------------------------------------------------------------------------------------
   const storyData = new Map<string, StoryRec[]>();
-  const storyCreated = new Map<string, StoryView>();
   function storySeed(sellerId: string): StoryRec[] {
     if (sellerId !== 'fx_seller_alem') return [];
     const story = (n: number, hoursAgo: number, text: string | null, target: StoryRec['target'], state: StoryRec['state'] = 'PUBLISHED', moderation: ModerationView | null = null): StoryRec => ({
@@ -240,6 +243,7 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
       version: 1,
       state,
       photo_name: `story-${n}.jpg`,
+      seeded: true,
       text,
       target,
       publishedAt: kit.now() - hoursAgo * HOUR_MS,
@@ -289,6 +293,7 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
       version: s.version,
       state,
       photo_name: s.photo_name,
+      preview_url: s.seeded ? demoImage(s.photo_name, 0.8) : null,
       text: s.text,
       target: s.target === null ? null : { kind: s.target.kind, id: s.target.id, label: targetLabel(sellerId, s.target) },
       published_at: kit.iso(s.publishedAt),
@@ -319,7 +324,7 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
       const a = kit.authz(ctx);
       need(a, 'content');
       needCap(a, 'content.write');
-      return replayable(storyCreated, ctx, () => {
+      {
         const errors: Record<string, string> = {};
         if (input.photo_name.trim() === '') errors['photo'] = 'MEDIA_FILE_REQUIRED';
         else if (!input.content_type.startsWith('image/')) errors['photo'] = 'MEDIA_REJECTED'; // exactly one still photo: no video, no other file
@@ -327,10 +332,10 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
         if (input.target !== null && !targetOk(a.sellerId, input.target)) errors['target'] = 'TARGET_NOT_ELIGIBLE';
         if (Object.keys(errors).length > 0) throw invalid(errors);
         const text = input.text === null || input.text.trim() === '' ? null : input.text;
-        const s: StoryRec = { id: kit.next('fx_story'), version: 1, state: 'PUBLISHED', photo_name: input.photo_name, text, target: input.target, publishedAt: kit.now(), moderation: null };
+        const s: StoryRec = { id: kit.next('fx_story'), version: 1, state: 'PUBLISHED', photo_name: input.photo_name, seeded: false, text, target: input.target, publishedAt: kit.now(), moderation: null };
         storiesOf(a.sellerId).unshift(s);
         return storyView(a.sellerId, s, a);
-      });
+      }
     },
     'stories.withdraw': ({ story_id, version }, ctx) => {
       const a = kit.authz(ctx);
@@ -363,11 +368,11 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
       const a = kit.authz(ctx);
       need(a, 'content');
       needCap(a, 'content.write');
-      return replayable(created, ctx, () => {
+      {
         const s: SceneRec = { id: kit.next('fx_scene'), version: 1, caption: '', image: null, tags: [], state: 'DRAFT', moderation: null };
         scenesOf(a.sellerId).unshift(s);
         return detail(a.sellerId, s, a);
-      });
+      }
     },
     'scenes.get': ({ scene_id }, ctx) => {
       const a = kit.authz(ctx);
@@ -401,7 +406,7 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
     'scenes.media.set': ({ scene_id, version, file_name, content_type }, ctx) => {
       const { a, s } = open(ctx, scene_id, version, 'EDIT');
       if (file_name.trim() === '') throw invalid({ image: 'MEDIA_FILE_REQUIRED' });
-      s.image = { file_name, content_type, addedAt: kit.now() };
+      s.image = { file_name, content_type, addedAt: kit.now(), seeded: false };
       s.version += 1;
       return detail(a.sellerId, s, a);
     },
@@ -432,6 +437,10 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
   };
 
   return {
-    handlers,
+    handlers: withIdempotency(kit, handlers, {
+      'scenes.create': { dest: 'content', cap: 'content.write' },
+      'scenes.media.set': { dest: 'content', cap: 'content.write' },
+      'stories.create': { dest: 'content', cap: 'content.write' },
+    }),
   };
 }

@@ -94,6 +94,21 @@ export interface MediaItem {
   readonly id: string;
   readonly file_name: string;
   readonly state: MediaState;
+  /**
+   * A derivative the server serves once the image is READY (a CDN URL in reality). Null while processing or when the server holds no
+   * bytes (fixture mode): the Console then shows the Seller's own selected file, in memory, for the session only.
+   */
+  readonly preview_url: string | null;
+}
+/**
+ * Optional TikTok embed (CATINV S27-S38, S101, S111, S117; MEDIA-01): external, Product-detail-only, never a Seller video upload and never
+ * in the Buyer For You feed. Attaching needs a connected, ownership-verified account; the failures are the canonical Media-domain codes
+ * TIKTOK_NOT_CONNECTED, TIKTOK_OWNERSHIP_NOT_VERIFIED and TIKTOK_EMBED_UNAVAILABLE, returned as the `tiktok` field error. Provider access is
+ * never activated from the Console: this state is the server's answer, not a claim.
+ */
+export interface TikTokState {
+  readonly connection: 'NOT_CONNECTED' | 'CONNECTED';
+  readonly embed: { readonly video_url: string } | null;
 }
 export interface StockConfidence {
   /** The Seller never chooses a confidence level (CON S54). Codes are rendered through the catalogue, with an unknown fallback. */
@@ -136,9 +151,10 @@ export interface ProductDetail {
   readonly availability: Availability;
   readonly media: readonly MediaItem[];
   readonly variants: readonly VariantView[];
+  readonly tiktok: TikTokState;
   /**
    * What THIS account may do to THIS Product right now, as the server resolved it (permission, role, state).
-   * Known members: EDIT, PUBLISH, WITHDRAW, ADD_VARIANT, EDIT_VARIANT, ADJUST_STOCK, CONFIRM_STOCK, ADD_MEDIA.
+   * Known members: EDIT, PUBLISH, WITHDRAW, ADD_VARIANT, EDIT_VARIANT, ADJUST_STOCK, CONFIRM_STOCK, ADD_MEDIA, EDIT_TIKTOK.
    * A member this version does not know is ignored, never granted.
    */
   readonly allowed_actions: readonly string[];
@@ -188,7 +204,11 @@ export interface CatalogueOperations {
    * the browser: only the name and type are sent. The real flow is an upload grant, bytes straight to object storage, then bind.
    */
   readonly 'products.media.add': { in: { product_id: string; version: number; file_name: string; content_type: string }; out: ProductDetail };
+  /** The full new order of the Product's image ids; the first is the primary image. One Product at a time. */
+  readonly 'products.media.reorder': { in: { product_id: string; version: number; order: readonly string[] }; out: ProductDetail };
   readonly 'products.media.remove': { in: { product_id: string; version: number; media_id: string }; out: ProductDetail };
+  readonly 'products.tiktok.attach': { in: { product_id: string; version: number; video_url: string }; out: ProductDetail };
+  readonly 'products.tiktok.detach': { in: { product_id: string; version: number }; out: ProductDetail };
   readonly 'variants.create': { in: { product_id: string; version: number; options: Readonly<Record<string, string>>; price_minor: number | null }; out: ProductDetail };
   /** Deactivate, never delete (CATINV S113). */
   readonly 'variants.update': { in: { product_id: string; version: number; variant_id: string; price_minor?: number | null; active?: boolean }; out: ProductDetail };

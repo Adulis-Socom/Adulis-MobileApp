@@ -6,6 +6,7 @@ import { useSellerCommand } from '../../seller/useSellerCommand';
 import { Section } from '../products/Section';
 import { ActionProblem } from '../shared/ActionProblem';
 import { useAction } from '../shared/useAction';
+import { useDirty } from '../shared/dirty';
 import { StoreFrame, type StoreProps } from './StoreFrame';
 
 /** A starting point for a new interval, editable like any other value. Not a rule. */
@@ -16,6 +17,10 @@ function Body({ view, onChange, onReload, editable }: StoreProps) {
   const action = useAction(true);
   const [weekly, setWeekly] = useState<DayHours[]>(() => view.hours.weekly.map((d) => ({ day: d.day, intervals: d.intervals.map((i) => ({ ...i })) })));
   const [closures, setClosures] = useState<Closure[]>(() => view.hours.closures.map((c) => ({ ...c })));
+
+  // Compared as the server stores it (closures by date), so a saved form is not left looking unsaved.
+  const hoursShape = (w: readonly DayHours[], c: readonly Closure[]): string => JSON.stringify([w.map((d) => [d.day, d.intervals.map((i) => [i.open, i.close])]), [...c].sort((x, y) => x.date.localeCompare(y.date)).map((x) => [x.date, x.note])]);
+  useDirty('hours', hoursShape(weekly, closures) !== hoursShape(view.hours.weekly, view.hours.closures));
 
   const editDay = (day: Weekday, change: (i: DayHours['intervals']) => DayHours['intervals']) => setWeekly((prev) => prev.map((d) => (d.day === day ? { day, intervals: change(d.intervals) } : d)));
 

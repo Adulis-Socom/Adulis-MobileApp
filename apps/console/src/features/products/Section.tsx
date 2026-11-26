@@ -4,7 +4,9 @@ import type { ReactNode } from 'react';
 export function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
     <section id={id} className="panel" aria-labelledby={`${id}-h`}>
-      <h2 id={`${id}-h`}>{title}</h2>
+      <h2 id={`${id}-h`} tabIndex={-1}>
+        {title}
+      </h2>
       {children}
     </section>
   );

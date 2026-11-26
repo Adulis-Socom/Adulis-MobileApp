@@ -6,6 +6,7 @@ import { t } from '../../i18n/t';
 import { useSellerCommand } from '../../seller/useSellerCommand';
 import { ActionProblem } from '../shared/ActionProblem';
 import { useAction } from '../shared/useAction';
+import { useDirty } from '../shared/dirty';
 import { can, type AttributeSectionProps } from './editor';
 import { Section } from './Section';
 
@@ -54,6 +55,8 @@ export function AttributesSection({ detail, attributes, onChange, onReload }: At
   const editable = can(detail, 'EDIT');
   const [values, setValues] = useState<Record<string, readonly string[]>>({ ...detail.attributes });
   const defs = (attributes?.attributes ?? []).filter((d) => d.scope === 'PRODUCT');
+  const shape = (m: Readonly<Record<string, readonly string[]>>): string => JSON.stringify(defs.map((d) => [d.id, [...(m[d.id] ?? [])].sort()]));
+  useDirty('attributes', shape(values) !== shape(detail.attributes));
 
   async function save(event: FormEvent) {
     event.preventDefault();

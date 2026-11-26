@@ -9,6 +9,7 @@ import { useSellerCommand } from '../../seller/useSellerCommand';
 import { Section } from '../products/Section';
 import { ActionProblem } from '../shared/ActionProblem';
 import { useAction } from '../shared/useAction';
+import { useDirty } from '../shared/dirty';
 import { StoreFrame, type StoreProps } from './StoreFrame';
 
 function Body({ view, onChange, onReload, editable }: StoreProps) {
@@ -16,6 +17,7 @@ function Body({ view, onChange, onReload, editable }: StoreProps) {
   const run = useSellerCommand();
   const action = useAction(true);
   const [settings, setSettings] = useState(() => view.fulfilment.map((f) => ({ mode: f.mode, enabled: f.enabled, instructions: f.instructions })));
+  useDirty('fulfilment', JSON.stringify(settings) !== JSON.stringify(view.fulfilment.map((f) => ({ mode: f.mode, enabled: f.enabled, instructions: f.instructions }))));
   const set = (mode: FulfilmentMode, change: Partial<{ enabled: boolean; instructions: string }>) => setSettings((prev) => prev.map((s) => (s.mode === mode ? { ...s, ...change } : s)));
 
   async function save(event: FormEvent) {

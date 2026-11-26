@@ -8,6 +8,7 @@ import { t } from '../../i18n/t';
 import { useSellerCommand } from '../../seller/useSellerCommand';
 import { ActionProblem } from '../shared/ActionProblem';
 import { useAction } from '../shared/useAction';
+import { useDirty } from '../shared/dirty';
 import { can, type AttributeSectionProps, type SectionProps } from './editor';
 import { Section } from './Section';
 
@@ -23,6 +24,7 @@ function VariantRow({ detail, variant, onChange, onReload }: SectionProps & { va
   const editable = can(detail, 'EDIT_VARIANT');
   const [price, setPrice] = useState(variant.price_minor === null ? '' : minorToInput(variant.price_minor, detail.currency));
   const fieldId = `variant-${variant.id}-price`;
+  useDirty(fieldId, price !== (variant.price_minor === null ? '' : minorToInput(variant.price_minor, detail.currency)));
 
   async function update(change: { price_minor: number | null } | { active: boolean }) {
     const next = await action.run(() => run('variants.update', { product_id: detail.id, version: detail.version, variant_id: variant.id, ...change }));
@@ -78,6 +80,7 @@ function AddVariant({ detail, attributes, onChange, onReload }: AttributeSection
   const defs = (attributes?.attributes ?? []).filter((d) => d.scope === 'VARIANT');
   const [options, setOptions] = useState<Record<string, string>>({});
   const [price, setPrice] = useState('');
+  useDirty('variant-add', price.trim() !== '' || Object.values(options).some((v) => v !== ''));
 
   async function add(event: FormEvent) {
     event.preventDefault();

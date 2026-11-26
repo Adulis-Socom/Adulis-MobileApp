@@ -1,5 +1,6 @@
 import type {
   Closure,
+  CompanyDetails,
   CourierList,
   CourierRelationship,
   DayHours,
@@ -11,7 +12,7 @@ import type {
   Weekday,
 } from '../contracts/gap-sc-store';
 import type { CallContext } from '../transport/port';
-import { conflict, DAY_MS, invalid, need, needCap, notFound, replayable, type Authz, type Handlers, type Kit } from './kit';
+import { conflict, DAY_MS, denied, invalid, need, needCap, notFound, withIdempotency, type Authz, type Handlers, type Kit } from './kit';
 
 /**
  * Fixture Store and Courier relationships (GAP-SC-13, GAP-SC-14). DEVELOPMENT ONLY. The server-side rules shown here are the
@@ -49,6 +50,7 @@ interface StoreRec {
   weekly: DayHours[];
   closures: Closure[];
   modes: Record<FulfilmentMode, { enabled: boolean; instructions: string }>;
+  company: CompanyDetails | null;
 }
 interface CourierRec {
   id: string;
@@ -66,6 +68,7 @@ type StoreOps =
   | 'store.coverage.set'
   | 'store.hours.set'
   | 'store.fulfilment.set'
+  | 'store.company.update'
   | 'couriers.list'
   | 'couriers.invite'
   | 'couriers.revoke';
@@ -74,13 +77,14 @@ export interface Store {
   readonly handlers: Handlers<StoreOps>;
   /** Readiness facts, resolved from the data the Console can change, never from a stored flag. */
   profileComplete(sellerId: string): boolean;
+  /** Readiness (COMPANY_DETAILS): true for a Seller that is not a Company, otherwise name, representative and contact are set. */
+  companyComplete(sellerId: string): boolean;
   fulfilmentConfigured(sellerId: string): boolean;
 }
 
 export function createStore(kit: Kit): Store {
   const stores = new Map<string, StoreRec>();
   const couriers = new Map<string, CourierRec[]>();
-  const invited = new Map<string, CourierList>();
 
   const week = (hours: Partial<Record<Weekday, [string, string][]>>): DayHours[] =>
     WEEK.map((day) => ({ day, intervals: (hours[day] ?? []).map(([open, close]) => ({ open, close })) }));
@@ -104,6 +108,11 @@ export function createStore(kit: Kit): Store {
         SELLER_DELIVERY: { enabled: false, instructions: '' },
         COURIER_DELIVERY: { enabled: false, instructions: '' },
       },
+      company: f.company
+        ? f.companyDetails
+          ? { company_name: f.name, description: `${f.name} is a demonstration company.`, representative_name: 'Demonstration representative', contact_phone: '+251900000099' }
+          : { company_name: '', description: '', representative_name: '', contact_phone: '' }
+        : null,
     };
   }
   const storeOf = (sellerId: string): StoreRec => {
@@ -128,7 +137,8 @@ export function createStore(kit: Kit): Store {
       coverage: { selected: s.coverage, options: COVERAGE_OPTIONS },
       hours: { weekly: s.weekly, closures: s.closures },
       fulfilment,
-      allowed_actions: a.caps.has('store.manage') ? ['EDIT'] : [],
+      company: s.company,
+      allowed_actions: a.caps.has('store.manage') ? (a.isOwner ? ['EDIT', 'EDIT_REPRESENTATIVE'] : ['EDIT']) : [],
     };
   }
   /** Common entry for a Store write: Seller scope, destination, capability, optimistic concurrency. */
@@ -237,6 +247,20 @@ export function createStore(kit: Kit): Store {
       s.version += 1;
       return view(a.sellerId, s, a);
     },
+    'store.company.update': ({ version, details }, ctx) => {
+      const { a, s } = open(ctx, version);
+      if (s.company === null) throw notFound(); // not a Company Seller: there is nothing to edit
+      const errors: Record<string, string> = {};
+      if (details.company_name.trim() === '') errors['company_name'] = 'COMPANY_NAME_REQUIRED';
+      if (details.representative_name.trim() === '') errors['representative_name'] = 'REPRESENTATIVE_REQUIRED';
+      if (details.contact_phone.trim() !== '' && !/^\+?\d{9,15}$/.test(details.contact_phone.replace(/[\s-]/g, ''))) errors['contact_phone'] = 'PHONE_INVALID';
+      if (Object.keys(errors).length > 0) throw invalid(errors);
+      // Representative changes stay Owner-only (ONB-01 S178); ordinary metadata is Owner or Admin.
+      if (!a.isOwner && details.representative_name.trim() !== s.company.representative_name && s.company.representative_name !== '') throw denied();
+      s.company = { company_name: details.company_name.trim(), description: details.description, representative_name: details.representative_name.trim(), contact_phone: details.contact_phone.trim() };
+      s.version += 1;
+      return view(a.sellerId, s, a);
+    },
     'store.fulfilment.set': ({ version, settings }, ctx) => {
       const { a, s } = open(ctx, version);
       const errors: Record<string, string> = {};
@@ -261,7 +285,7 @@ export function createStore(kit: Kit): Store {
       const a = kit.authz(ctx);
       need(a, 'store');
       needCap(a, 'couriers.manage');
-      return replayable(invited, ctx, () => {
+      {
         const digits = phone.replace(/[^\d+]/g, '');
         if (!/^\+?\d{9,15}$/.test(digits)) throw invalid({ phone: 'PHONE_INVALID' });
         const list = couriersOf(a.sellerId);
@@ -270,7 +294,7 @@ export function createStore(kit: Kit): Store {
           list.unshift({ id: kit.next('fx_rel'), name: `Courier ending ${digits.slice(-3)}`, phone: digits, status: 'INVITED', statusAt: kit.now() });
         }
         return courierList(a.sellerId, a);
-      });
+      }
     },
     'couriers.revoke': ({ relationship_id }, ctx) => {
       const a = kit.authz(ctx);
@@ -286,10 +310,14 @@ export function createStore(kit: Kit): Store {
   };
 
   return {
-    handlers,
+    handlers: withIdempotency(kit, handlers, { 'couriers.invite': { dest: 'store', cap: 'couriers.manage' } }),
     profileComplete: (sellerId) => {
       const s = storeOf(sellerId);
       return s.display_name.trim() !== '' && s.bio.trim() !== '';
+    },
+    companyComplete: (sellerId) => {
+      const c = storeOf(sellerId).company;
+      return c === null || (c.company_name.trim() !== '' && c.representative_name.trim() !== '' && c.contact_phone.trim() !== '');
     },
     fulfilmentConfigured: (sellerId) => {
       const s = storeOf(sellerId);

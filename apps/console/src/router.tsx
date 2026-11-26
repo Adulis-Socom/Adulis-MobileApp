@@ -15,6 +15,7 @@ import { ProductEditor } from './features/products/ProductEditor';
 import { Products } from './features/products/Products';
 import { Admission } from './features/onboarding/Admission';
 import { Couriers } from './features/store/Couriers';
+import { StoreCompany } from './features/store/StoreCompany';
 import { StoreCoverage } from './features/store/StoreCoverage';
 import { StoreFulfilment } from './features/store/StoreFulfilment';
 import { StoreLayout } from './features/store/StoreFrame';
@@ -75,6 +76,7 @@ const children: RouteObject[] = [
             ),
             children: [
               { index: true, element: <StoreProfile /> },
+              { path: 'company', element: <StoreCompany /> },
               { path: 'location', element: <StoreLocation /> },
               { path: 'coverage', element: <StoreCoverage /> },
               { path: 'hours', element: <StoreHours /> },

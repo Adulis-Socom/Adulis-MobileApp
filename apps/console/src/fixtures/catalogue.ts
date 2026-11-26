@@ -12,7 +12,7 @@ import type {
   VariantView,
 } from '../contracts/gap-sc-catalogue';
 import type { CallContext } from '../transport/port';
-import { conflict, DAY_MS, denied, invalid, need, needCap, notFound, replayable, type Authz, type Handlers, type Kit } from './kit';
+import { conflict, DAY_MS, demoImage, denied, invalid, need, needCap, notFound, withIdempotency, type Authz, type Handlers, type Kit } from './kit';
 
 /**
  * Fixture Catalogue (GAP-SC-08..10): a demonstration taxonomy, Products, Variants and an Inventory ledger. DEVELOPMENT ONLY.
@@ -72,6 +72,8 @@ interface MediaRec {
   file_name: string;
   content_type: string;
   addedAt: number;
+  /** A seeded image has a bundled demonstration derivative; one the Seller added has none (the fixture server holds no bytes). */
+  seeded: boolean;
 }
 interface ProductRec {
   id: string;
@@ -85,6 +87,7 @@ interface ProductRec {
   publishedAt: number | null;
   media: MediaRec[];
   variants: VariantRec[];
+  tiktokUrl: string | null;
 }
 
 export interface ProductFact {
@@ -92,6 +95,11 @@ export interface ProductFact {
   readonly title: string;
   readonly state: ProductState;
   readonly availability: Availability;
+  /**
+   * True only when the Product is published, has at least one active Variant, and EVERY active Variant is at zero stock. A Product that is
+   * unavailable for any other reason (withdrawn, restricted, no active Variant) is not "out of stock", and a Scene must not say it is.
+   */
+  readonly stockDepleted: boolean;
 }
 
 export interface Catalogue {
@@ -106,6 +114,9 @@ export interface Catalogue {
     | 'products.withdraw'
     | 'products.media.add'
     | 'products.media.remove'
+    | 'products.media.reorder'
+    | 'products.tiktok.attach'
+    | 'products.tiktok.detach'
     | 'variants.create'
     | 'variants.update'
     | 'inventory.set'
@@ -117,11 +128,12 @@ export interface Catalogue {
   /** Current commerce truth of one Product, for Scenes and Stories to resolve (they never copy it). */
   fact(sellerId: string, productId: string): ProductFact | undefined;
   facts(sellerId: string): readonly ProductFact[];
+  /** Fixture moderation: put a Product under restriction, as an Operator decision would. Development only. */
+  restrict(sellerId: string, productId: string): boolean;
 }
 
 export function createCatalogue(kit: Kit): Catalogue {
   const data = new Map<string, ProductRec[]>();
-  const created = new Map<string, ProductDetail>();
 
   const variant = (id: string, options: Record<string, string>, qty: number, price: number | null, confirmedAgoDays: number | null): VariantRec => ({
     id,
@@ -152,8 +164,9 @@ export function createCatalogue(kit: Kit): Catalogue {
     mode: 'EXACT',
     state,
     publishedAt: state === 'DRAFT' ? null : kit.now() - 10 * DAY_MS,
-    media: extra.media ?? (state === 'DRAFT' ? [] : [{ id: `fx_media_${sellerId.replace('fx_seller_', '')}_${n}`, file_name: `${title.toLowerCase().replace(/\W+/g, '-')}.jpg`, content_type: 'image/jpeg', addedAt: kit.now() - 11 * DAY_MS }]),
+    media: extra.media ?? (state === 'DRAFT' ? [] : [{ id: `fx_media_${sellerId.replace('fx_seller_', '')}_${n}`, file_name: `${title.toLowerCase().replace(/\W+/g, '-')}.jpg`, content_type: 'image/jpeg', addedAt: kit.now() - 11 * DAY_MS, seeded: true }]),
     variants,
+    tiktokUrl: null,
   });
   const dressAttrs = { fx_attr_material: ['fx_val_linen'], fx_attr_care: ['fx_val_machine_wash'] };
 
@@ -236,9 +249,12 @@ export function createCatalogue(kit: Kit): Catalogue {
     else if (p.media.some((m) => mediaState(m) !== 'READY')) out.push({ code: 'MEDIA_NOT_READY', field: 'media' });
     return out;
   }
+  /** Fixture: only Alem Textiles has a connected, ownership-verified TikTok account (handle @alem.textiles). */
+  const tiktokConnected = (sellerId: string): boolean => sellerId === 'fx_seller_alem';
   function actionsOf(p: ProductRec, a: Authz): string[] {
     if (p.state === 'RESTRICTED') return [];
     const out: string[] = [];
+    if (a.caps.has('content.write')) out.push('EDIT_TIKTOK');
     if (a.caps.has('catalogue.write')) {
       out.push('EDIT', 'ADD_VARIANT', 'EDIT_VARIANT', 'ADD_MEDIA');
       if (p.state === 'PUBLISHED') out.push('WITHDRAW');
@@ -272,8 +288,9 @@ export function createCatalogue(kit: Kit): Catalogue {
       currency: CURRENCY,
       publication: { state: p.state, published_at: p.publishedAt === null ? null : kit.iso(p.publishedAt), blockers: blockersOf(p) },
       availability: productAvail(p),
-      media: p.media.map((m) => ({ id: m.id, file_name: m.file_name, state: mediaState(m) })),
+      media: p.media.map((m) => ({ id: m.id, file_name: m.file_name, state: mediaState(m), preview_url: m.seeded && mediaState(m) === 'READY' ? demoImage(m.file_name, 1) : null })),
       variants,
+      tiktok: { connection: tiktokConnected(sellerId) ? 'CONNECTED' : 'NOT_CONNECTED', embed: p.tiktokUrl === null ? null : { video_url: p.tiktokUrl } },
       allowed_actions: actionsOf(p, a),
     };
   }
@@ -329,11 +346,11 @@ export function createCatalogue(kit: Kit): Catalogue {
       const a = kit.authz(ctx);
       need(a, 'products');
       needCap(a, 'catalogue.write');
-      return replayable(created, ctx, () => {
-        const p: ProductRec = { id: kit.next('fx_prod'), version: 1, title: '', description: '', category_id: null, attributes: {}, mode: 'EXACT', state: 'DRAFT', publishedAt: null, media: [], variants: [] };
+      {
+        const p: ProductRec = { id: kit.next('fx_prod'), version: 1, title: '', description: '', category_id: null, attributes: {}, mode: 'EXACT', state: 'DRAFT', publishedAt: null, media: [], variants: [], tiktokUrl: null };
         productsOf(a.sellerId).unshift(p);
         return detail(a.sellerId, p, a);
-      });
+      }
     },
     'products.get': ({ product_id }, ctx) => {
       const a = kit.authz(ctx);
@@ -396,7 +413,33 @@ export function createCatalogue(kit: Kit): Catalogue {
     'products.media.add': ({ product_id, version, file_name, content_type }, ctx) => {
       const { a, p } = open(ctx, 'catalogue.write', product_id, version);
       if (file_name.trim() === '') throw invalid({ media: 'MEDIA_FILE_REQUIRED' });
-      p.media.push({ id: kit.next('fx_media'), file_name, content_type, addedAt: kit.now() });
+      p.media.push({ id: kit.next('fx_media'), file_name, content_type, addedAt: kit.now(), seeded: false });
+      p.version += 1;
+      return detail(a.sellerId, p, a);
+    },
+    'products.media.reorder': ({ product_id, version, order }, ctx) => {
+      const { a, p } = open(ctx, 'catalogue.write', product_id, version);
+      const same = order.length === p.media.length && new Set(order).size === order.length && p.media.every((m) => order.includes(m.id));
+      if (!same) throw invalid({ media: 'MEDIA_ORDER_INVALID' });
+      p.media = order.flatMap((id) => p.media.filter((m) => m.id === id));
+      p.version += 1;
+      return detail(a.sellerId, p, a);
+    },
+    'products.tiktok.attach': ({ product_id, version, video_url }, ctx) => {
+      const { a, p } = open(ctx, 'content.write', product_id, version);
+      // Never arbitrary embed HTML: a video reference the server verifies. The failures are the canonical Media-domain codes (founder ruling).
+      const match = /^https:\/\/(?:www\.)?tiktok\.com\/(@[A-Za-z0-9._]+)\/video\/(\d+)/.exec(video_url.trim());
+      if (!match) throw invalid({ tiktok: 'TIKTOK_URL_INVALID' });
+      if (!tiktokConnected(a.sellerId)) throw invalid({ tiktok: 'TIKTOK_NOT_CONNECTED' });
+      if (match[1] !== '@alem.textiles') throw invalid({ tiktok: 'TIKTOK_OWNERSHIP_NOT_VERIFIED' });
+      if (video_url.includes('unavailable')) throw invalid({ tiktok: 'TIKTOK_EMBED_UNAVAILABLE' });
+      p.tiktokUrl = video_url.trim();
+      p.version += 1;
+      return detail(a.sellerId, p, a);
+    },
+    'products.tiktok.detach': ({ product_id, version }, ctx) => {
+      const { a, p } = open(ctx, 'content.write', product_id, version);
+      p.tiktokUrl = null;
       p.version += 1;
       return detail(a.sellerId, p, a);
     },
@@ -492,14 +535,30 @@ export function createCatalogue(kit: Kit): Catalogue {
     throw notFound();
   }
 
-  const factOf = (p: ProductRec): ProductFact => ({ id: p.id, title: p.title, state: p.state, availability: productAvail(p) });
+  const factOf = (p: ProductRec): ProductFact => {
+    const active = p.variants.filter((v) => v.active);
+    return { id: p.id, title: p.title, state: p.state, availability: productAvail(p), stockDepleted: p.state === 'PUBLISHED' && active.length > 0 && active.every((v) => v.quantity <= 0) };
+  };
   return {
-    handlers,
+    handlers: withIdempotency(kit, handlers, {
+      'products.create': { dest: 'products', cap: 'catalogue.write' },
+      'products.media.add': { dest: 'products', cap: 'catalogue.write' },
+      'variants.create': { dest: 'products', cap: 'catalogue.write' },
+      'inventory.set': { dest: 'products', cap: 'inventory.write' },
+      'inventory.confirm': { dest: 'products', cap: 'inventory.write' },
+    }),
     hasPublishedProduct: (sellerId) => productsOf(sellerId).some((p) => p.state === 'PUBLISHED'),
     fact: (sellerId, productId) => {
       const p = productsOf(sellerId).find((x) => x.id === productId);
       return p ? factOf(p) : undefined;
     },
     facts: (sellerId) => productsOf(sellerId).map(factOf),
+    restrict: (sellerId, productId) => {
+      const p = productsOf(sellerId).find((x) => x.id === productId);
+      if (!p) return false;
+      p.state = 'RESTRICTED';
+      p.version += 1;
+      return true;
+    },
   };
 }

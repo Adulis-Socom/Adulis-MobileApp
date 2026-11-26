@@ -176,7 +176,7 @@ test.describe('SC-FE-02: the Publication Readiness Hub (independent items, serve
     await page.getByRole('link', { name: SELLER.eden.name }).click();
     await expect(hub(page)).toContainText('2 of 7 requirements are met.');
     await expect(row(page, 'Company details')).toContainText('Company details are incomplete.');
-    await expect(row(page, 'Company details').getByRole('button', { name: 'Add company details' })).toHaveAttribute('aria-disabled', 'true');
+    await expect(row(page, 'Company details').getByRole('link', { name: 'Add company details' })).toHaveAttribute('href', `/s/${SELLER.eden.id}/store/company`);
     await expect(row(page, 'Admission to Adulis')).toContainText('Waiting for an Adulis review.');
     await expect(page.getByText('Eden Foods PLC').first()).toBeVisible();
   });

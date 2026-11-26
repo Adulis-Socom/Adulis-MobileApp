@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { FieldError } from '../../components/Form';
 import { codeText, t } from '../../i18n/t';
+import { isStaleCompletion } from '../../seller/useSellerCommand';
 import { asTransportError, TransportError } from '../../transport/port';
 
 /**
@@ -44,6 +45,8 @@ export function useAction(announceSaved = false): ActionApi {
       if (announceSaved) setSaved(true);
       return result;
     } catch (e) {
+      // The screen this write belonged to is gone: nothing here may show a notice or move focus.
+      if (isStaleCompletion(e)) return undefined;
       setError(asTransportError(e));
       setToken((n) => n + 1);
       return undefined;

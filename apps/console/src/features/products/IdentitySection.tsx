@@ -5,6 +5,7 @@ import { t } from '../../i18n/t';
 import { useSellerCommand } from '../../seller/useSellerCommand';
 import { ActionProblem } from '../shared/ActionProblem';
 import { useAction } from '../shared/useAction';
+import { useDirty } from '../shared/dirty';
 import { can, categoryPath, type CategorySectionProps } from './editor';
 import { Section } from './Section';
 
@@ -17,6 +18,7 @@ export function IdentitySection({ detail, categories, onChange, onReload }: Cate
   const [description, setDescription] = useState(detail.description);
   const [category, setCategory] = useState(detail.category_id ?? '');
   const chosen = categories.find((c) => c.id === category);
+  useDirty('identity', title !== detail.title || description !== detail.description || category !== (detail.category_id ?? ''));
 
   async function save(event: FormEvent) {
     event.preventDefault();

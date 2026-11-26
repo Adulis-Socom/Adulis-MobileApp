@@ -1,4 +1,5 @@
 import { ErrorSummary } from '../../components/Form';
+import { isUnknownOutcome } from '../../seller/retry';
 import { Problem } from '../../components/Problem';
 import { t } from '../../i18n/t';
 import type { ActionApi } from './useAction';
@@ -14,6 +15,7 @@ export function ActionProblem({ action, onReload }: { action: ActionApi; onReloa
     <>
       <ErrorSummary errors={action.summary} focusToken={action.token} />
       <Problem error={hasFields ? null : action.error} />
+      {action.error && isUnknownOutcome(action.error.code) ? <p className="hint">{t('error.uncertain')}</p> : null}
       <p role="status" className="hint">
         {action.saved ? t('action.saved') : ''}
       </p>

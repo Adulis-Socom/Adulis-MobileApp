@@ -6,9 +6,10 @@ import { label, t } from '../../i18n/t';
 import { useSellerCommand } from '../../seller/useSellerCommand';
 import { ActionProblem } from '../shared/ActionProblem';
 import { useAction } from '../shared/useAction';
+import { useDirty } from '../shared/dirty';
 import { Section } from '../products/Section';
 import { Stage } from './Stage';
-import { canDo, type SceneSectionProps } from './sceneEditor';
+import { canDo, imageSrc, type SceneSectionProps } from './sceneEditor';
 
 const LOOK: Record<'PROCESSING' | 'READY' | 'REJECTED', { tone: Tone; icon: IconName }> = {
   PROCESSING: { tone: 'info', icon: 'clock' },
@@ -19,7 +20,7 @@ const LOOK: Record<'PROCESSING' | 'READY' | 'REJECTED', { tone: Tone; icon: Icon
 const POLL_MS = 1000;
 
 /** The Scene's image (SCN S21): photo only; native video upload does not exist. Processing is asynchronous. */
-export function SceneImageSection({ scene, onChange, onReload, onRefresh }: SceneSectionProps) {
+export function SceneImageSection({ scene, onChange, onReload, onRefresh, localImage, onLocalImage }: SceneSectionProps) {
   const run = useSellerCommand();
   const action = useAction();
   const editable = canDo(scene, 'EDIT');
@@ -36,15 +37,19 @@ export function SceneImageSection({ scene, onChange, onReload, onRefresh }: Scen
     event.target.value = '';
     if (!file) return;
     const next = await action.run(() => run('scenes.media.set', { scene_id: scene.id, version: scene.version, file_name: file.name, content_type: file.type === '' ? 'application/octet-stream' : file.type }));
-    if (next) onChange(next);
+    if (next) {
+      onLocalImage(file);
+      onChange(next);
+    }
   }
+  const src = imageSrc(scene, localImage);
 
   return (
     <Section id="image" title={t('scenes.image_title')}>
       <ActionProblem action={action} onReload={onReload} />
       {scene.image ? (
         <>
-          <Stage aspect={scene.image.aspect} imageName={scene.image.file_name} markers={[]} />
+          <Stage aspect={scene.image.aspect} imageName={scene.image.file_name} imageUrl={src.url} measure={src.measure} markers={[]} />
           <p>
             <Badge tone={LOOK[scene.image.state].tone} icon={LOOK[scene.image.state].icon}>
               {label('media.state', scene.image.state)}
@@ -75,6 +80,7 @@ export function SceneCaptionSection({ scene, onChange, onReload }: SceneSectionP
   const action = useAction(true);
   const editable = canDo(scene, 'EDIT');
   const [caption, setCaption] = useState(scene.caption);
+  useDirty('caption', caption !== scene.caption);
 
   async function save(event: FormEvent) {
     event.preventDefault();

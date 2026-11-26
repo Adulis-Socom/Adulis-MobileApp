@@ -43,17 +43,26 @@ function History({ variantId, timezone }: { variantId: string; timezone: string 
 
 function Confidence({ variant, timezone }: { variant: VariantView; timezone: string | undefined }) {
   const c = variant.confidence;
+  const when = c.last_confirmed_at === null ? t('stock.never_confirmed') : formatInstant(c.last_confirmed_at, timezone);
+  // The effect is shown per Variant only when it says something; "none defined yet" is said once for the whole section.
+  const effect = c.effect_code === 'NONE_DEFINED' ? null : (codeText('confidence.effect', c.effect_code) ?? c.effect_code);
   return (
-    <dl className="facts">
-      <dt>{t('stock.confidence')}</dt>
-      <dd>{label('confidence', c.state)}</dd>
-      <dt>{t('stock.confidence_why')}</dt>
-      <dd>{label('confidence.reason', c.reason_code)}</dd>
-      <dt>{t('stock.confidence_effect')}</dt>
-      <dd>{codeText('confidence.effect', c.effect_code) ?? c.effect_code}</dd>
-      <dt>{t('stock.last_confirmed')}</dt>
-      <dd>{c.last_confirmed_at === null ? t('stock.never_confirmed') : <time dateTime={c.last_confirmed_at}>{formatInstant(c.last_confirmed_at, timezone)}</time>}</dd>
-    </dl>
+    <>
+      <p className="ledger-meta">{t('stock.confidence_line', { state: label('confidence', c.state), when })}</p>
+      <details className="more">
+        <summary>{t('stock.details')}</summary>
+        <dl className="facts">
+          <dt>{t('stock.confidence_why')}</dt>
+          <dd>{label('confidence.reason', c.reason_code)}</dd>
+          {effect ? (
+            <>
+              <dt>{t('stock.confidence_effect')}</dt>
+              <dd>{effect}</dd>
+            </>
+          ) : null}
+        </dl>
+      </details>
+    </>
   );
 }
 
@@ -155,11 +164,14 @@ export function InventorySection(props: SectionProps) {
       {detail.variants.length === 0 ? (
         <p className="empty">{t('stock.no_variants')}</p>
       ) : (
+        <>
+          {detail.variants.some((v) => v.confidence.effect_code === 'NONE_DEFINED') ? <p className="hint">{codeText('confidence.effect', 'NONE_DEFINED')}</p> : null}
         <ul className="ledger" aria-label={t('stock.list_label')}>
           {detail.variants.map((v) => (
             <StockCard key={v.id} {...props} variant={v} />
           ))}
         </ul>
+        </>
       )}
     </Section>
   );

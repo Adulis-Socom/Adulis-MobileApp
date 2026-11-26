@@ -53,7 +53,8 @@ test.describe('SC-FE-06: location, coverage, hours', () => {
     await expect(facts).toContainText(/Shown to Buyers\s*Yes/);
     await page.getByRole('button', { name: 'Remove location' }).click();
     await expect(page.getByText('No shop location is set.')).toBeVisible();
-    await expect(page.getByText('A map preview is not available in this release.')).toBeVisible();
+    await expect(page.getByText('No map provider is connected in this release.', { exact: false })).toBeVisible();
+    await expect(page.getByText('No place is set, so there is nothing to preview yet.')).toBeVisible();
   });
 
   test('service coverage starts empty and is explicit; Market eligibility is not coverage', async ({ page }) => {
@@ -110,7 +111,9 @@ test.describe('SC-FE-06: fulfilment and coverage depend on each other', () => {
     await page.getByRole('button', { name: 'Save fulfilment' }).click();
     await expect(page.getByRole('alert').getByRole('link', { name: 'Choose at least one service area while a delivery method is on.' })).toHaveAttribute('href', '#fulfilment');
 
+    // the refused save left the form edited, so leaving asks first; this Seller chooses to leave
     await storeNav(page).getByRole('link', { name: 'Service coverage' }).click();
+    await page.getByRole('button', { name: 'Leave and discard changes' }).click();
     await page.getByRole('checkbox', { name: ADDIS }).check();
     await page.getByRole('button', { name: 'Save service coverage' }).click();
     await expect(page.getByText('Saved.')).toBeVisible();

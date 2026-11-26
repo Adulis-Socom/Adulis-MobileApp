@@ -249,6 +249,8 @@ export interface World {
     /** Remove the signed-in account's relationship with a Seller, as if it left the team mid-session. */
     revokeMembership(sellerId: string): void;
     callLog(): readonly { op: string; sellerId: string | null }[];
+    /** Put a Product under restriction, as an Operator decision would. Development only. */
+    restrictProduct(sellerId: string, productId: string): boolean;
     /** Move the fixture server's clock forward by `ms`. Development only: the real server owns time. */
     skewClock(ms: number): void;
   };
@@ -326,6 +328,7 @@ export function createWorld(options: WorldOptions): World {
     const product = catalogue.hasPublishedProduct(s.summary.id);
     const profile = store.profileComplete(s.summary.id);
     const fulfilment = store.fulfilmentConfigured(s.summary.id);
+    const companyOk = store.companyComplete(s.summary.id);
     const act = (kind: string): ReadinessItem['resolving_action'] => ({ kind, denied: canResolve ? null : 'NO_PERMISSION' });
     const items: ReadinessItem[] = [
       { code: 'ACCOUNT_CREATED', satisfied: true, workflow_state: null, reason_codes: [], resolving_action: null },
@@ -341,10 +344,10 @@ export function createWorld(options: WorldOptions): World {
     if (s.summary.seller_type === 'COMPANY') {
       items.push({
         code: 'COMPANY_DETAILS',
-        satisfied: s.companyDetails,
+        satisfied: companyOk,
         workflow_state: null,
-        reason_codes: s.companyDetails ? [] : ['COMPANY_DETAILS_INCOMPLETE'],
-        resolving_action: s.companyDetails ? null : act('EDIT_COMPANY_DETAILS'),
+        reason_codes: companyOk ? [] : ['COMPANY_DETAILS_INCOMPLETE'],
+        resolving_action: companyOk ? null : act('EDIT_COMPANY_DETAILS'),
       });
     }
     items.push(
@@ -411,12 +414,15 @@ export function createWorld(options: WorldOptions): World {
     next: (prefix) => `${prefix}_${++counter}`,
     flags: (id) => {
       const r = sellers[id];
-      return { name: r?.summary.display_name ?? '', product: r?.product ?? false, store: r?.store ?? false, fulfilment: r?.fulfilment ?? false };
+      return { name: r?.summary.display_name ?? '', product: r?.product ?? false, store: r?.store ?? false, fulfilment: r?.fulfilment ?? false, company: r?.summary.seller_type === 'COMPANY', companyDetails: r?.companyDetails ?? false };
     },
     authz: (ctx): Authz => {
-      const { m, s } = membership(persona(), sellerIdOf(ctx));
+      const who = persona();
+      const { m, s } = membership(who, sellerIdOf(ctx));
       const access = accessFor(m, s);
       return {
+        accountId: who.id,
+        isOwner: m.relationship === 'OWNER',
         sellerId: s.summary.id,
         sellerName: s.summary.display_name,
         caps: new Set(access.capabilities),
@@ -615,6 +621,7 @@ export function createWorld(options: WorldOptions): World {
       skewClock(ms) {
         skew += ms;
       },
+      restrictProduct: (sellerId, productId) => catalogue.restrict(sellerId, productId),
     },
   };
 }
