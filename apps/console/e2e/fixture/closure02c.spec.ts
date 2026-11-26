@@ -86,9 +86,10 @@ test.describe('Product media: real previews, arrangement, removal', () => {
     await goInApp(page, `/s/${SELLER.biruk.id}/products`);
     await page.getByRole('button', { name: 'Add a Product' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'New Product' })).toBeVisible();
-    await page.getByLabel('Add an image').setInputFiles(PNG('first.png'));
-    await page.getByLabel('Add an image').setInputFiles(PNG('second.png'));
     const list = page.getByRole('list', { name: 'Product images', exact: true });
+    await page.getByLabel('Add an image').setInputFiles(PNG('first.png'));
+    await expect(list.getByRole('listitem')).toHaveCount(1); // one upload at a time: a second choice while one is in flight is ignored
+    await page.getByLabel('Add an image').setInputFiles(PNG('second.png'));
     await expect(list.getByRole('listitem')).toHaveCount(2);
     await expect(list.getByRole('img', { name: 'Product image: first.png' })).toBeVisible();
     await expect(list.getByRole('listitem').nth(0)).toContainText('Main image');
@@ -113,7 +114,7 @@ test.describe('TikTok: optional, Product-detail-only, never a connection made he
     await region.getByLabel('TikTok video link').fill('https://www.tiktok.com/@someone.else/video/123');
     await region.getByRole('button', { name: 'Link video' }).click();
     await expect(region.getByRole('alert')).toContainText('We could not confirm that this video belongs to your TikTok account.');
-    await region.getByLabel('TikTok video link').fill('https://www.tiktok.com/@alem.textiles/video/unavailable');
+    await region.getByLabel('TikTok video link').fill('https://www.tiktok.com/@alem.textiles/video/999?unavailable');
     await region.getByRole('button', { name: 'Link video' }).click();
     await expect(region.getByRole('alert')).toContainText('This video cannot be shown right now.');
     await region.getByLabel('TikTok video link').fill('https://www.tiktok.com/@alem.textiles/video/456');

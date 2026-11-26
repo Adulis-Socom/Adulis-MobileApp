@@ -137,6 +137,7 @@ test.describe('SC-FE-06: fulfilment and coverage depend on each other', () => {
     await openStore(page, PHONE.owner, SELLER.alem, '/fulfilment', 'Fulfilment');
     await page.getByRole('checkbox', { name: 'Offer Courier Delivery' }).check();
     await page.getByRole('link', { name: 'Manage your Couriers' }).click();
+    await page.getByRole('button', { name: 'Leave and discard changes' }).click(); // the checkbox is an unsaved edit
     await expect(page.getByRole('heading', { level: 1, name: 'Couriers', exact: true })).toBeVisible();
   });
 });
