@@ -57,12 +57,15 @@ function Summary({ aggregate }: { aggregate: ReviewAggregate }) {
     <dl className="facts">
       <dt>{t('reviews.count_label')}</dt>
       <dd>{aggregate.count}</dd>
-      {(['5', '4', '3', '2', '1'] as const).map((n) => (
-        <div key={n} className="fact-pair">
-          <dt>{t('reviews.stars', { n })}</dt>
-          <dd>{aggregate.distribution[n]}</dd>
-        </div>
-      ))}
+      {/* With no reviews there is no distribution to show: five zero rows would bury the empty message below them. */}
+      {aggregate.count > 0
+        ? (['5', '4', '3', '2', '1'] as const).map((n) => (
+            <div key={n} className="fact-pair">
+              <dt>{t('reviews.stars', { n })}</dt>
+              <dd>{t('reviews.at_rating', { count: aggregate.distribution[n] })}</dd>
+            </div>
+          ))
+        : null}
     </dl>
   );
 }
