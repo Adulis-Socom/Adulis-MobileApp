@@ -125,6 +125,11 @@ function TopBar() {
       >
         <p>{t('account.signed_in_as', { name: accountName })}</p>
         <p className="hint">{t('account.sessions_note')}</p>
+        <p>
+          <Link to="/account" onClick={close}>
+            {t('acct.open_link')}
+          </Link>
+        </p>
         {signOutFailed ? (
           <p className="field-error" role="alert">
             <Icon name="alert" />

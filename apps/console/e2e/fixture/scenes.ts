@@ -613,6 +613,51 @@ export const SCENES: readonly Scene[] = [
       await expect(p.getByRole('region', { name: 'What this Seller includes' })).toBeVisible();
     },
   },
+  // ---- SC-FE-11 team, step-up, closure and the Account's own pages ----
+  {
+    name: 'settings-team',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/settings/team`);
+      await expect(p.getByRole('list', { name: 'Members' })).toBeVisible();
+    },
+  },
+  {
+    name: 'settings-team-stepup',
+    dialog: true,
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/settings/team`);
+      await p.getByLabel('New Owner').selectOption({ label: 'Abel (demonstration)' });
+      await p.getByRole('button', { name: 'Transfer ownership' }).click();
+      await expect(p.getByRole('dialog', { name: 'Confirm it is you' }).getByText('Enter the code to transfer ownership of Alem Textiles.')).toBeVisible();
+    },
+  },
+  {
+    name: 'settings-closure',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/settings/closure`);
+      await expect(p.getByRole('heading', { level: 2, name: 'What closing does' })).toBeVisible();
+    },
+  },
+  {
+    name: 'account-security',
+    setup: async (p) => {
+      await signedInChooser(p, PHONE.owner);
+      await p.getByRole('link', { name: 'Your account and security' }).click();
+      await expect(p.getByRole('list', { name: 'Where you are signed in' })).toBeVisible();
+    },
+  },
+  {
+    name: 'account-privacy',
+    setup: async (p) => {
+      await signedInChooser(p, PHONE.owner);
+      await p.getByRole('link', { name: 'Your account and security' }).click();
+      await p.getByRole('navigation', { name: 'Account sections' }).getByRole('link', { name: 'Privacy and deletion' }).click();
+      await expect(p.getByRole('heading', { level: 2, name: 'Delete your account' })).toBeVisible();
+    },
+  },
 ];
 
 export { CODE };
