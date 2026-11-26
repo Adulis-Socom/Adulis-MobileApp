@@ -38,7 +38,13 @@ describe('source hygiene (what no screen may contain)', () => {
     const copy = Object.entries(en);
     expect(copy.filter(([, v]) => /revenue|gmv|payout|reservation|refund|surcharge|paid order/i.test(v)).map(([k]) => k)).toEqual([]);
     const negations = new Set(['home.honest_body']);
-    expect(copy.filter(([k, v]) => /\b(orders?|payments?|deliver\w*)\b/i.test(v) && !negations.has(k)).map(([k]) => k)).toEqual([]);
+    // Orders and payments are never named. "Delivery" is allowed only where the governing designs NAME it as a configurable thing:
+    // the three fulfilment modes (FUL-01 S1) and standing Courier relationships (B02B-D02). Everything else is still checked.
+    const mayNameDelivery = (k: string): boolean => k.startsWith('fulfilment.') || k.startsWith('couriers.') || k.startsWith('courier.') || k === 'field_error.COVERAGE_REQUIRED_FOR_DELIVERY';
+    expect(copy.filter(([k, v]) => /\b(orders?|payments?)\b/i.test(v) && !negations.has(k)).map(([k]) => k)).toEqual([]);
+    expect(copy.filter(([k, v]) => /\bdeliver\w*\b/i.test(v) && !negations.has(k) && !mayNameDelivery(k)).map(([k]) => k)).toEqual([]);
+    // and where delivery may be named, the copy never claims it is live
+    expect(copy.filter(([k, v]) => mayNameDelivery(k) && /\b(tracking|on its way|delivered|out for delivery|in transit)\b/i.test(v)).map(([k]) => k)).toEqual([]);
   });
 });
 
