@@ -70,7 +70,8 @@ identify the governing ADU document and read `.claude/reference/DOCUMENT_AUTHORI
   checkout is Option A (real Cart, review only, never submits) plus Option C (isolated,
   development-only simulation); Seller Stories are in the MVP; the whole of Ethiopia is the
   first active Market; the build order is one surface at a time, frontend then backend,
-  Seller Console first. The legacy payment code that still exists is **not** approved
+  Seller Console first (scheduling amended by RB27-D01..D08, effective on its merge: two
+  controlled lanes, one surface at a time PER LANE). The legacy payment code that still exists is **not** approved
   behaviour: do not extend it, and do not delete it without a work order.
 - **Never invent an answer to an open product, database, API, legal, security or
   infrastructure question.** Report the gap; do not fill it.
@@ -244,6 +245,12 @@ never used as a starting point. Automated tests never use a persistent database 
 (SC-FE-12, SC-BE-08, MOB-FE-12, MOB-BE-09, SF-FE-07, SF-BE-05, OP-FE-09, OP-BE-07, REL-08) is promoted into `dev` by a normal reviewed PR
 with every required check, no second approval needed for the merge. First promotion after SC-FE-12:
 `docs/rebuild/DEV-PROMOTION-PROCEDURE.md`. It is not launch, deployment or database authorisation, and never touches `main`.
+
+**Controlled parallel execution, RB27-D01..D08 (27 November 2026, effective only on the founder's merge of its PR):** Lane 1 = Seller
+Console FE then BE (unchanged branches into `rebuild/2026-11-25`); Lane 2 = Mobile, then Storefront, then Operator frontends, integrating
+into its own lane branch (`rebuild/l2-mobile`, ...), with their backends only after all three frontends are accepted. A root coordinator
+alone writes shared resources (API/schema/migrations/events/auth, generated contract and client, tokens, locale, workspace, lockfile, CI,
+governance). `docs/amendments/REBUILD-2026-11-27-CONTROLLED-PARALLEL-EXECUTION.md`, `docs/rebuild/GOV-PARALLEL-01-EXECUTION-CONTROLS.md`.
 
 ## Development storage (every work order)
 
