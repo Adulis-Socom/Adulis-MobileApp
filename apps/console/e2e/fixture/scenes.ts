@@ -159,7 +159,8 @@ export const SCENES: readonly Scene[] = [
     name: 'unavailable-insights',
     setup: async (p) => {
       await atSellerHome(p, PHONE.owner, SELLER.alem.name);
-      await goInApp(p, `/s/${SELLER.alem.id}/insights`);
+      // Insights itself is built (SC-FE-10); its sub-pages still arrive later.
+      await goInApp(p, `/s/${SELLER.alem.id}/insights/reviews`);
       await expect(p.getByText('Insights arrives in a later release')).toBeVisible();
     },
   },
