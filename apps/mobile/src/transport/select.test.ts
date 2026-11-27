@@ -1,8 +1,10 @@
 // GOV-06 S1/S2 on the selector: the fixture is reachable only when BOTH build-time operands allow it, live never
 // reaches a fixture, and the live transport fails closed without sending anything. These tests do not prove that the
 // fixtures are absent from a release bundle: scripts/verify-release.mjs scans the real export for that.
-import { FIXTURE_BANNER } from '../fixtures';
+import { FIXTURE_BANNER, fixtureTransport } from '../fixtures';
+import { liveTransport } from './live';
 import { TransportError } from './port';
+import { selectTransport } from './select';
 
 const devGlobal = globalThis as unknown as { __DEV__: boolean };
 const original = { dev: devGlobal.__DEV__, flag: process.env.EXPO_PUBLIC_ADULIS_FIXTURES, fetch: globalThis.fetch };
@@ -18,7 +20,6 @@ async function select(dev: boolean, flag: string | undefined) {
   devGlobal.__DEV__ = dev;
   if (flag === undefined) delete process.env.EXPO_PUBLIC_ADULIS_FIXTURES;
   else process.env.EXPO_PUBLIC_ADULIS_FIXTURES = flag;
-  const { selectTransport } = await import('./select');
   return selectTransport();
 }
 
@@ -44,7 +45,6 @@ describe('live transport', () => {
   it('fails closed with UNAVAILABLE and sends nothing', async () => {
     const fetchSpy = jest.fn().mockRejectedValue(new Error('network must not be used'));
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
-    const { liveTransport } = await import('./live');
     await expect(liveTransport.request('bootstrap')).rejects.toMatchObject({ code: 'UNAVAILABLE', messageKey: 'error.request.internal' });
     await expect(liveTransport.request('bootstrap')).rejects.toBeInstanceOf(TransportError);
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -55,7 +55,6 @@ describe('fixture transport', () => {
   it('opens no network and refuses everything', async () => {
     const fetchSpy = jest.fn().mockRejectedValue(new Error('network must not be used'));
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
-    const { fixtureTransport } = await import('../fixtures');
     await expect(fixtureTransport.request('bootstrap')).rejects.toMatchObject({ code: 'REFUSED' });
     expect(fetchSpy).not.toHaveBeenCalled();
   });

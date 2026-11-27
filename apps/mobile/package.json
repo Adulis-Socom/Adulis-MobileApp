@@ -11,7 +11,7 @@
     "build": "expo export --platform android --output-dir dist",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
-    "test": "node scripts/check-locale-imports.mjs && jest",
+    "test": "node scripts/check-locale-imports.mjs && node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "verify:release": "node scripts/verify-release.mjs"
   },
   "expo": {
