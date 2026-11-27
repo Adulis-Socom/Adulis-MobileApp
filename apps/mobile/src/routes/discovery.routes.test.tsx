@@ -77,9 +77,10 @@ describe('Scene Explorer', () => {
     expect(screen.queryByRole('image', { name: 'Photo for scene 1' })).toBeNull();
   });
 
-  it('a malformed Scene link is the neutral not-found sentence and requests nothing', async () => {
-    await boot('/scenes/..');
-    expect(await screen.findByText(t('error.request.not_found'), undefined, WAIT)).toBeTruthy();
+  it('a malformed Scene reference is the neutral sentence and requests nothing (the router itself resolves dot segments away)', async () => {
+    await boot('/scenes/a.b');
+    expect(await findText('mobile.scene.gone')).toBeTruthy();
+    expect(fixtureHandle.opLog.some((entry) => entry.op === 'scene.get')).toBe(false);
   });
 });
 
