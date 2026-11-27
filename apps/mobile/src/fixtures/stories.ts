@@ -2,11 +2,12 @@
 // first, chronological inside a Seller). Expiry is a server-authored instant 24 hours after the request, so a fixture Story is
 // never "already expired" under a real clock; the app still never decides expiry itself. `expire(sellerRef)` lets a test play
 // the server withdrawing or expiring a Seller's Stories.
+import type { SellerSummary } from '../contracts/gap-mob-discovery';
 import type { StoryGroup, StoryView } from '../contracts/gap-mob-stories';
 import { FIXTURE_IDS } from './ids';
 
-const alem = { sellerRef: FIXTURE_IDS.seller, storeName: 'Demo Store Alem' };
-const bete = { sellerRef: 'fx_seller_demo_bete', storeName: 'Demo Store Bete' };
+const alem: SellerSummary = { sellerRef: FIXTURE_IDS.seller, storeName: 'Demo Store Alem' };
+const bete: SellerSummary = { sellerRef: 'fx_seller_demo_bete', storeName: 'Demo Store Bete' };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const story = (n: number, sellerName: string, text: string | null, target: StoryView['target']): StoryView => ({
@@ -28,7 +29,7 @@ const make = () => ({
 
 export const STORY_GROUPS: readonly StoryGroup[] = [{ seller: bete }, { seller: alem }];
 
-export function storiesOf(sellerRef: string, expired: ReadonlySet<string>): { seller: typeof alem; stories: StoryView[] } | null {
+export function storiesOf(sellerRef: string, expired: ReadonlySet<string>): { seller: SellerSummary; stories: StoryView[] } | null {
   const seller = [alem, bete].find((s) => s.sellerRef === sellerRef);
   const stories = (make() as Record<string, StoryView[]>)[sellerRef];
   if (seller === undefined || stories === undefined || expired.has(sellerRef)) return null; // one neutral answer for every reason
