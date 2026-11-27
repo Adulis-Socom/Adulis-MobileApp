@@ -3,6 +3,7 @@
 import { useRouter } from 'expo-router';
 
 import type { SceneCardUnit } from '../contracts/gap-mob-discovery';
+import { SceneActions } from '../engagement/controls';
 import { t } from '../i18n/messages';
 import { PagedList, SceneCard } from './components';
 import { usePaged } from './hooks';
@@ -17,7 +18,7 @@ export function SceneFeed({ op, empty }: { readonly op: 'feed.forYou.page' | 'fe
       keyOf={(scene) => scene.sceneRef}
       accept={(scene) => scene.type === 'SCENE_POST'}
       empty={empty ?? t('mobile.state.empty')}
-      renderItem={(scene) => <SceneCard scene={scene} onExplore={() => router.push(`/scenes/${scene.sceneRef}`)} />}
+      renderItem={(scene) => <SceneCard scene={scene} onExplore={() => router.push(`/scenes/${scene.sceneRef}`)} actions={<SceneActions scene={scene} />} />}
     />
   );
 }

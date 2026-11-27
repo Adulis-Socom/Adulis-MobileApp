@@ -12,6 +12,8 @@ import { formatPriceRange } from '../../../discovery/format';
 import { hotspotPosition, type Box } from '../../../discovery/hotspot';
 import { problemKind, useRead } from '../../../discovery/hooks';
 import { validRef } from '../../../discovery/params';
+import { SceneActions } from '../../../engagement/controls';
+import { ShareAndReport } from '../../../engagement/ShareAndReport';
 import { t } from '../../../i18n/messages';
 import { Body, Button, Screen, StateView } from '../../../ui/components';
 import { theme } from '../../../ui/theme';
@@ -75,6 +77,8 @@ export default function SceneExplorer() {
         <Text style={styles.seller}>{t('mobile.scene.by_seller', { seller: scene.seller.storeName })}</Text>
         {/* The caption is the Seller's words, as long as they wrote it: body text, not a title-size wall. */}
         <Body>{scene.caption}</Body>
+        <SceneActions scene={scene} />
+        <ShareAndReport />
         <Section title={t('mobile.scene.in_this_scene')}>
           {scene.tags.map((tag) => (
             <Pressable key={tag.position} accessibilityRole="button" accessibilityLabel={`${tag.name}`} onPress={() => setSelected(tag.position)} style={[styles.row, selected === tag.position && styles.rowSelected]}>

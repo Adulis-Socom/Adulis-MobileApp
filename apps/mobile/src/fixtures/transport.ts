@@ -5,8 +5,9 @@ import { asAccountRef, asMarketRef, MOBILE_AUDIENCE, ORDINARY_PRINCIPAL, type Bo
 import { OP_SPECS } from '../contracts/ops';
 import { TransportError, type CallContext, type MobileTransport } from '../transport/port';
 import { FIXTURE_CHALLENGE_PREFIX, FIXTURE_CREDENTIAL_PREFIX, FIXTURE_IDS, FIXTURE_REFUSAL, FIXTURE_VERSION } from './ids';
-import { CATEGORIES, CHANNELS, followedSellerRefs, knownCategory, pageOf, productDetail, productsOf, publicScene, search, sellerProfile, shopProducts, visibleScenes } from './discovery';
+import { CATEGORIES, CHANNELS, knownCategory, productTile, sceneUnit, pageOf, productDetail, productsOf, publicScene, search, sellerProfile, shopProducts, visibleScenes } from './discovery';
 import { PERSONAS, type Persona } from './personas';
+import { createEngagementWorld } from './engagement';
 import { createStoryWorld } from './stories';
 
 /** The deny-list backstop: never served, whatever the registry says (GOV-06 S2). */
@@ -31,6 +32,8 @@ export interface FixtureHandle {
   expireStories(sellerRef: string): void;
   /** Linked content (a Product or Scene ref) stopped being public: its Story is suppressed. */
   makeStoryTargetPrivate(ref: string): void;
+  /** The next call of `op` fails with `code` (failure-state tests). */
+  failNext(op: MobileOpId, code: 'NETWORK' | 'INTERNAL' | 'NOT_FOUND'): void;
   /** The fixture server clock (null: the real clock). Story publication and expiry are re-taken from it on reset(). */
   setNow(now: (() => number) | null): void;
   /** Accounts the fixture currently has a session for (isolation tests). */
@@ -47,6 +50,8 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
   const holds = new Map<string, Promise<void>[]>();
   const spent = new Set<string>(); // expiry / revocation scenarios fire once per credential
   const withdrawn = new Set<string>();
+  const engagement = createEngagementWorld();
+  const failures = new Map<string, 'NETWORK' | 'INTERNAL' | 'NOT_FOUND'>();
   let client: ClientScenario = 'OK';
   let sequence = 0;
 
@@ -56,6 +61,13 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
       : client === 'UPGRADE_RECOMMENDED'
         ? { status: 'UPGRADE_RECOMMENDED', message: null }
         : { status: 'OK' };
+
+  /** The Account behind this request's bearer. An Account-bound operation without one is refused, exactly as a server would. */
+  function personaOf(ctx: CallContext): Persona {
+    const persona = ctx.bearer === null ? undefined : sessions.get(ctx.bearer);
+    if (persona === undefined) throw new TransportError('AUTHENTICATION_REQUIRED');
+    return persona;
+  }
 
   function serve(op: MobileOpId, input: unknown, ctx: CallContext): unknown {
     switch (op) {
@@ -105,6 +117,77 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
         if (ctx.bearer !== null) sessions.delete(ctx.bearer);
         return {};
       }
+      case 'engagement.state.get':
+        return engagement.state(personaOf(ctx).key, input as MobileOps['engagement.state.get']['in']);
+      case 'scene.like.set': {
+        const { sceneRef, liked } = input as MobileOps['scene.like.set']['in'];
+        if (publicScene(sceneRef, withdrawn) === null) throw new TransportError('NOT_FOUND');
+        return engagement.like(personaOf(ctx).key, sceneRef, liked);
+      }
+      case 'scene.save.set': {
+        const { sceneRef, saved } = input as MobileOps['scene.save.set']['in'];
+        if (publicScene(sceneRef, withdrawn) === null) throw new TransportError('NOT_FOUND');
+        return engagement.saveScene(personaOf(ctx).key, sceneRef, saved);
+      }
+      case 'product.save.set': {
+        const { productRef, saved } = input as MobileOps['product.save.set']['in'];
+        if (productDetail(productRef) === null) throw new TransportError('NOT_FOUND');
+        return engagement.saveProduct(personaOf(ctx).key, productRef, saved);
+      }
+      case 'seller.follow.set': {
+        const { sellerRef, following } = input as MobileOps['seller.follow.set']['in'];
+        if (sellerProfile(sellerRef) === null) throw new TransportError('NOT_FOUND');
+        return engagement.follow(personaOf(ctx).key, sellerRef, following);
+      }
+      case 'saved.list.get': {
+        const mine = engagement.saved(personaOf(ctx).key);
+        // A Scene withdrawn since it was saved is simply absent: the server decides what is public.
+        return {
+          scenes: mine.scenes.map((ref) => (withdrawn.has(ref) ? undefined : sceneUnit(ref))).filter((s) => s !== undefined),
+          products: mine.products.map((ref) => productTile(ref)).filter((p) => p !== undefined),
+        };
+      }
+      case 'collections.list.get':
+        return { collections: engagement.collections(personaOf(ctx).key) };
+      case 'collection.create': {
+        const created = engagement.createCollection(personaOf(ctx).key, (input as MobileOps['collection.create']['in']).name);
+        if (created === null) throw new TransportError('VALIDATION_FAILED');
+        return { collection: created };
+      }
+      case 'collection.get': {
+        const found = engagement.collection(personaOf(ctx).key, (input as MobileOps['collection.get']['in']).collectionRef);
+        if (found === undefined) throw new TransportError('NOT_FOUND');
+        const items = found.items.map((item) => {
+          const scene = item.kind === 'SCENE_POST' && !withdrawn.has(item.ref) ? sceneUnit(item.ref) : undefined;
+          if (scene) return { kind: 'SCENE_POST' as const, scene };
+          const product = item.kind === 'PRODUCT_POST' ? productTile(item.ref) : undefined;
+          if (product) return { kind: 'PRODUCT_POST' as const, product };
+          return { kind: 'UNAVAILABLE' as const, item }; // no name, caption or picture of what it once was
+        });
+        return { collection: { collectionRef: found.collectionRef, name: found.name }, items };
+      }
+      case 'collection.rename': {
+        const { collectionRef, name } = input as MobileOps['collection.rename']['in'];
+        const renamed = engagement.rename(personaOf(ctx).key, collectionRef, name);
+        if (renamed === 'NOT_FOUND') throw new TransportError('NOT_FOUND');
+        if (renamed === 'INVALID') throw new TransportError('VALIDATION_FAILED');
+        return { collection: renamed };
+      }
+      case 'collection.delete': {
+        // Deleting what is already gone is the outcome asked for (recovered from the archived saved-privacy cases).
+        engagement.remove(personaOf(ctx).key, (input as MobileOps['collection.delete']['in']).collectionRef);
+        return {};
+      }
+      case 'collection.item.add':
+      case 'collection.item.remove': {
+        const { collectionRef, item } = input as MobileOps['collection.item.add']['in'];
+        const adding = op === 'collection.item.add';
+        // Only something public can be added; anything can be removed (including what stopped being public).
+        const publicNow = item.kind === 'SCENE_POST' ? sceneUnit(item.ref) !== undefined && !withdrawn.has(item.ref) : productTile(item.ref) !== undefined;
+        if (adding && !publicNow) throw new TransportError('NOT_FOUND');
+        if (!engagement.setMember(personaOf(ctx).key, collectionRef, item, adding)) throw new TransportError('NOT_FOUND');
+        return { item };
+      }
       case 'stories.row.get':
         return { groups: stories.row(), nextCursor: null };
       case 'stories.group.get': {
@@ -119,8 +202,7 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
       case 'feed.following.page': {
         const persona = ctx.bearer === null ? undefined : sessions.get(ctx.bearer);
         if (persona === undefined) throw new TransportError('AUTHENTICATION_REQUIRED');
-        const followed = followedSellerRefs(persona.key);
-        return pageOf(visibleScenes(withdrawn).filter((s) => followed.includes(s.seller.sellerRef)), (input as MobileOps['feed.following.page']['in']).cursor);
+        return pageOf(visibleScenes(withdrawn).filter((s) => engagement.isFollowing(persona.key, s.seller.sellerRef)), (input as MobileOps['feed.following.page']['in']).cursor);
       }
       case 'scene.get': {
         const found = publicScene((input as MobileOps['scene.get']['in']).sceneRef, withdrawn);
@@ -171,6 +253,12 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
       }
       const queued = holds.get(op)?.shift();
       if (queued) await queued;
+      const failure = failures.get(op);
+      if (failure !== undefined) {
+        failures.delete(op);
+        log.push({ op, outcome: 'SERVED' });
+        throw new TransportError(failure);
+      }
       let value: unknown;
       try {
         value = serve(op, input, ctx);
@@ -200,6 +288,7 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
     withdraw: (sceneRef) => void withdrawn.add(sceneRef),
     expireStories: (sellerRef) => stories.makeUnavailable(sellerRef),
     makeStoryTargetPrivate: (ref) => stories.makeTargetPrivate(ref),
+    failNext: (op, code) => void failures.set(op, code),
     setNow(now) {
       clock = now;
     },
@@ -212,6 +301,8 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
       spent.clear();
       withdrawn.clear();
       stories.reset();
+      engagement.reset();
+      failures.clear();
       client = 'OK';
       sequence = 0;
     },

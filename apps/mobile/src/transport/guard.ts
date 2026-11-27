@@ -20,5 +20,9 @@ function pick(input: unknown, path: readonly string[]): unknown {
 
 /** True when any identifier field of the operation carries a reserved (fixture) identifier. */
 export function carriesReservedId(op: MobileOpId, input: unknown): boolean {
-  return OP_SPECS[op].refFields.some((path) => isReservedId(pick(input, path)));
+  // A field may hold one identifier or a list of them (a batch read): either way, one reserved member refuses the call.
+  return OP_SPECS[op].refFields.some((path) => {
+    const value = pick(input, path);
+    return Array.isArray(value) ? value.some(isReservedId) : isReservedId(value);
+  });
 }

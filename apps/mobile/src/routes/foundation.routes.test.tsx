@@ -91,7 +91,8 @@ describe('sign-in, verification and return', () => {
     await findText('error.auth.authentication_required');
     await fireEvent.press(button('mobile.auth.sign_in'));
     await signInThroughScreens(phone('owner'));
-    expect(await findText('mobile.state.later')).toBeTruthy();
+    // MOB-FE-03 builds Saved: a new Account has nothing saved yet.
+    expect(await findText('mobile.saved.empty')).toBeTruthy();
     expect(r.getPathname()).toBe('/saved');
     expect(screen.queryByText(t('error.auth.authentication_required'))).toBeNull();
   });

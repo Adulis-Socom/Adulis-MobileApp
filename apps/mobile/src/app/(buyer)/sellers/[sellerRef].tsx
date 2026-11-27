@@ -10,6 +10,8 @@ import { PagedList, ProductTileView, SceneCard } from '../../../discovery/compon
 import { trustText } from '../../../discovery/format';
 import { problemKind, usePaged, useRead } from '../../../discovery/hooks';
 import { validRef } from '../../../discovery/params';
+import { SellerFollow } from '../../../engagement/controls';
+import { ShareAndReport } from '../../../engagement/ShareAndReport';
 import { t, type UiMessageKey } from '../../../i18n/messages';
 import { Body, Heading, Screen, StateView } from '../../../ui/components';
 import { theme } from '../../../ui/theme';
@@ -36,9 +38,9 @@ function ProductsTab({ sellerRef }: { readonly sellerRef: string }) {
 
 export default function SellerProfileRoute() {
   const router = useRouter();
-  const { sellerRef } = useLocalSearchParams<{ sellerRef?: string }>();
+  const { sellerRef, tab: initialTab } = useLocalSearchParams<{ sellerRef?: string; tab?: string }>();
   const ref = validRef(sellerRef);
-  const [tab, setTab] = useState<Tab>('scenes');
+  const [tab, setTab] = useState<Tab>(() => (TABS.some((entry) => entry.key === initialTab) ? (initialTab as Tab) : 'scenes'));
   const query = useRead('seller.get', { sellerRef: ref ?? '' }, { enabled: ref !== null });
 
   if (ref === null || (query.status === 'error' && problemKind(query.error) === 'gone')) {
@@ -52,6 +54,8 @@ export default function SellerProfileRoute() {
   return (
     <Screen>
       <Heading>{seller.storeName}</Heading>
+      <SellerFollow sellerRef={seller.sellerRef} />
+      <ShareAndReport />
       {seller.isOpen === null ? null : <Text style={styles.small}>{t(seller.isOpen ? 'mobile.seller.open' : 'mobile.seller.closed')}</Text>}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityRole="tablist" style={styles.tabScroll} contentContainerStyle={styles.tabs}>
         {TABS.map(({ key, label }) => (
