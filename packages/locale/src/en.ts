@@ -175,6 +175,11 @@ export const enCommon = {
   'mobile.stories.time_left.one_hour': 'About 1 hour left.',
   'mobile.stories.time_left.hours': 'About {hours} hours left.',
   'mobile.market.unresolved': 'Your region is not set yet, so results may be limited.',
+  // L2-MOBILE-03 addendum 152-155 to SR-L2M01-LOC-01 (MOB-FE-03: honest Share and Report entries).
+  'mobile.share.entry': 'Share',
+  'mobile.share.unavailable': 'Sharing is not available yet.',
+  'mobile.report.entry': 'Report',
+  'mobile.report.unavailable': 'Reporting from the app is not available yet.',
 } as const;
 
 export type CommonMessageKey = keyof typeof enCommon;

@@ -168,4 +168,8 @@ export const amCommon: { readonly [K in CommonMessageKey]: AmEntry } = {
   'mobile.stories.time_left.one_hour': { status: 'PENDING' },
   'mobile.stories.time_left.hours': { status: 'PENDING' },
   'mobile.market.unresolved': { status: 'PENDING' },
+  'mobile.share.entry': { status: 'PENDING' },
+  'mobile.share.unavailable': { status: 'PENDING' },
+  'mobile.report.entry': { status: 'PENDING' },
+  'mobile.report.unavailable': { status: 'PENDING' },
 };
