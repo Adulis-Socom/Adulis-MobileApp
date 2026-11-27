@@ -6,7 +6,6 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import type { DiscoveryOps } from '../contracts/gap-mob-discovery';
 import { SessionChanged, type MobileOps } from '../contracts/gap-mob-session';
 import { useApp } from '../providers/AppProvider';
-import { queryKeys } from '../session/query-keys';
 import { TransportError } from '../transport/port';
 
 type PagedOp = { [K in keyof DiscoveryOps]: DiscoveryOps[K]['out'] extends { nextCursor: string | null } ? K : never }[keyof DiscoveryOps];

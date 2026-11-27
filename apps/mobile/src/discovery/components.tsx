@@ -101,14 +101,14 @@ export function PagedList<T>({
       data={items}
       keyExtractor={keyOf}
       renderItem={({ item }) => <View style={styles.row}>{renderItem(item)}</View>}
-      ListHeaderComponent={header ? <View>{header}</View> : null}
+      ListHeaderComponent={header ? <View>{header}</View> : undefined}
       ListEmptyComponent={<StateView kind="empty" message={empty ?? t('mobile.state.empty')} />}
       ListFooterComponent={
         query.hasNextPage ? (
           <View style={styles.row}>
             <Button kind="secondary" label={t('mobile.list.load_more')} busy={query.isFetchingNextPage} onPress={() => void query.fetchNextPage()} />
           </View>
-        ) : null
+        ) : undefined
       }
       onEndReached={() => query.hasNextPage && !query.isFetchingNextPage && void query.fetchNextPage()}
       onEndReachedThreshold={0.5}

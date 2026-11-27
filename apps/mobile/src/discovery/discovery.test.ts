@@ -1,5 +1,6 @@
 // MOB-FE-02 discovery: pure logic and the fixture world through the real session boundary. Product rules are asserted as
 // absences as well as presences, because completing the model is how a retired rule comes back.
+import type { SceneCardUnit } from '../contracts/gap-mob-discovery';
 import { containRect, hotspotPosition } from './hotspot';
 import { availabilityText, formatMoney, formatPriceRange, trustText } from './format';
 import { prepareQuery, SEARCH_MAX_CHARS } from './search-query';
@@ -88,7 +89,7 @@ describe('the fixture discovery world', () => {
     let cursor: string | null = null;
     let pages = 0;
     do {
-      const page = await runtime.session.call('feed.forYou.page', { cursor });
+      const page: { items: readonly SceneCardUnit[]; nextCursor: string | null } = await runtime.session.call('feed.forYou.page', { cursor });
       expect(page.items.length).toBeLessThanOrEqual(PAGE_SIZE);
       seen.push(...page.items.map((s) => s.sceneRef));
       cursor = page.nextCursor;
@@ -206,7 +207,12 @@ describe('the fixture discovery world', () => {
     const keys = new Set<string>();
     const walk = (node: unknown) => {
       if (Array.isArray(node)) node.forEach(walk);
-      else if (node && typeof node === 'object') for (const [k, v] of Object.entries(node)) (keys.add(k), walk(v));
+      else if (node && typeof node === 'object') {
+        for (const [k, v] of Object.entries(node)) {
+          keys.add(k);
+          walk(v);
+        }
+      }
     };
     payloads.forEach(walk);
     const forbidden = [...keys].filter((k) => /score|weight|rank|algorithm|candidate|discount|percent|stock|likes?\b|likeCount|comment|popular|trending|distance|radius|location|reviewSummary|rating|handoff/i.test(k));
