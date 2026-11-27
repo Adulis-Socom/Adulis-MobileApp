@@ -13,10 +13,10 @@ test.describe('SC-FE-03: the daily operating Home', () => {
     await expect(page.getByRole('region', { name: 'Alerts' })).toContainText('Your admission is due to be checked again under the current policy.');
     await expect(page.getByRole('region', { name: 'Things to do' })).toContainText('Accept the updated Seller policy.');
     await expect(page.getByRole('region', { name: 'Things to do' }).locator('time')).toHaveCount(1);
-    for (const name of ['Inbox', 'Insights', 'Settings']) {
-      await expect(area(page, name).first()).toContainText('Arrives later');
-    }
-    // Products (SC-FE-04), Scenes (SC-FE-05) and Seller Stories (SC-FE-05S) are built: open, and links
+    // Products (SC-FE-04), Scenes (SC-FE-05), Seller Stories (SC-FE-05S), the Inbox (SC-FE-08), Insights and Settings (SC-FE-10) are built
+    await expect(area(page, 'Insights').first()).toContainText('Open');
+    await expect(area(page, 'Settings').first()).toContainText('Open');
+    await expect(area(page, 'Inbox').first()).toContainText('Open');
     await expect(area(page, 'Seller Stories').first()).toContainText('Open');
     await expect(area(page, 'Products').first()).toContainText('Open');
     await expect(area(page, 'Scenes').first()).toContainText('Open');
@@ -36,10 +36,9 @@ test.describe('SC-FE-03: the daily operating Home', () => {
 
   test('area rows lead to honest destinations the role may open, and nothing else', async ({ page }) => {
     await atSellerHome(page, PHONE.owner, SELLER.alem.name);
-    // an area that only arrives later is a row that says so: no link, no chevron promising a destination
-    await expect(area(page, 'Inbox').getByRole('link')).toHaveCount(0);
-    await expect(area(page, 'Inbox').locator('svg.icon').first()).toBeVisible(); // only the status badge icon
-    await expect(area(page, 'Inbox').locator('.ledger-link')).toHaveCount(0);
+    // every area of this brief is built now (SC-FE-10): each is one link to its own destination
+    await expect(area(page, 'Insights').getByRole('link')).toHaveCount(1);
+    await expect(area(page, 'Settings').getByRole('link')).toHaveCount(1);
     await expect(area(page, 'Products').getByRole('link')).toHaveCount(1);
     await expect(area(page, 'Scenes').getByRole('link')).toHaveCount(1);
     await expect(area(page, 'Seller Stories').getByRole('link')).toHaveCount(1);

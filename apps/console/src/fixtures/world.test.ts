@@ -142,7 +142,7 @@ describe('fixture world: capabilities, roles and entitlements (server decides)',
     const world = fresh();
     await signIn(world, 'fx_acct_sales');
     const access = await world.handle('seller.access.get', {}, { sellerId: 'fx_seller_alem' });
-    expect(access.destinations.map((d) => d.key)).toEqual(['home', 'inbox']);
+    expect(access.destinations.map((d) => d.key)).toEqual(['home', 'inbox', 'trust']); // AUTH-02: Sales Support holds seller.trust:read
     const brief = await world.handle('seller.home.get', {}, { sellerId: 'fx_seller_alem' });
     expect(brief.role_view).toBe('SALES_SUPPORT');
     expect(brief.areas.map((a) => a.key)).not.toContain('PRODUCTS');
@@ -152,7 +152,7 @@ describe('fixture world: capabilities, roles and entitlements (server decides)',
     const world = fresh();
     await signIn(world, 'fx_acct_multirole');
     const access = await world.handle('seller.access.get', {}, { sellerId: 'fx_seller_alem' });
-    expect(access.destinations.map((d) => d.key)).toEqual(['home', 'products', 'inbox']);
+    expect(access.destinations.map((d) => d.key)).toEqual(['home', 'products', 'inbox', 'trust']);
   });
 
   it('missing entitlement is reported as NO_ENTITLEMENT, not removed', async () => {
@@ -183,12 +183,28 @@ describe('fixture world: capabilities, roles and entitlements (server decides)',
     expect(after.capabilities).not.toContain('readiness.resolve');
   });
 
-  it('a restricted Seller keeps only Home and Settings and says why', async () => {
+  it('a safety-suspended Seller keeps Home, read-only Trust and Settings, says why, and holds no write capability (P-70)', async () => {
     const world = fresh();
     await signIn(world, 'fx_acct_states');
     const access = await world.handle('seller.access.get', {}, { sellerId: 'fx_seller_gelila' });
-    expect(access.destinations.map((d) => d.key)).toEqual(['home', 'settings']);
+    expect(access.destinations.map((d) => d.key)).toEqual(['home', 'trust', 'settings']);
+    expect([...access.capabilities].sort()).toEqual(['notifications.view', 'reviews.read', 'trust.read']);
     expect(access.restriction).not.toBeNull();
+  });
+
+  it('answers a request sent under a session that has since ended as unauthenticated, and leaves the new session alone', async () => {
+    const world = fresh();
+    await signIn(world, 'fx_acct_owner');
+    world.hooks.delayNext('seller.home.get', 30);
+    const late = world.handle('seller.home.get', {}, { sellerId: 'fx_seller_alem' }).then(
+      () => 'ok',
+      (e: unknown) => (e instanceof TransportError ? e.code : 'other'),
+    );
+    await world.handle('auth.session.end', {}, {});
+    await signIn(world, 'fx_acct_owner');
+    expect(await late).toBe('AUTHENTICATION_REQUIRED');
+    // The current session is untouched by the obsolete request's failure.
+    expect((await world.handle('account.context.get', {}, {})).account.id).toBe('fx_acct_owner');
   });
 });
 
@@ -246,7 +262,7 @@ describe('fixture world: readiness, admission and Seller creation', () => {
     const world = fresh();
     await signIn(world, 'fx_acct_owner');
     const brief = await world.handle('seller.home.get', {}, { sellerId: 'fx_seller_alem' });
-    const built = ['NOTIFICATIONS', 'PRODUCTS', 'INVENTORY', 'SCENES', 'STORIES'];
+    const built = ['NOTIFICATIONS', 'PRODUCTS', 'INVENTORY', 'SCENES', 'STORIES', 'INBOX', 'INSIGHTS', 'SETTINGS'];
     expect(brief.areas.filter((a) => !built.includes(a.key)).every((a) => a.state !== 'AVAILABLE')).toBe(true);
     expect(brief.areas.filter((a) => built.includes(a.key)).every((a) => a.state === 'AVAILABLE')).toBe(true);
     expect(JSON.stringify(brief)).not.toMatch(/revenue|gmv|payment|paid|order|delivery/i);

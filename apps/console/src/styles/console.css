@@ -1496,6 +1496,50 @@ legend {
   margin-bottom: var(--adu-space-md);
 }
 
+/* ---- SC-FE-08 Inbox ----------------------------------------------------------------------------------------------- */
+.messages {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.message {
+  padding: var(--adu-space-md) 0;
+  border-top: 1px solid var(--adu-color-border);
+}
+
+.message:first-child {
+  border-top: 0;
+}
+
+/* a message says who sent it with words, never with colour or side alone; automated ones are set apart by a rule at the start */
+.message[data-sender='AUTOMATED'] {
+  border-inline-start: 3px solid var(--adu-color-border-strong);
+  padding-inline-start: var(--adu-space-md);
+}
+
+.message-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---- SC-FE-09 Trust and Reviews ---------------------------------------------------------------------------------- */
+.fact-pair {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--adu-space-xs) var(--adu-space-md);
+  border-top: 1px solid var(--adu-color-border);
+  padding-top: var(--adu-space-xs);
+}
+
+.fact-pair > dt,
+.fact-pair > dd {
+  margin: 0;
+}
+
 /* a long unbroken identifier or word wraps instead of widening the row (200% text, Amharic) */
 .ledger-title,
 .ledger-meta {
@@ -1512,3 +1556,30 @@ legend {
   font-weight: var(--adu-font-weight-semibold);
 }
 
+/* a team message is indented, so Buyer and team read as two voices even before the sender's name is read */
+.message[data-sender='SELLER_TEAM'] {
+  padding-inline-start: var(--adu-space-lg);
+}
+
+/* SC-FE-10: a server figure reads as the figure; its definition version follows in small type */
+.metric-value {
+  font-size: var(--adu-font-size-lg);
+  font-weight: var(--adu-font-weight-semibold);
+}
+
+.metric-value .hint {
+  font-size: var(--adu-font-size-base);
+  font-weight: var(--adu-font-weight-regular);
+}
+
+/* A server identifier (a template key, a code) has no spaces: at doubled text it must still break rather than widen its panel */
+.facts dd,
+.ledger-meta {
+  overflow-wrap: anywhere;
+}
+
+/* notice text sits beside its icon in a flex row: at doubled text a long word (demonstration) must wrap inside, not push past the window */
+.notice > span {
+  min-width: 0;
+  overflow-wrap: break-word;
+}

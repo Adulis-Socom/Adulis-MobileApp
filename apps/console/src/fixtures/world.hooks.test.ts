@@ -55,7 +55,7 @@ describe('fixture world: the hooks the fail-closed tests rely on', () => {
     const inventory = await world.handle('seller.access.get', {}, { sellerId: 'fx_seller_alem' });
     expect(owner.destinations).toHaveLength(8);
     expect(owner.capabilities).toContain('readiness.resolve');
-    expect(inventory.destinations.map((d) => d.key)).toEqual(['home', 'products']);
+    expect(inventory.destinations.map((d) => d.key)).toEqual(['home', 'products', 'trust']); // AUTH-02: Inventory holds seller.trust:read
     expect(inventory.capabilities).not.toContain('readiness.resolve');
   });
 });

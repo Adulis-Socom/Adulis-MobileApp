@@ -10,7 +10,16 @@ import { Home } from './features/home/Home';
 import { SceneEditor } from './features/content/SceneEditor';
 import { Scenes } from './features/content/Scenes';
 import { Stories } from './features/content/Stories';
+import { AutomationKnowledgePage, AutomationLayout, AutomationOverviewPage, AutomationTestRoute } from './features/automation/Automation';
+import { Inbox } from './features/inbox/Inbox';
+import { Insights } from './features/insights/Insights';
+import { Plan, SettingsIndex } from './features/settings/Settings';
+import { Closure } from './features/settings/Closure';
+import { Team } from './features/settings/Team';
+import { AccountInvitations, AccountLayout, AccountNotifications, AccountPrivacy, AccountSecurity } from './features/account/Account';
+import { Thread } from './features/inbox/Thread';
 import { Notifications } from './features/notifications/Notifications';
+import { Trust } from './features/trust/Trust';
 import { ProductEditor } from './features/products/ProductEditor';
 import { Products } from './features/products/Products';
 import { Admission } from './features/onboarding/Admission';
@@ -52,6 +61,16 @@ const children: RouteObject[] = [
       { path: 'sellers', element: <Chooser /> },
       { path: 'become-seller', element: <BecomeSeller /> },
       {
+        path: 'account',
+        element: <AccountLayout />,
+        children: [
+          { index: true, element: <AccountSecurity /> },
+          { path: 'notifications', element: <AccountNotifications /> },
+          { path: 'privacy', element: <AccountPrivacy /> },
+          { path: 'invitations', element: <AccountInvitations /> },
+        ],
+      },
+      {
         path: 's/:sellerId',
         element: <SellerRoute />,
         children: [
@@ -65,7 +84,19 @@ const children: RouteObject[] = [
           { path: 'content/scenes/:postId', element: <Gate dest="content"><SceneEditor /></Gate> },
           { path: 'content/stories', element: <Gate dest="content"><Stories /></Gate> },
           deferred('content/*', 'content'),
-          deferred('inbox/*', 'inbox'),
+          { path: 'inbox', element: <Gate dest="inbox"><Inbox /></Gate> },
+          // Scripted assistance administration (SC-FE-08): gated by the chatbot capabilities, not by the Inbox destination (CONSOLE-02 S76).
+          {
+            path: 'inbox/automation',
+            element: <AutomationLayout />,
+            children: [
+              { index: true, element: <AutomationOverviewPage /> },
+              { path: 'knowledge', element: <AutomationKnowledgePage /> },
+              { path: 'test', element: <AutomationTestRoute /> },
+            ],
+          },
+          { path: 'inbox/:conversationId', element: <Gate dest="inbox"><Thread /></Gate> },
+          { path: 'insights', element: <Gate dest="insights"><Insights /></Gate> },
           deferred('insights/*', 'insights'),
           {
             path: 'store',
@@ -84,7 +115,11 @@ const children: RouteObject[] = [
               { path: 'couriers', element: <Couriers /> },
             ],
           },
-          deferred('trust/*', 'trust'),
+          { path: 'trust', element: <Gate dest="trust"><Trust /></Gate> },
+          { path: 'settings', element: <Gate dest="settings"><SettingsIndex /></Gate> },
+          { path: 'settings/plan', element: <Gate dest="settings"><Plan /></Gate> },
+          { path: 'settings/team', element: <Gate dest="settings"><Team /></Gate> },
+          { path: 'settings/closure', element: <Gate dest="settings"><Closure /></Gate> },
           deferred('settings/*', 'settings'),
           { path: '*', element: <NotFoundInSeller /> },
         ],

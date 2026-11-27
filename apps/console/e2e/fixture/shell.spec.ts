@@ -81,7 +81,7 @@ test.describe('SC-FE-01: shell, navigation and denial vocabulary', () => {
 
   test('areas that are not built say so, behind their own gate, and contain no control', async ({ page }) => {
     await atSellerHome(page, PHONE.owner, SELLER.alem.name);
-    for (const [path, area] of [['inbox', 'Inbox'], ['trust', 'Trust and Reviews'], ['settings/team', 'Settings'], ['insights', 'Insights']] as const) {
+    for (const [path, area] of [['settings/preferences', 'Settings'], ['insights/reviews', 'Insights']] as const) {
       await goInApp(page, `/s/${SELLER.alem.id}/${path}`);
       await expect(page.getByRole('heading', { level: 1, name: area })).toBeVisible();
       await expect(page.getByText(`${area} arrives in a later release`)).toBeVisible();
@@ -101,8 +101,8 @@ test.describe('SC-FE-01: shell, navigation and denial vocabulary', () => {
 
 test.describe('SC-FE-01: roles, permission and entitlement', () => {
   const cases = [
-    { who: 'sales', phone: PHONE.sales, role: 'Sales Support', visible: ['Home', 'Inbox'], hidden: ['Products', 'Content', 'Insights', 'Store', 'Trust', 'Settings'] },
-    { who: 'inventory', phone: PHONE.inventory, role: 'Inventory', visible: ['Home', 'Products'], hidden: ['Inbox', 'Content', 'Insights', 'Store', 'Settings'] },
+    { who: 'sales', phone: PHONE.sales, role: 'Sales Support', visible: ['Home', 'Inbox', 'Trust'], hidden: ['Products', 'Content', 'Insights', 'Store', 'Settings'] },
+    { who: 'inventory', phone: PHONE.inventory, role: 'Inventory', visible: ['Home', 'Products', 'Trust'], hidden: ['Inbox', 'Content', 'Insights', 'Store', 'Settings'] },
     { who: 'analyst', phone: PHONE.analyst, role: 'Analyst', visible: ['Home', 'Insights'], hidden: ['Products', 'Inbox', 'Content', 'Store', 'Settings'] },
     { who: 'campaign', phone: PHONE.campaign, role: 'Campaign Manager', visible: ['Home', 'Content', 'Products', 'Insights'], hidden: ['Inbox', 'Store', 'Settings'] },
     { who: 'admin', phone: PHONE.admin, role: 'Admin', visible: ['Home', 'Products', 'Content', 'Inbox', 'Insights', 'Store', 'Trust', 'Settings'], hidden: [] },
@@ -162,7 +162,7 @@ test.describe('SC-FE-01: roles, permission and entitlement', () => {
     await page.getByRole('link', { name: SELLER.gelila.name }).click();
     await expect(page.getByRole('heading', { name: 'This Seller is restricted' })).toBeVisible();
     await expect(page.getByText('The Seller is under review.')).toBeVisible();
-    await expect(sidebar(page).getByRole('link')).toHaveText(['Home', 'Settings']);
+    await expect(sidebar(page).getByRole('link')).toHaveText(['Home', 'Trust', 'Settings']);
     await goInApp(page, `/s/${SELLER.gelila.id}/settings`);
     await expect(page.getByRole('heading', { name: 'This Seller is restricted' })).toBeVisible();
   });

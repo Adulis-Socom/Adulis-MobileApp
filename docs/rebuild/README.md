@@ -32,3 +32,12 @@ scoped authority wording in CLAUDE.md, `.claude/reference` and five skills.
 | ARC-BE-05 | `packages/tokens`, `packages/locale`, `packages/api-client`, `.github/workflows/rebuild-ci.yml` | CTO palette light-only with contrast gate; clean English-first catalogue (Amharic PENDING, not public); generated client; replacement CI |
 | ARC-BE-06 | `ops/rebuild/verify-retired-absence.mjs` | executable proof that no retired architecture is active |
 Reports, checkpoints and the verification matrix live in the batch report folder (WO-REBUILD-20261125-01B).
+
+## GOV-PARALLEL-01 -- controlled parallel execution (supporting gate, L2-00A; effective with RB27 on merge)
+
+| File | What it is |
+|---|---|
+| `GOV-PARALLEL-01-EXECUTION-CONTROLS.md` | sessions and worktrees, root single-writer request flow, lane status publication, milestone candidate procedure, proposed lane protection |
+| `GOV-PARALLEL-01-DEPENDENCY-MATRIX.csv` | the 29 Lane 2 frontend and 21 backend orders, 8 REL gates and 7 P2 orders: master gate, new gate, scheduling-only vs real owner dependencies, sources, batch, status, master acceptance verbatim |
+| `GOV-PARALLEL-01-CONTRACT-REGISTER.csv` | cross-lane contract register (RB27-D05), seeded with the five owner gaps GAP-L2-01..05 |
+Authority: `docs/amendments/REBUILD-2026-11-27-CONTROLLED-PARALLEL-EXECUTION.md`. Reports: `Deliverables/Lane-2/L2-00A`.
