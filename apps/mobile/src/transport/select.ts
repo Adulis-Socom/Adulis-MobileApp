@@ -6,18 +6,19 @@
 // that really removes src/fixtures from the release output is NOT assumed: scripts/verify-release.mjs scans the real
 // export, with a positive control and a planted-marker negative control.
 import { liveTransport } from './live';
-import type { FixtureUi, MobileTransport } from './port';
+import type { FixtureEnvironment, FixtureUi, MobileTransport } from './port';
 
 export interface Selection {
   readonly transport: MobileTransport;
   readonly fixtureUi: FixtureUi | null;
+  readonly fixtureEnv: FixtureEnvironment | null;
 }
 
 export async function selectTransport(): Promise<Selection> {
   // ONE expression, literally this shape, so the bundler can fold the branch.
   if (__DEV__ && process.env.EXPO_PUBLIC_ADULIS_FIXTURES === 'on') {
     const fixtures = await import('../fixtures');
-    return { transport: fixtures.fixtureTransport, fixtureUi: fixtures.fixtureUi };
+    return { transport: fixtures.fixtureTransport, fixtureUi: fixtures.fixtureUi, fixtureEnv: fixtures.fixtureEnv };
   }
-  return { transport: liveTransport, fixtureUi: null };
+  return { transport: liveTransport, fixtureUi: null, fixtureEnv: null };
 }
