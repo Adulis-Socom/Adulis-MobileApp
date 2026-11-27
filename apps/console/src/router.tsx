@@ -10,7 +10,10 @@ import { Home } from './features/home/Home';
 import { SceneEditor } from './features/content/SceneEditor';
 import { Scenes } from './features/content/Scenes';
 import { Stories } from './features/content/Stories';
+import { Inbox } from './features/inbox/Inbox';
+import { Thread } from './features/inbox/Thread';
 import { Notifications } from './features/notifications/Notifications';
+import { Trust } from './features/trust/Trust';
 import { ProductEditor } from './features/products/ProductEditor';
 import { Products } from './features/products/Products';
 import { Admission } from './features/onboarding/Admission';
@@ -65,7 +68,10 @@ const children: RouteObject[] = [
           { path: 'content/scenes/:postId', element: <Gate dest="content"><SceneEditor /></Gate> },
           { path: 'content/stories', element: <Gate dest="content"><Stories /></Gate> },
           deferred('content/*', 'content'),
-          deferred('inbox/*', 'inbox'),
+          { path: 'inbox', element: <Gate dest="inbox"><Inbox /></Gate> },
+          // Scripted assistance settings: the chatbot requirements are under founder review (RB25-D09), so this is an honest "arrives later".
+          deferred('inbox/automation', 'inbox'),
+          { path: 'inbox/:conversationId', element: <Gate dest="inbox"><Thread /></Gate> },
           deferred('insights/*', 'insights'),
           {
             path: 'store',
@@ -84,7 +90,7 @@ const children: RouteObject[] = [
               { path: 'couriers', element: <Couriers /> },
             ],
           },
-          deferred('trust/*', 'trust'),
+          { path: 'trust', element: <Gate dest="trust"><Trust /></Gate> },
           deferred('settings/*', 'settings'),
           { path: '*', element: <NotFoundInSeller /> },
         ],
@@ -99,6 +105,10 @@ export const rootRoute = (inner: RouteObject[]): RouteObject[] => [{ errorElemen
 
 export const routes: RouteObject[] = rootRoute(children);
 
-export function createRouter() {
-  return createBrowserRouter(routes);
+/**
+ * `simulationRoute` is the internal Order experience demonstration (SC-FE-07). Only a fixture build can supply it, so in a release build the
+ * route does not exist, its path is not in the bundle, and the URL falls through to the not-found page. It is outside every Seller and every nav.
+ */
+export function createRouter(simulationRoute: RouteObject | null = null) {
+  return createBrowserRouter(simulationRoute === null ? routes : rootRoute([simulationRoute, ...children]));
 }

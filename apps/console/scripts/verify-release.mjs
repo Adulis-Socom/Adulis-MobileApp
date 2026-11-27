@@ -26,6 +26,10 @@ const MARKERS = {
   'demonstration code': '246810',
   'demonstration phone': '+251900000001',
   'test handle': '__ADULIS_FIXTURE__',
+  // SC-FE-07: the internal Order experience demonstration must be as absent from a release as the fixtures it lives with
+  'order simulation marker': 'ADULIS_ORDER_SIMULATION_MARKER_2c91',
+  'order simulation title': 'Order experience demonstration',
+  'order simulation route': 'internal/order-simulation',
 };
 const FORBIDDEN_IN_RELEASE = ['Confirm Payment', 'Payment Not Received', 'payout', 'handoff', 'Reservation', 'Mark Ready', 'Demonstration accounts'];
 const failures = [];

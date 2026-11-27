@@ -156,11 +156,11 @@ export const SCENES: readonly Scene[] = [
     },
   },
   {
-    name: 'unavailable-inbox',
+    name: 'unavailable-insights',
     setup: async (p) => {
       await atSellerHome(p, PHONE.owner, SELLER.alem.name);
-      await goInApp(p, `/s/${SELLER.alem.id}/inbox`);
-      await expect(p.getByText('Inbox arrives in a later release')).toBeVisible();
+      await goInApp(p, `/s/${SELLER.alem.id}/insights`);
+      await expect(p.getByText('Insights arrives in a later release')).toBeVisible();
     },
   },
   {
@@ -404,6 +404,58 @@ export const SCENES: readonly Scene[] = [
       await goInApp(p, `/s/${SELLER.alem.id}/store/couriers`);
       await expect(p.getByRole('heading', { level: 1, name: 'Couriers', exact: true })).toBeVisible();
       await expect(p.getByRole('list', { name: 'Courier relationships' }).getByRole('listitem')).toHaveCount(3);
+    },
+  },
+  {
+    name: 'order-simulation',
+    setup: async (p) => {
+      await p.goto('/internal/order-simulation');
+      await expect(p.getByRole('heading', { level: 1, name: 'Order experience demonstration' })).toBeVisible();
+      await p.getByRole('button', { name: 'Open fx_sim_ord_001' }).click();
+      await expect(p.getByRole('button', { name: 'Start preparing' })).toBeVisible();
+    },
+  },
+  {
+    name: 'inbox-list',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox`);
+      await expect(p.getByRole('list', { name: 'Conversations', exact: true }).getByRole('listitem')).toHaveCount(4);
+    },
+  },
+  {
+    name: 'inbox-thread-waiting',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox/fx_conv_alem_2`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Demonstration buyer B' })).toBeVisible();
+      await expect(p.getByText('A team member is needed. Automated replies cannot answer this conversation.')).toBeVisible();
+    },
+  },
+  {
+    name: 'inbox-thread-scene',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox/fx_conv_alem_1`);
+      await expect(p.getByRole('heading', { level: 1, name: 'Demonstration buyer A' })).toBeVisible();
+      await p.getByLabel('Scene (optional)').selectOption({ label: 'Linen wrap dress styled for the rainy season' });
+    },
+  },
+  {
+    name: 'trust-reviews',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/trust`);
+      await expect(p.getByRole('region', { name: 'Trust level' })).toContainText('Established');
+      await expect(p.getByRole('list', { name: 'Product review list' }).getByRole('listitem')).toHaveCount(3);
+    },
+  },
+  {
+    name: 'trust-new-no-reviews',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.biruk.name);
+      await goInApp(p, `/s/${SELLER.biruk.id}/trust`);
+      await expect(p.getByText('There are no Product reviews yet.')).toBeVisible();
     },
   },
   {

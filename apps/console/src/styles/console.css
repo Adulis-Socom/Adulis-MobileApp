@@ -1496,3 +1496,68 @@ legend {
   margin-bottom: var(--adu-space-md);
 }
 
+/* ---- SC-FE-08 Inbox ----------------------------------------------------------------------------------------------- */
+.messages {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.message {
+  padding: var(--adu-space-md) 0;
+  border-top: 1px solid var(--adu-color-border);
+}
+
+.message:first-child {
+  border-top: 0;
+}
+
+/* a message says who sent it with words, never with colour or side alone; automated ones are set apart by a rule at the start */
+.message[data-sender='AUTOMATED'] {
+  border-inline-start: 3px solid var(--adu-color-border-strong);
+  padding-inline-start: var(--adu-space-md);
+}
+
+.message-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---- SC-FE-09 Trust and Reviews ---------------------------------------------------------------------------------- */
+.fact-pair {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--adu-space-xs) var(--adu-space-md);
+  border-top: 1px solid var(--adu-color-border);
+  padding-top: var(--adu-space-xs);
+}
+
+.fact-pair > dt,
+.fact-pair > dd {
+  margin: 0;
+}
+
+/* a long unbroken identifier or word wraps instead of widening the row (200% text, Amharic) */
+.ledger-title,
+.ledger-meta {
+  overflow-wrap: anywhere;
+}
+
+/* a run of facts where the label is quiet and the value is what the eye lands on */
+.facts-compact dt {
+  font-size: var(--adu-font-size-sm);
+  margin-top: var(--adu-space-xs);
+}
+
+.facts-compact dd {
+  font-weight: var(--adu-font-weight-semibold);
+}
+
+/* a team message is indented, so Buyer and team read as two voices even before the sender's name is read */
+.message[data-sender='SELLER_TEAM'] {
+  padding-inline-start: var(--adu-space-lg);
+}
+

@@ -142,7 +142,7 @@ describe('fixture world: capabilities, roles and entitlements (server decides)',
     const world = fresh();
     await signIn(world, 'fx_acct_sales');
     const access = await world.handle('seller.access.get', {}, { sellerId: 'fx_seller_alem' });
-    expect(access.destinations.map((d) => d.key)).toEqual(['home', 'inbox']);
+    expect(access.destinations.map((d) => d.key)).toEqual(['home', 'inbox', 'trust']); // AUTH-02: Sales Support holds seller.trust:read
     const brief = await world.handle('seller.home.get', {}, { sellerId: 'fx_seller_alem' });
     expect(brief.role_view).toBe('SALES_SUPPORT');
     expect(brief.areas.map((a) => a.key)).not.toContain('PRODUCTS');
@@ -152,7 +152,7 @@ describe('fixture world: capabilities, roles and entitlements (server decides)',
     const world = fresh();
     await signIn(world, 'fx_acct_multirole');
     const access = await world.handle('seller.access.get', {}, { sellerId: 'fx_seller_alem' });
-    expect(access.destinations.map((d) => d.key)).toEqual(['home', 'products', 'inbox']);
+    expect(access.destinations.map((d) => d.key)).toEqual(['home', 'products', 'inbox', 'trust']);
   });
 
   it('missing entitlement is reported as NO_ENTITLEMENT, not removed', async () => {
@@ -246,7 +246,7 @@ describe('fixture world: readiness, admission and Seller creation', () => {
     const world = fresh();
     await signIn(world, 'fx_acct_owner');
     const brief = await world.handle('seller.home.get', {}, { sellerId: 'fx_seller_alem' });
-    const built = ['NOTIFICATIONS', 'PRODUCTS', 'INVENTORY', 'SCENES', 'STORIES'];
+    const built = ['NOTIFICATIONS', 'PRODUCTS', 'INVENTORY', 'SCENES', 'STORIES', 'INBOX'];
     expect(brief.areas.filter((a) => !built.includes(a.key)).every((a) => a.state !== 'AVAILABLE')).toBe(true);
     expect(brief.areas.filter((a) => built.includes(a.key)).every((a) => a.state === 'AVAILABLE')).toBe(true);
     expect(JSON.stringify(brief)).not.toMatch(/revenue|gmv|payment|paid|order|delivery/i);
