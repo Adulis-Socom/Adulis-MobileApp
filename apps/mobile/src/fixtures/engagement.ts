@@ -3,7 +3,9 @@
 // lost on restart by design. Writes are idempotent by desired state. No count exists anywhere.
 import type { Collection, CollectionItemRef, EngagementState } from '../contracts/gap-mob-engagement';
 
-interface StoredCollection extends Collection {
+interface StoredCollection {
+  readonly collectionRef: string;
+  name: string;
   items: CollectionItemRef[];
 }
 

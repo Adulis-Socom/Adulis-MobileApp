@@ -1,6 +1,6 @@
 // M01-R08 / M01-R10: Collections through MOUNTED routes: create, open, add a saved Scene and a saved Product, remove, rename,
 // a member that stops being public, delete with confirmation, another Account's Collection, and nothing readable after sign-out.
-import { act, fireEvent, screen } from 'expo-router/testing-library';
+import { act, fireEvent, screen, waitFor } from 'expo-router/testing-library';
 import { router } from 'expo-router';
 
 import { fixtureHandle, PERSONAS } from '../fixtures';
@@ -67,8 +67,9 @@ describe('Collections', () => {
     expect(await findText('mobile.collections.item_unavailable')).toBeTruthy();
     expect(screen.queryByText(CAPTION)).toBeNull();
     await fireEvent.press(button('mobile.collections.remove_unavailable'));
-    expect(await role(t('mobile.collections.remove', { name: 'Woven basket' }))).toBeTruthy();
-    expect(screen.queryByText(t('mobile.collections.item_unavailable'))).toBeNull();
+    // The Woven basket was already a member, so wait for the re-read itself: the neutral entry is gone.
+    await waitFor(() => expect(screen.queryByText(t('mobile.collections.item_unavailable'))).toBeNull(), WAIT);
+    expect(button('mobile.collections.remove', { name: 'Woven basket' })).toBeTruthy();
   });
 
   it('delete asks first, then returns to Saved without the Collection; what was saved stays saved', async () => {
