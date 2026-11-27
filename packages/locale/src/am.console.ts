@@ -1243,4 +1243,11 @@ export const amConsole: { readonly [K in keyof typeof enConsole]: AmEntry } = {
   'field_error.TEAM_SLOT_OCCUPIED': PENDING,
   'field_error.USE_SIGN_OUT_FOR_THIS_SESSION': PENDING,
   'field_error.PREFERENCE_UNKNOWN': PENDING,
+
+  // ---- SC-FE-11 team review polish: short visible action labels ----
+  'team.change_roles_short': PENDING,
+  'team.action_short.SUSPEND': PENDING,
+  'team.action_short.REINSTATE': PENDING,
+  'team.action_short.REMOVE': PENDING,
+  'team.session_revoke_short': PENDING,
 };

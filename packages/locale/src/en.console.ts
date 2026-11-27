@@ -1158,7 +1158,7 @@ export const enConsole = {
   'team.sessions_note': 'Signing a member out here ends their access to this Seller on that device. It does not touch the rest of their account.',
   'team.sessions_empty': 'No team member is signed in to this Seller.',
   'team.session_line': '{device}, last used {time}',
-  'team.session_revoke': 'Sign {name} out of this Seller',
+  'team.session_revoke': 'Sign out of this Seller: {name}',
   'team.ownership_title': 'Ownership',
   'team.transfer_note': 'Only an active Admin can become the Owner. After you confirm, there is a 24-hour wait, and you can cancel during it.',
   'team.transfer_target': 'New Owner',
@@ -1263,4 +1263,11 @@ export const enConsole = {
   'field_error.TEAM_SLOT_OCCUPIED': 'You can be on one team at a time.',
   'field_error.USE_SIGN_OUT_FOR_THIS_SESSION': 'Use Sign out to end this session.',
   'field_error.PREFERENCE_UNKNOWN': 'This notification setting is not known.',
+
+  // ---- SC-FE-11 team review polish: short visible action labels (proposed English, awaiting approval) ----
+  'team.change_roles_short': 'Change roles',
+  'team.action_short.SUSPEND': 'Suspend',
+  'team.action_short.REINSTATE': 'Reinstate',
+  'team.action_short.REMOVE': 'Remove',
+  'team.session_revoke_short': 'Sign out of this Seller',
 } as const;
