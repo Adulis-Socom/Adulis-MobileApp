@@ -35,11 +35,12 @@ async function withCollection(persona: string, name: string) {
   await act(() => router.push('/saved'));
   await fireEvent.changeText(await screen.findByLabelText(t('mobile.collections.name'), undefined, WAIT), name);
   await fireEvent.press(button('mobile.collections.create'));
-  // Pressed twice: a double tap still opens one screen (ISS-039); the delete case proves one Back lands on Saved.
+  // Pressed twice: a double tap still opens one screen (ISS-039).
   const open = await role(name);
   await fireEvent.press(open);
   await fireEvent.press(open);
   await findText('mobile.collections.empty_items');
+  expect(screen.queryAllByText(t('mobile.collections.empty_items'), { includeHiddenElements: true })).toHaveLength(1);
 }
 
 describe('Collections', () => {
