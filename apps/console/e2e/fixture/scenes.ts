@@ -159,7 +159,8 @@ export const SCENES: readonly Scene[] = [
     name: 'unavailable-insights',
     setup: async (p) => {
       await atSellerHome(p, PHONE.owner, SELLER.alem.name);
-      await goInApp(p, `/s/${SELLER.alem.id}/insights`);
+      // Insights itself is built (SC-FE-10); its sub-pages still arrive later.
+      await goInApp(p, `/s/${SELLER.alem.id}/insights/reviews`);
       await expect(p.getByText('Insights arrives in a later release')).toBeVisible();
     },
   },
@@ -586,6 +587,31 @@ export const SCENES: readonly Scene[] = [
       await p.getByLabel('Product the question is about').selectOption({ label: 'Linen wrap dress' });
       await p.getByRole('button', { name: 'Run test' }).click();
       await expect(p.getByRole('heading', { level: 2, name: 'Test result' })).toBeVisible();
+    },
+  },
+  // ---- SC-FE-10 nonfinancial Insights and Plan ----
+  {
+    name: 'insights-owner',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/insights`);
+      await expect(p.getByRole('region', { name: 'Not measured in this release' })).toBeVisible();
+    },
+  },
+  {
+    name: 'insights-stale',
+    setup: async (p) => {
+      await statesAccountAt(p, SELLER.iman.name);
+      await goInApp(p, `/s/${SELLER.iman.id}/insights`);
+      await expect(p.getByText('These figures are older than usual.')).toBeVisible();
+    },
+  },
+  {
+    name: 'settings-plan',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.biruk.name);
+      await goInApp(p, `/s/${SELLER.biruk.id}/settings/plan`);
+      await expect(p.getByRole('region', { name: 'What this Seller includes' })).toBeVisible();
     },
   },
 ];

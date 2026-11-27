@@ -26,6 +26,7 @@ import { createAutomation } from './automation';
 import { createCatalogue } from './catalogue';
 import { createContent } from './content';
 import { createInbox } from './inbox';
+import { createInsights } from './insights';
 import { createStore } from './store';
 import { createTrust } from './trust';
 import type { Authz, Kit } from './kit';
@@ -203,17 +204,20 @@ const MANAGER_ROLES: SellerRole[] = ['OWNER', 'ADMIN'];
 /** Capabilities a manager holds beyond the admission ones, and what the other roles hold (CATINV S110, CONSOLE-02 S17). */
 /** Scripted assistance, AUTH-02 Appendix C: seller.chatbot:read, :configure, :test, :analytics_read. No feedback-submission code exists, so none is granted. */
 const CHATBOT_ALL = ['chatbot.read', 'chatbot.configure', 'chatbot.test', 'chatbot.analytics_read'];
-const WRITE_CAPS = ['catalogue.write', 'inventory.write', 'content.write', 'store.manage', 'couriers.manage', 'inbox.read', 'inbox.reply', 'trust.read', 'reviews.read', ...CHATBOT_ALL];
+/** AUTH-02 Appendix B analytics family: Owner, Admin and Analyst hold all seven; the Campaign Manager holds five (no business or inventory read). */
+const ANALYTICS_ALL = ['business_read', 'product_read', 'content_read', 'fyp_read', 'inventory_read', 'chatbot_read', 'quality_read'].map((c) => `analytics.${c}`);
+const ANALYTICS_CAMPAIGN = ['chatbot_read', 'content_read', 'fyp_read', 'product_read', 'quality_read'].map((c) => `analytics.${c}`);
+const WRITE_CAPS = ['catalogue.write', 'inventory.write', 'content.write', 'store.manage', 'couriers.manage', 'inbox.read', 'inbox.reply', 'trust.read', 'reviews.read', ...CHATBOT_ALL, ...ANALYTICS_ALL];
 const ROLE_CAPS: Record<SellerRole, string[]> = {
   OWNER: WRITE_CAPS,
   ADMIN: WRITE_CAPS,
   SALES_SUPPORT: ['inbox.read', 'inbox.reply', 'trust.read', 'reviews.read', 'chatbot.read'],
   INVENTORY: ['catalogue.write', 'inventory.write', 'trust.read'],
-  ANALYST: ['analytics.chatbot_read'],
-  CAMPAIGN_MANAGER: ['content.write', ...CHATBOT_ALL],
+  ANALYST: ANALYTICS_ALL,
+  CAMPAIGN_MANAGER: ['content.write', ...CHATBOT_ALL, ...ANALYTICS_CAMPAIGN],
 };
-/** Brief areas whose work order is built (SC-FE-04 Products and Inventory, SC-FE-05 Scenes, SC-FE-05S Stories, SC-FE-08 Inbox). The rest stay DEFERRED. */
-const BUILT_AREAS = new Set(['PRODUCTS', 'INVENTORY', 'SCENES', 'STORIES', 'INBOX']);
+/** Brief areas whose work order is built (SC-FE-04 Products and Inventory, SC-FE-05 Scenes, SC-FE-05S Stories, SC-FE-08 Inbox, SC-FE-10 Insights and Settings: plan). The rest stay DEFERRED. */
+const BUILT_AREAS = new Set(['PRODUCTS', 'INVENTORY', 'SCENES', 'STORIES', 'INBOX', 'INSIGHTS', 'SETTINGS']);
 const VIEW_PRIORITY: [SellerRole, RoleView][] = [
   ['OWNER', 'OWNER_ADMIN'], ['ADMIN', 'OWNER_ADMIN'], ['SALES_SUPPORT', 'SALES_SUPPORT'],
   ['INVENTORY', 'INVENTORY'], ['CAMPAIGN_MANAGER', 'CAMPAIGN_MANAGER'], ['ANALYST', 'ANALYST'],
@@ -450,6 +454,7 @@ export function createWorld(options: WorldOptions): World {
   const inbox = createInbox(kit, catalogue, content);
   const trust = createTrust(kit, catalogue);
   const automation = createAutomation(kit, catalogue);
+  const insights = createInsights(kit, (id) => sellers[id]?.entitlementOff ?? []);
 
   type H = { [K in OpId]: (input: OpInput<K>, ctx: CallContext) => OpOutput<K> };
   const handlers: H = {
@@ -459,6 +464,7 @@ export function createWorld(options: WorldOptions): World {
     ...inbox.handlers,
     ...trust.handlers,
     ...automation.handlers,
+    ...insights.handlers,
     'auth.otp.start': ({ phone }) => {
       if (!/^\+?\d{9,15}$/.test(digits(phone))) throw new TransportError('VALIDATION_FAILED', { fields: { phone: 'PHONE_INVALID' } });
       return newChallenge(digits(phone));
