@@ -31,6 +31,7 @@ export default function BuyerLayout() {
       <Stack.Screen name="product/[productRef]" dangerouslySingular={perRef('productRef')} />
       <Stack.Screen name="scenes/[scenePostRef]" dangerouslySingular={perRef('scenePostRef')} />
       <Stack.Screen name="sellers/[sellerRef]" dangerouslySingular={perRef('sellerRef')} />
+      <Stack.Screen name="stories/[sellerRef]" dangerouslySingular={perRef('sellerRef')} />
     </Stack>
   );
 }

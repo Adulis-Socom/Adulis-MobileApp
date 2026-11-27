@@ -35,6 +35,17 @@ describe('Seller Stories', () => {
     expect(r.getPathname()).toBe('/home');
   });
 
+  it('a double tap on the row opens one viewer: a single Close is back on Home (ISS-039)', async () => {
+    const r = await boot();
+    const bete = await entry('Demo Store Bete');
+    await fireEvent.press(bete);
+    await fireEvent.press(bete);
+    expect(await findText('mobile.stories.position', { n: 1, total: 1 })).toBeTruthy();
+    await fireEvent.press(button('mobile.stories.close'));
+    expect(await entry('Demo Store Bete')).toBeTruthy();
+    expect(r.getPathname()).toBe('/home');
+  });
+
   it('a Story link only navigates: a Scene link opens Explore the Scene', async () => {
     await boot();
     await fireEvent.press(await entry('Demo Store Bete'));
