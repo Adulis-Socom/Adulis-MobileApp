@@ -1,7 +1,8 @@
 // M01-R10: MOB-FE-02S through MOUNTED routes: the Stories row on Home, opening the viewer from it, the link action, Close, and a
 // Seller whose Stories are withdrawn between the row and the opening. (Screen-reader focus returning to the entry is code that
 // only a device can observe: Jest has no native view to focus. It is in the native walkthrough, not claimed here.)
-import { fireEvent, screen } from 'expo-router/testing-library';
+import { act, fireEvent, screen } from 'expo-router/testing-library';
+import { router } from 'expo-router';
 
 import { fixtureHandle } from '../fixtures';
 import { t } from '../i18n/messages';
@@ -73,5 +74,38 @@ describe('Seller Stories', () => {
     expect((await findAllText('mobile.stories.gone')).length).toBeGreaterThan(0);
     expect(screen.queryByRole('image', { name: 'Story from Demo Store Bete' })).toBeNull();
     expect(button('mobile.stories.close')).toBeTruthy();
+  });
+
+  describe('reopening a viewer that is already deeper in the stack (ISS-041)', () => {
+    /** Home, the Bete viewer, then Explore the Scene over it: the viewer is now one screen down. */
+    async function viewerUnderScene() {
+      const r = await boot();
+      await fireEvent.press(await entry('Demo Store Bete'));
+      await findText('mobile.stories.position', { n: 1, total: 1 });
+      await fireEvent.press(button('mobile.scene.explore'));
+      await findText('mobile.scene.in_this_scene');
+      return r;
+    }
+
+    it('Stories withdrawn while the viewer was out of sight are never drawn from the retained route instance', async () => {
+      const r = await viewerUnderScene();
+      fixtureHandle.expireStories('fx_seller_demo_bete');
+      await act(() => router.push('/stories/fx_seller_demo_bete'));
+      expect((await findAllText('mobile.stories.gone')).length).toBeGreaterThan(0);
+      expect(screen.queryByRole('image', { name: 'Story from Demo Store Bete' })).toBeNull();
+      expect(r.getPathname()).toBe('/stories/fx_seller_demo_bete');
+    });
+
+    it('a Story that is still public reappears only after a fresh read, as one viewer; Close and Back lead home without a second viewer', async () => {
+      const r = await viewerUnderScene();
+      await act(() => router.push('/stories/fx_seller_demo_bete'));
+      expect(await findText('mobile.stories.position', { n: 1, total: 1 })).toBeTruthy();
+      expect(screen.getAllByRole('image', { name: 'Story from Demo Store Bete' })).toHaveLength(1);
+      await fireEvent.press(button('mobile.stories.close'));
+      for (let i = 0; i < 2 && r.getPathname() !== '/home'; i += 1) await act(() => router.back());
+      expect(await entry('Demo Store Bete')).toBeTruthy();
+      expect(r.getPathname()).toBe('/home');
+      expect(screen.queryByText(t('mobile.stories.position', { n: 1, total: 1 }))).toBeNull();
+    });
   });
 });
