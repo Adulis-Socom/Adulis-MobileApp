@@ -1252,4 +1252,10 @@ export const amConsole: { readonly [K in keyof typeof enConsole]: AmEntry } = {
   'team.action_short.REINSTATE': PENDING,
   'team.action_short.REMOVE': PENDING,
   'team.session_revoke_short': PENDING,
+
+  // ---- DEPRECATED 02C reply codes, kept so the shared locale change is additive; remove after SC-FE-07-09-CLOSE is integrated ----
+  'field_error.MESSAGE_BODY_REQUIRED': PENDING,
+  'field_error.MESSAGE_PRODUCT_NOT_IN_SCENE': PENDING,
+  'field_error.CONTEXT_SCENE_NOT_AVAILABLE': PENDING,
+  'field_error.CONTEXT_PRODUCT_NOT_AVAILABLE': PENDING,
 };
