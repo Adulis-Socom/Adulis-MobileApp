@@ -915,4 +915,41 @@ export const enConsole = {
 
   // ---- SC-FE-08 Inbox (review polish) (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
   'inbox.scene_chosen': 'Chosen Scene: {scene}',
+
+  // ---- SC-FE-09 Trust and Reviews (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
+  'trust.lead': 'Your Trust level, and the reviews Buyers have written about your Products and your service.',
+  'trust.standing_title': 'Trust level',
+  'trust.level_label': 'Your level',
+  'trust.level.NEW': 'New',
+  'trust.level.REBUILDING': 'Rebuilding',
+  'trust.level.ESTABLISHED': 'Established',
+  'trust.level.TRUSTED': 'Trusted',
+  'trust.note.REBUILDING': 'This Seller reached a higher level before and is now below Established.',
+  'trust.evaluated': 'Last evaluated {time}.',
+  'trust.not_evaluated': 'Your level has not been evaluated yet.',
+  'trust.server_note': 'Adulis sets your level from recorded evidence. You cannot change it, and this page does not estimate it.',
+  'trust.evidence_note': 'Evidence from completed transactions is not connected in this release, so nothing here shows progress toward another level.',
+  'trust.error_title': 'We could not load your Trust level',
+  'trust.deferred_title': 'Reporting and appeals',
+  'trust.deferred': 'Reporting a review and asking for a review of your level arrive in a later release. They need the Adulis review process, which is not part of this release.',
+  'reviews.title': 'Reviews',
+  'reviews.note': 'Reviews are written by Buyers. You cannot edit, hide, delay or remove them.',
+  'reviews.product_title': 'Product reviews',
+  'reviews.service_title': 'Service reviews',
+  'reviews.count_label': 'Number of reviews',
+  'reviews.stars': '{n} out of 5',
+  'reviews.for_product': 'Product: {product}',
+  'reviews.no_text': 'A rating with no written comment.',
+  'reviews.empty_product': 'There are no Product reviews yet.',
+  'reviews.empty_service': 'There are no service reviews yet.',
+  'reviews.error_title': 'We could not load your reviews',
+  'reviews.more_product': 'Show more Product reviews',
+  'reviews.more_service': 'Show more service reviews',
+  'reviews.list_product': 'Product review list',
+  'reviews.list_service': 'Service review list',
+
+
+
+  // ---- SC-FE-09 Trust and Reviews (review polish) (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
+  'reviews.at_rating': 'Reviews: {count}',
 } as const;
