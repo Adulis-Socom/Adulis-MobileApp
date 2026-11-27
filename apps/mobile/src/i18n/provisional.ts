@@ -55,6 +55,7 @@ export const provisionalEn = {
   'mobile.session.ended.expired': 'Your session ended. Sign in again to continue.',
   'mobile.session.ended.revoked': 'You were signed out of this device. Sign in again to continue.',
   'mobile.session.ended.deleted': 'Your account was deleted.',
+  'mobile.session.signout_not_durable': 'This device could not finish signing out, and Adulis could not be told. Your sign-in may come back when the app restarts. Try again while connected.',
   'mobile.session.signout_incomplete': 'You are signed out, but this device could not clear its saved sign-in. Restart the app before handing this device to anyone.',
 
   'mobile.account.title': 'You',

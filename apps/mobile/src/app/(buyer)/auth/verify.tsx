@@ -4,7 +4,7 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 
 import { t } from '../../../i18n/messages';
-import { matchRoute, pathOf } from '../../../modes/routes';
+import { FALLBACK_RETURN, parseReturnTo, pathOf } from '../../../modes/routes';
 import { useApp } from '../../../providers/AppProvider';
 import { newIntentKey } from '../../../session/intent-key';
 import { refusalText, SURFACE_REFUSAL_KEY } from '../../../ui/auth-text';
@@ -30,7 +30,8 @@ export default function Verify() {
     setBusy(false);
     if (outcome.kind === 'SIGNED_IN') {
       runtime.challenge.set(null);
-      const target = typeof returnTo === 'string' ? matchRoute(returnTo) : null; // allowlist: anything else goes Home
+      // No destination: Home. A destination that is not on the return allow-list: You (never the place the link named).
+      const target = returnTo === undefined ? null : (parseReturnTo(returnTo) ?? FALLBACK_RETURN);
       router.replace(target ? pathOf(target) : '/home');
     } else if (outcome.kind === 'REFUSED') {
       setProblem(refusalText(outcome.refusal));

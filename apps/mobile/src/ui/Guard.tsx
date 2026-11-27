@@ -2,7 +2,7 @@
 // denied direct link shows one neutral state that does not reveal why (an Order, another person's content and a missing
 // relationship look the same).
 import { useRouter } from 'expo-router';
-import { useEffect, type ReactNode } from 'react';
+import { Fragment, useEffect, type ReactNode } from 'react';
 
 import type { GatedMode } from '../contracts/gap-mob-session';
 import { serverText, t } from '../i18n/messages';
@@ -18,7 +18,9 @@ export function Guard({ template, children }: { readonly template: RouteTemplate
 
   switch (result.kind) {
     case 'ALLOW':
-      return <>{children}</>;
+      // Keyed by the session epoch: every private subtree remounts on an identity change, so no component state, pending
+      // mutation or cached render of one Account can survive into the next (M01-R03).
+      return <Fragment key={session.epoch}>{children}</Fragment>;
     case 'WAIT':
       return gate.kind === 'READY_OFFLINE' && result.waitingFor !== 'SESSION' ? <StateView kind="offline" onRetry={retry} /> : <StateView kind="loading" />;
     case 'SIGN_IN_REQUIRED': {
