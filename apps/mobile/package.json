@@ -8,10 +8,11 @@
   "scripts": {
     "dev": "expo start",
     "android": "expo run:android",
-    "build": "expo export --output-dir dist",
+    "build": "expo export --platform android --output-dir dist",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
-    "test": "node scripts/check-locale-imports.mjs && jest"
+    "lint": "eslint . --max-warnings 0",
+    "test": "node scripts/check-locale-imports.mjs && node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "verify:release": "node scripts/verify-release.mjs"
   },
   "expo": {
     "install": {
@@ -47,12 +48,17 @@
   },
   "devDependencies": {
     "@adulis/config": "workspace:*",
+    "@eslint/js": "9.39.5",
     "@testing-library/react-native": "14.1.0",
     "@types/jest": "30.0.0",
     "@types/react": "~19.3.0",
+    "eslint": "9.39.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "16.5.0",
     "jest": "~30.5.2",
     "jest-expo": "~58.0.14",
     "test-renderer": "1.3.0",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.68.0"
   }
 }

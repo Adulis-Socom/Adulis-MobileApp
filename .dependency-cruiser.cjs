@@ -83,6 +83,19 @@ module.exports = {
       to: { path: '^apps/' },
     },
     {
+      name: 'no-mobile-fixture-import',
+      comment:
+        'GOV-06 S1 / FL-13. Mobile development fixtures are reached only through src/transport/select.ts (and by ' +
+        'unit tests and the fixtures themselves). Any other import of src/fixtures puts demonstration data one ' +
+        'bundler step from a release. ESLint no-restricted-imports says the same; the two layers are deliberate.',
+      severity: 'error',
+      from: {
+        path: '^apps/mobile/',
+        pathNot: ['^apps/mobile/src/transport/select\\.ts$', '^apps/mobile/src/fixtures/', '\\.test\\.tsx?$'],
+      },
+      to: { path: '^apps/mobile/src/fixtures/' },
+    },
+    {
       name: 'no-retired-runtime',
       comment:
         'RB25-D01 / ARC-BE-06. The replacement never reaches the retired stack: no Express runtime, no ' +

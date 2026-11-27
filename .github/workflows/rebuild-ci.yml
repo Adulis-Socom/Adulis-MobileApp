@@ -293,3 +293,75 @@ jobs:
             apps/console/playwright-report
             apps/console/test-results
           if-no-files-found: warn
+
+  # The Mobile app (L2-00B, Lane 2): its own job on the Lane 2 integration branch, so the protected foundation and
+  # Seller Console checks keep their scope. Exact check name: "Mobile (rebuild-20261125)". It becomes a REQUIRED status
+  # check of rebuild/l2-mobile only after it has run green and its release-fixture controls have been shown to fail when
+  # they should (GOV-PARALLEL-01 s5 steps 7 and 8). No emulator, no Maestro, no store build: native-device evidence is a
+  # separate class and is never inferred from this job.
+  mobile:
+    name: Mobile (rebuild-20261125)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Record what is being verified (exact head / integration candidate)
+        run: |
+          {
+            echo "### Verified tree (Mobile)"
+            echo "- event: ${{ github.event_name }}"
+            echo "- checked-out commit: $(git rev-parse HEAD)"
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              echo "- PR head: ${{ github.event.pull_request.head.sha }}"
+              echo "- PR base (${{ github.base_ref }}): ${{ github.event.pull_request.base.sha }}"
+              echo "- this is the MERGE RESULT of head onto base (integration candidate)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install from the lockfile (clean, frozen)
+        run: pnpm install --frozen-lockfile
+
+      # Every step below runs even when an earlier one failed, so one run reports every failure; the job is still red.
+
+      - name: Shared token and locale validation
+        run: |
+          pnpm verify:tokens
+          pnpm --filter @adulis/locale test
+
+      - name: Strict type check
+        if: ${{ !cancelled() }}
+        run: pnpm --filter @adulis/mobile typecheck
+
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: pnpm --filter @adulis/mobile lint
+
+      - name: Dependency boundaries (and that the rules fire)
+        if: ${{ !cancelled() }}
+        run: |
+          pnpm exec depcruise apps/mobile packages --config .dependency-cruiser.cjs
+          bash apps/mobile/scripts/verify-deps-fires.sh
+
+      - name: Unit tests
+        if: ${{ !cancelled() }}
+        run: pnpm --filter @adulis/mobile test
+
+      - name: Expo release export
+        if: ${{ !cancelled() }}
+        run: pnpm --filter @adulis/mobile build
+
+      - name: Fixture exclusion from the release export (negative scan with its positive and planted controls)
+        if: ${{ !cancelled() }}
+        run: pnpm --filter @adulis/mobile verify:release
