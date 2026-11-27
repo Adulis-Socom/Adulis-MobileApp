@@ -8,9 +8,10 @@
  * Settlement is matched by key: an answer for a key that is no longer the request's key (the request was resolved and a new command
  * began) is stale and changes nothing, so it can neither forget an unresolved key nor resurrect a resolved one.
  *
- * Bounded. Only an IDLE unknown entry (nothing in flight) can be evicted, oldest first. An evicted request loses its key, so a later
- * attempt may be a duplicate; that is why the Console never promises a write "will not be done twice" (P-49), and asks the person to
- * check the current status first. Held in memory only, per Seller scope and session: never in storage. Durable idempotency is the backend's.
+ * Never evicted (FE12-01): an unresolved request keeps its key for as long as its store lives, because dropping it would silently turn the
+ * next retry into a possible duplicate. The store lives per Seller scope and session (SellerScope replaces it on a change of account,
+ * session or Seller), in memory only, never in storage. Each entry is one write a person started whose outcome is unknown, so the store
+ * grows only with those. The Console still never promises a write "will not be done twice" (P-49): durable idempotency is the backend's.
  */
 export type WriteOutcome = 'APPLIED' | 'REFUSED' | 'UNKNOWN';
 
@@ -35,28 +36,18 @@ interface Entry {
   resolved: boolean;
 }
 
-export function createRetryKeys(max = 25, mint: () => string = () => crypto.randomUUID()): RetryKeys {
+// shortcut: no size cap; entries are per-person unknown writes inside one scope's lifetime. Upgrade to a cap that REFUSES new writes (never evicts) if a scope can live long enough to matter.
+export function createRetryKeys(mint: () => string = () => crypto.randomUUID()): RetryKeys {
   const entries = new Map<string, Entry>();
-  const evict = () => {
-    for (const [signature, entry] of entries) {
-      if (entries.size <= max) return;
-      if (entry.inFlight === 0) entries.delete(signature);
-    }
-  };
   return {
     begin(signature) {
       const found = entries.get(signature);
       if (found && !found.resolved) {
         found.inFlight += 1;
-        // Most recently used goes last, so eviction takes the request that has waited longest.
-        entries.delete(signature);
-        entries.set(signature, found);
         return found.key;
       }
       const entry: Entry = { key: mint(), inFlight: 1, unknown: false, resolved: false };
-      entries.delete(signature);
       entries.set(signature, entry);
-      evict();
       return entry.key;
     },
     settle(signature, key, outcome) {
@@ -66,7 +57,6 @@ export function createRetryKeys(max = 25, mint: () => string = () => crypto.rand
       if (outcome === 'UNKNOWN') entry.unknown = entry.unknown || !entry.resolved;
       else entry.resolved = true;
       if (entry.inFlight === 0 && (entry.resolved || !entry.unknown)) entries.delete(signature);
-      evict();
     },
     get size() {
       return entries.size;
