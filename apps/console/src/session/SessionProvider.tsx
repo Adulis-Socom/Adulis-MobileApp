@@ -29,8 +29,14 @@ export interface SessionApi {
   readonly refresh: () => Promise<SessionState['status']>;
   /** Ends the session on the server; resolves false when the server could not be told (the person stays signed in). */
   readonly signOut: () => Promise<boolean>;
-  /** A request found the session gone: drop everything that belonged to it. */
+  /**
+   * A request found the session gone: drop everything that belonged to it. Bound to the session that was current when this value was
+   * read, so a late AUTHENTICATION_REQUIRED for a request of an EARLIER session (signed out, expired, signed in again since) is not this
+   * session's failure and changes nothing, while the current session's own failure still ends it.
+   */
   readonly expire: () => void;
+  /** Changes whenever a session ends, so anything keyed by it (retry identity) starts fresh for the next session. */
+  readonly epoch: number;
 }
 
 const SessionContext = createContext<SessionApi | null>(null);
@@ -46,6 +52,13 @@ export function SessionProvider({ selected, children }: { selected: Selected; ch
   // Each ask gets a number; only the newest ask may change state, so a slow answer from before a sign-out cannot
   // resurrect the session it belonged to.
   const generation = useRef(0);
+  // The session epoch moves on whenever a session ends (sign-out, expiry, the server saying there is none).
+  const [epoch, setEpoch] = useState(0);
+  const epochRef = useRef(0);
+  const endEpoch = useCallback(() => {
+    epochRef.current += 1;
+    setEpoch(epochRef.current);
+  }, []);
 
   const refresh = useCallback(async (): Promise<SessionState['status']> => {
     const mine = ++generation.current;
@@ -56,10 +69,13 @@ export function SessionProvider({ selected, children }: { selected: Selected; ch
     } catch (error) {
       const code = asTransportError(error).code;
       const next: SessionState = code === 'AUTHENTICATION_REQUIRED' ? { status: 'SIGNED_OUT', justSignedOut: false } : code === 'UNAVAILABLE' ? { status: 'UNAVAILABLE' } : { status: 'ERROR' };
-      if (mine === generation.current) setState(next);
+      if (mine === generation.current) {
+        if (next.status === 'SIGNED_OUT') endEpoch();
+        setState(next);
+      }
       return next.status;
     }
-  }, [selected.transport]);
+  }, [selected.transport, endEpoch]);
 
   useEffect(() => {
     void refresh();
@@ -74,15 +90,18 @@ export function SessionProvider({ selected, children }: { selected: Selected; ch
       if (asTransportError(error).code !== 'AUTHENTICATION_REQUIRED') return false;
     }
     generation.current += 1;
+    endEpoch();
     setState({ status: 'SIGNED_OUT', justSignedOut: true });
     return true;
-  }, [selected.transport]);
+  }, [selected.transport, endEpoch]);
 
   const expire = useCallback(() => {
+    if (epoch !== epochRef.current) return;
     generation.current += 1;
+    endEpoch();
     setState((current) => (current.status === 'READY' ? { status: 'EXPIRED' } : current));
-  }, []);
+  }, [epoch, endEpoch]);
 
-  const api = useMemo<SessionApi>(() => ({ state, selected, refresh, signOut, expire }), [state, selected, refresh, signOut, expire]);
+  const api = useMemo<SessionApi>(() => ({ state, selected, refresh, signOut, expire, epoch }), [state, selected, refresh, signOut, expire, epoch]);
   return <SessionContext.Provider value={api}>{children}</SessionContext.Provider>;
 }

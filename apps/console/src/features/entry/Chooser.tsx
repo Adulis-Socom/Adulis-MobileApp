@@ -26,6 +26,9 @@ export function Chooser() {
           }
         >
           <p>{t('sellers.empty_body')}</p>
+          <p>
+            <Link to="/account/invitations">{t('acct.invitations_link')}</Link>
+          </p>
         </StatePanel>
       ) : (
         <>
@@ -48,6 +51,9 @@ export function Chooser() {
           <div className="actions">
             <Link className="btn btn-quiet" to="/become-seller">
               {t('sellers.become')}
+            </Link>
+            <Link className="btn btn-quiet" to="/account">
+              {t('acct.open_link')}
             </Link>
           </div>
         </>

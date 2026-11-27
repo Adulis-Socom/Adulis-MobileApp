@@ -16,15 +16,16 @@ export const isStaleCompletion = (e: unknown): boolean => e instanceof Transport
 /**
  * Run a Seller-scoped WRITE. The request names the Seller from the URL and the answer must echo it (scoped.ts).
  *
- * Idempotency (CATINV S120). The key belongs to the request (operation plus body) and is remembered, in memory and per Seller scope,
- * only while the outcome of that request is UNKNOWN (network failure, server could not say). The next attempt of the same request then
- * carries the same key, so a lost response cannot become a duplicate, even after navigating elsewhere in the Seller and back. A definite
- * answer ends the request. A fresh key is never minted for a request whose outcome is unknown.
+ * Idempotency (CATINV S120). The key belongs to the request (operation plus body) and is remembered, in memory, per Seller scope and
+ * session, while that request is UNRESOLVED: in flight, or answered with an unknown outcome (network failure, server could not say).
+ * Every attempt of the same request, concurrent ones included, carries that key, so a lost response cannot become a duplicate, even after
+ * navigating elsewhere in the Seller and back. A definite answer ends the request (retry.ts). The guarantee holds only while the key is
+ * held; the Console therefore never promises that a retry cannot duplicate (P-49).
  *
  * Late completion. If the screen that sent the write is gone by the time it settles (the Seller was switched, the user navigated, signed
  * out or the session expired) the result is NOT delivered: the call rejects with STALE_COMPLETION, so no completion effect runs
  * (no navigation, no notice, no overwrite of newer data). The server may still have applied the write; this does not and cannot undo it.
- * `AUTHENTICATION_REQUIRED` always ends the session.
+ * `AUTHENTICATION_REQUIRED` ends the session that sent the request; if that session has already ended, it changes nothing (SessionProvider).
  */
 export function useSellerCommand(): SellerCommand {
   const { sellerId } = useSeller();
@@ -42,7 +43,7 @@ export function useSellerCommand(): SellerCommand {
   return useCallback(
     async <K extends SellerOp>(op: K, input: OpInput<K>): Promise<OpOutput<K>> => {
       const signature = requestSignature(op, input);
-      const key = retryKeys.keyFor(signature);
+      const key = retryKeys.begin(signature);
       let result: OpOutput<K>;
       try {
         result = await runScoped(transport, op, sellerId, input, undefined, key);

@@ -159,7 +159,8 @@ export const SCENES: readonly Scene[] = [
     name: 'unavailable-insights',
     setup: async (p) => {
       await atSellerHome(p, PHONE.owner, SELLER.alem.name);
-      await goInApp(p, `/s/${SELLER.alem.id}/insights`);
+      // Insights itself is built (SC-FE-10); its sub-pages still arrive later.
+      await goInApp(p, `/s/${SELLER.alem.id}/insights/reviews`);
       await expect(p.getByText('Insights arrives in a later release')).toBeVisible();
     },
   },
@@ -506,6 +507,156 @@ export const SCENES: readonly Scene[] = [
       await expect(p.getByRole('heading', { level: 2, name: 'Product images' })).toBeVisible();
       await p.getByRole('heading', { level: 2, name: 'TikTok video' }).scrollIntoViewIfNeeded();
       await expect(p.getByRole('heading', { level: 2, name: 'TikTok video' })).toBeVisible();
+    },
+  },
+  // ---- Batch 02D visual closure: states nobody had looked at, and the new SC-FE-07-09-CLOSE / SC-FE-08 screens ----
+  {
+    name: 'closure-unsaved-dialog',
+    dialog: true,
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox/fx_conv_alem_4`);
+      await p.getByLabel('Your message').fill('Not sent yet.');
+      await p.getByRole('link', { name: 'Back to the Inbox' }).click();
+      await expect(p.getByRole('dialog', { name: 'Leave without saving?' })).toBeVisible();
+    },
+  },
+  {
+    name: 'closure-product-multiple-images',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.biruk.name);
+      await goInApp(p, `/s/${SELLER.biruk.id}/products`);
+      await p.getByRole('button', { name: 'Add a Product' }).click();
+      await expect(p.getByRole('heading', { level: 1, name: 'New Product' })).toBeVisible();
+      const list = p.getByRole('list', { name: 'Product images', exact: true });
+      for (const [n, name] of ['front.png', 'back.png', 'detail.png'].entries()) {
+        await p.getByLabel('Add an image').setInputFiles({ name, mimeType: 'image/png', buffer: REAL_PNG });
+        await expect(list.getByRole('listitem')).toHaveCount(n + 1);
+      }
+    },
+  },
+  {
+    name: 'closure-tiktok-linked',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/products/fx_prod_alem_1`);
+      const region = p.getByRole('region', { name: 'TikTok video' });
+      await region.getByLabel('TikTok video link').fill('https://www.tiktok.com/@alem.textiles/video/456');
+      await region.getByRole('button', { name: 'Link video' }).click();
+      await expect(region.getByText('https://www.tiktok.com/@alem.textiles/video/456')).toBeVisible();
+    },
+  },
+  {
+    name: 'suspended-trust-read-only',
+    setup: async (p) => {
+      await statesAccountAt(p, SELLER.gelila.name);
+      await goInApp(p, `/s/${SELLER.gelila.id}/trust`);
+      await expect(p.getByText('Fresh and fragrant.')).toBeVisible();
+    },
+  },
+  {
+    name: 'inbox-thread-provenance',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox/fx_conv_alem_3`);
+      await expect(p.getByText('From the Scene The old kaftan, styled two ways, which can no longer be shown')).toHaveCount(2);
+    },
+  },
+  {
+    name: 'automation-overview',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox/automation`);
+      await expect(p.getByRole('heading', { level: 2, name: 'Questions it can answer' })).toBeVisible();
+    },
+  },
+  {
+    name: 'automation-knowledge',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox/automation/knowledge`);
+      await expect(p.getByRole('heading', { level: 2, name: 'Store knowledge' })).toBeVisible();
+    },
+  },
+  {
+    name: 'automation-test-result',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox/automation/test`);
+      await p.getByLabel('Buyer question').fill('Is this still available?');
+      await p.getByLabel('Product the question is about').selectOption({ label: 'Linen wrap dress' });
+      await p.getByRole('button', { name: 'Run test' }).click();
+      await expect(p.getByRole('heading', { level: 2, name: 'Test result' })).toBeVisible();
+    },
+  },
+  // ---- SC-FE-10 nonfinancial Insights and Plan ----
+  {
+    name: 'insights-owner',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/insights`);
+      await expect(p.getByRole('region', { name: 'Not measured in this release' })).toBeVisible();
+    },
+  },
+  {
+    name: 'insights-stale',
+    setup: async (p) => {
+      await statesAccountAt(p, SELLER.iman.name);
+      await goInApp(p, `/s/${SELLER.iman.id}/insights`);
+      await expect(p.getByText('These figures are older than usual.')).toBeVisible();
+    },
+  },
+  {
+    name: 'settings-plan',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.biruk.name);
+      await goInApp(p, `/s/${SELLER.biruk.id}/settings/plan`);
+      await expect(p.getByRole('region', { name: 'What this Seller includes' })).toBeVisible();
+    },
+  },
+  // ---- SC-FE-11 team, step-up, closure and the Account's own pages ----
+  {
+    name: 'settings-team',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/settings/team`);
+      await expect(p.getByRole('list', { name: 'Members' })).toBeVisible();
+    },
+  },
+  {
+    name: 'settings-team-stepup',
+    dialog: true,
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/settings/team`);
+      await p.getByLabel('New Owner').selectOption({ label: 'Abel (demonstration)' });
+      await p.getByRole('button', { name: 'Transfer ownership' }).click();
+      await expect(p.getByRole('dialog', { name: 'Confirm it is you' }).getByText('Enter the code to transfer ownership of Alem Textiles to Abel (demonstration).')).toBeVisible();
+    },
+  },
+  {
+    name: 'settings-closure',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/settings/closure`);
+      await expect(p.getByRole('heading', { level: 2, name: 'What closing does' })).toBeVisible();
+    },
+  },
+  {
+    name: 'account-security',
+    setup: async (p) => {
+      await signedInChooser(p, PHONE.owner);
+      await p.getByRole('link', { name: 'Your account and security' }).click();
+      await expect(p.getByRole('list', { name: 'Where you are signed in' })).toBeVisible();
+    },
+  },
+  {
+    name: 'account-privacy',
+    setup: async (p) => {
+      await signedInChooser(p, PHONE.owner);
+      await p.getByRole('link', { name: 'Your account and security' }).click();
+      await p.getByRole('navigation', { name: 'Account sections' }).getByRole('link', { name: 'Privacy and deletion' }).click();
+      await expect(p.getByRole('heading', { level: 2, name: 'Delete your account' })).toBeVisible();
     },
   },
 ];

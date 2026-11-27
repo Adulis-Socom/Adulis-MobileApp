@@ -160,13 +160,6 @@ test.describe('SC-FE-08: who may see it, and whose it is', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'We could not find that page' })).toBeVisible();
   });
 
-  test('scripted assistance settings are an honest "arrives later", with no control', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await open(page, PHONE.owner);
-    await goInApp(page, `/s/${SELLER.alem.id}/inbox/automation`);
-    await expect(page.getByText('Inbox arrives in a later release')).toBeVisible();
-    await expect(page.getByRole('main').getByRole('button')).toHaveCount(0);
-  });
 });
 
 test.describe('SC-FE-08: layout and accessibility', () => {
