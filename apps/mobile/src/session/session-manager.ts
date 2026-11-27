@@ -32,9 +32,20 @@ import type { CredentialStore } from './credential-store';
 export type SessionListener = (next: SessionState, prev: SessionState) => void;
 export type IdentityListener = (prev: SessionState, next: SessionState) => void;
 
+/** What a local forget achieved: CLEARED (nothing restorable), FLAGGED (on disk but refused on restart), FAILED (neither). */
+export type LocalForget = 'CLEARED' | 'FLAGGED' | 'FAILED';
+export type ServerRevoke = 'REVOKED' | 'FAILED' | 'NOT_ATTEMPTED';
+
 export interface SignOutResult {
-  /** False when secure storage refused the delete: the app is signed out in memory and fails closed on restart. */
+  /** True only when nothing restorable is left on this device. */
   readonly credentialCleared: boolean;
+  readonly local: LocalForget;
+  readonly server: ServerRevoke;
+  /**
+   * True when SOMETHING stops this credential coming back (local delete, the signed-out flag, or a server revoke). False
+   * means the app is signed out in memory only and must say so: a restart could restore the sign-in.
+   */
+  readonly durable: boolean;
 }
 export type ConfirmResult = 'CONFIRMED' | 'ANOMALY' | 'STALE';
 
@@ -61,7 +72,14 @@ export class SessionManager {
   private credential: string | null = null;
   private deletionPending = false;
   private verifying = false;
-  private forgetting: Promise<boolean> = Promise.resolve(true);
+  private forgetting: Promise<LocalForget> = Promise.resolve('CLEARED');
+  /**
+   * Bumped on every identity transition AND on a sign-out request made while a sign-in is still persisting. An
+   * authentication that finishes writing under an older generation is stale: it is rolled back, never committed.
+   */
+  private generation = 0;
+  /** Every credential write and delete runs through this one queue, in order (M01-R02: no interleaving). */
+  private storage: Promise<unknown> = Promise.resolve();
   private readonly listeners = new Set<SessionListener>();
   private readonly identityListeners = new Set<IdentityListener>();
   /** Count of purge hooks that threw. A failed purge is never silent: tests and diagnostics read this. */
@@ -89,9 +107,26 @@ export class SessionManager {
   hasPendingCredentialDeletion(): boolean {
     return this.deletionPending;
   }
-  /** Resolves when any credential delete started by a transition has settled (tests, sign-out screens). */
-  idle(): Promise<boolean> {
+  /** Resolves when every queued credential operation has settled (tests, sign-out screens). */
+  async idle(): Promise<LocalForget> {
+    await this.storage;
     return this.forgetting;
+  }
+
+  /** Runs one credential operation after every earlier one, whatever they returned. */
+  private serial<T>(operation: () => Promise<T>): Promise<T> {
+    const next = this.storage.then(operation, operation);
+    this.storage = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  }
+
+  /** A sign-out that could not finish locally may be tried again (the notice offers it). Null when nothing is pending. */
+  retryPendingDeletion(): Promise<LocalForget> | null {
+    if (!this.deletionPending || this.credential !== null) return null;
+    return this.forgetCredential();
   }
 
   // ---- stamps ---------------------------------------------------------------------------------------------------
@@ -117,6 +152,7 @@ export class SessionManager {
     this.current = build(advance ? asEpoch(prev.epoch + 1) : prev.epoch);
     const next = this.current;
     if (advance) {
+      this.generation += 1;
       for (const hook of this.identityListeners) {
         try {
           hook(prev, next);
@@ -161,33 +197,38 @@ export class SessionManager {
     return this.current;
   }
 
-  /** Delete the stored credential. Fails CLOSED: the flag is raised first and lowered only after the delete succeeded. */
-  private forgetCredential(): Promise<boolean> {
+  /**
+   * Delete the stored credential, through the storage queue. Fails CLOSED: the flag is raised first and lowered only after the
+   * delete succeeded. Says honestly what it achieved: CLEARED (nothing restorable is left), FLAGGED (the credential is still on
+   * disk but a restart will refuse it), FAILED (neither: a restart could restore it unless the server revoked it).
+   */
+  private forgetCredential(): Promise<LocalForget> {
     this.credential = null;
-    const run = async (): Promise<boolean> => {
-      let flagged = false;
-      try {
-        await this.deps.credentials.writeSignedOutFlag(true);
-        flagged = true;
-      } catch {
-        flagged = false;
-      }
-      try {
-        await this.deps.credentials.delete();
-      } catch {
-        this.deletionPending = true;
-        return false;
-      }
-      this.deletionPending = false;
-      try {
-        if (flagged) await this.deps.credentials.writeSignedOutFlag(false);
-      } catch {
-        // The flag stays raised: the next restore stays guest, retries the (already successful) delete, and lowers it.
-      }
-      return true;
-    };
-    this.forgetting = this.forgetting.then(run, run);
+    this.forgetting = this.serial(() => this.forgetNow());
     return this.forgetting;
+  }
+
+  private async forgetNow(): Promise<LocalForget> {
+    let flagged = false;
+    try {
+      await this.deps.credentials.writeSignedOutFlag(true);
+      flagged = true;
+    } catch {
+      flagged = false;
+    }
+    try {
+      await this.deps.credentials.delete();
+    } catch {
+      this.deletionPending = true;
+      return flagged ? 'FLAGGED' : 'FAILED';
+    }
+    this.deletionPending = false;
+    try {
+      if (flagged) await this.deps.credentials.writeSignedOutFlag(false);
+    } catch {
+      // The flag stays raised: the next restore stays guest, retries the (already successful) delete, and lowers it.
+    }
+    return 'CLEARED';
   }
 
   /** The server confirmed a restored or current credential and named the Account it belongs to. */
@@ -209,11 +250,11 @@ export class SessionManager {
   }
 
   /** The server said the session carried by `epoch` is dead. A no-op unless `epoch` is current. */
-  endFromServer(epoch: Epoch, reason: Extract<SessionEndReason, 'EXPIRED' | 'REVOKED' | 'CREDENTIAL_REJECTED'>, message: ServerMessage | null): Promise<boolean> {
+  endFromServer(epoch: Epoch, reason: Extract<SessionEndReason, 'EXPIRED' | 'REVOKED' | 'CREDENTIAL_REJECTED'>, message: ServerMessage | null): Promise<LocalForget | true> {
     return this.end(epoch, reason, message);
   }
 
-  private async end(epoch: Epoch, reason: SessionEndReason, message: ServerMessage | null): Promise<boolean> {
+  private async end(epoch: Epoch, reason: SessionEndReason, message: ServerMessage | null): Promise<LocalForget | true> {
     if (epoch !== this.current.epoch) return true; // a late answer for an earlier session must not end a newer one
     if (this.current.kind === 'GUEST' || this.current.kind === 'RESTORING') return true;
     const endedEpoch = this.current.epoch;
@@ -224,20 +265,27 @@ export class SessionManager {
   /** Local first: the epoch advances and private state is purged before the server revoke is attempted, never in front of it. */
   async signOut(): Promise<SignOutResult> {
     const state = this.current;
-    if (state.kind === 'GUEST' || state.kind === 'RESTORING') return { credentialCleared: !this.deletionPending };
+    if (state.kind === 'GUEST' || state.kind === 'RESTORING') {
+      // Nothing is signed in, but a sign-in may still be persisting: cancel it, so it can never commit after this request.
+      this.generation += 1;
+      const local: LocalForget = this.deletionPending ? 'FAILED' : 'CLEARED';
+      return { credentialCleared: local === 'CLEARED', local, server: 'NOT_ATTEMPTED', durable: local === 'CLEARED' };
+    }
     const oldStamp = this.stamp();
     const oldBearer = this.credential;
     this.move((epoch) => ({ kind: 'GUEST', epoch, lastEnd: { reason: 'SIGNED_OUT', endedEpoch: state.epoch, message: null, at: this.now() } }), true);
-    const revoked = oldBearer === null || state.kind !== 'AUTHENTICATED' ? Promise.resolve() : this.revokeBestEffort(oldStamp, oldBearer);
-    const cleared = await this.forgetCredential();
-    await revoked;
-    return { credentialCleared: cleared };
+    const revoked: Promise<ServerRevoke> = oldBearer === null || state.kind !== 'AUTHENTICATED' ? Promise.resolve('NOT_ATTEMPTED') : this.revokeBestEffort(oldStamp, oldBearer);
+    const local = await this.forgetCredential();
+    const server = await revoked;
+    // Durable means something stops this credential coming back: it is gone or refused locally, or the server ended it.
+    // When neither holds, the app is signed out in memory and says plainly that a restart may restore the sign-in.
+    return { credentialCleared: local === 'CLEARED', local, server, durable: local !== 'FAILED' || server === 'REVOKED' };
   }
 
-  private revokeBestEffort(stamp: RequestStamp, bearer: string): Promise<void> {
+  private revokeBestEffort(stamp: RequestStamp, bearer: string): Promise<ServerRevoke> {
     return this.deps.transport.json('session.signOut', {}, { stamp, bearer }).then(
-      () => undefined,
-      () => undefined, // best effort: the local forget already happened
+      () => 'REVOKED' as const,
+      () => 'FAILED' as const, // best effort: the local forget already happened
     );
   }
 
@@ -258,6 +306,7 @@ export class SessionManager {
   async verifyCode(input: VerifyInput): Promise<VerifyOutcome> {
     if (this.verifying) return { kind: 'STALE' };
     this.verifying = true;
+    const generation = this.generation; // taken before any await: a transition after this point makes the result stale
     try {
       let wire: MobileOps['session.verifyCode']['out'];
       try {
@@ -272,12 +321,36 @@ export class SessionManager {
       const fixtureOnLive = isReservedId(wire.credential) && this.deps.transport.kind === 'live';
       if (notOrdinary || fixtureOnLive) return { kind: 'REJECTED_FOR_SURFACE' };
 
-      // Storage first: if the credential cannot be written the person is NOT signed in.
-      try {
-        await this.deps.credentials.writeSignedOutFlag(false);
-        await this.deps.credentials.write(wire.credential);
-      } catch {
-        return { kind: 'REFUSED', refusal: { code: 'INTERNAL', message: null, retryAt: null } };
+      // Storage first: if the credential cannot be written the person is NOT signed in. The credential is written BEFORE
+      // the signed-out flag is lowered, so a failed write never leaves an older, signed-out credential restorable (M01-R01).
+      const persisted = await this.serial(async (): Promise<'STALE' | 'WRITE_FAILED' | 'WRITTEN'> => {
+        if (this.generation !== generation) return 'STALE';
+        try {
+          await this.deps.credentials.write(wire.credential);
+        } catch {
+          return 'WRITE_FAILED';
+        }
+        try {
+          await this.deps.credentials.writeSignedOutFlag(false);
+        } catch {
+          // Conservative: the flag stays raised, so this sign-in works now and a restart asks for a new sign-in.
+        }
+        return 'WRITTEN';
+      });
+      if (persisted === 'STALE') return { kind: 'STALE' };
+      if (persisted === 'WRITE_FAILED') return { kind: 'REFUSED', refusal: { code: 'INTERNAL', message: null, retryAt: null } };
+      if (this.generation !== generation) {
+        // Someone signed out, the server ended a session or another identity arrived while this was being written: do not
+        // commit. Put back the credential of whoever the app is now, or remove this one if nobody is signed in.
+        await this.serial(async () => {
+          if (this.credential !== null) {
+            const keep = this.credential;
+            await this.deps.credentials.write(keep).catch(() => undefined);
+          } else {
+            await this.forgetNow();
+          }
+        });
+        return { kind: 'STALE' };
       }
       this.deletionPending = false;
       const prev = this.current;
