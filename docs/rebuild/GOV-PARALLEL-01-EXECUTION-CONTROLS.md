@@ -25,6 +25,12 @@ the procedure; the addendum governs where they differ. Effective with the addend
    acknowledgement by an agent is recorded as an agent acknowledgement, not as an independent human review.
 4. Lockfile: regenerate with `pnpm install` from the reviewed manifests; never hand-merge `pnpm-lock.yaml`.
 5. After merge, each lane synchronises the named merge commit (RB27-D06), never a blanket merge.
+6. Synchronisation scope (L2-R03). Before a lane branch takes a shared change: (a) list the imported ancestry
+   (`git log --oneline <lane>..<source>`) and confirm it holds only reviewed root work; (b) write the allowed-path
+   list; (c) preview the resulting tree (`git merge-tree --write-tree <lane> <source>`) and check `git diff --stat`
+   touches only allowed paths; (d) if the source holds anything else, use a scoped patch or `git cherry-pick -x`
+   of the named commits instead of a merge; (e) regenerate `pnpm-lock.yaml` with `pnpm install`, never by hand.
+   A merge commit that imports another surface's unfinished implementation is not permitted.
 
 ## 3. Lane status publication (at every acceptance gate or shared change)
 Each lane reports: integration base and head SHA, open PRs with head SHAs, shared changes requested, contract
@@ -51,6 +57,12 @@ neither lane overwrites the other's.
    `dev`, the protection read-back, `main` and recovery tags unchanged.
 9. Feed back: each active lane branch synchronises from the new `dev` through a reviewed PR.
 
+Preservation (L2-R04), checked at step 5 and again after step 8: the resulting tree still contains every surface,
+workspace membership (`pnpm-workspace.yaml`), dependency manifest, CI job and required-check name, fixture-release
+protection and dependency-boundary rule that the previous accepted `dev` tree had, plus the new surface; the
+security and privacy tests of earlier milestones still run. Compare against the previous accepted tree and record
+it. Step 6 is pre-merge on the exact head AND the current merge candidate; post-merge CI never replaces it.
+
 ## 5. Proposed protection (applied only by the founder or a repository admin)
 Ruleset `protect-lane-integration` (proposal):
 ```
@@ -60,7 +72,26 @@ rules: deletion; non_fast_forward;
   pull_request {required_approving_review_count: 0, dismiss_stale_reviews_on_push: true,
                 required_review_thread_resolution: true};
   required_status_checks {strict: true, checks: ["replacement foundation (rebuild-20261125)",
-                          "Mobile (rebuild-20261125)"]}   # second context only after it has emitted green + a negative control
+                          "Seller Console (rebuild-20261125)"]}   # the baseline's two; never fewer (L2-R02)
+# PROT-2, a separate later update: add "Mobile (rebuild-20261125)" only after the job exists, has emitted
+# green on a real run and has passed a negative control; keep the other two.
 ```
-Workflow change (root PR in L2-00B): add the `Mobile (rebuild-20261125)` job and add `rebuild/l2-mobile` to
-`on.pull_request.branches` in `.github/workflows/rebuild-ci.yml`.
+Activation order (L2-R01), each step its own reviewed change, never merged out of order:
+1. Root PR into `rebuild/2026-11-25`: add `rebuild/l2-mobile` to `on.pull_request.branches` in
+   `.github/workflows/rebuild-ci.yml`. Trigger only (no job, no dependency, no workspace change); the
+   existing triggers, jobs, permissions and check names are unchanged. Merge after #201 is accepted.
+2. Founder creates `rebuild/l2-mobile` from a baseline that contains step 1, and applies PROT-1 (above).
+3. The L2-00B activation PR goes into `rebuild/l2-mobile`. It receives merge-candidate CI from the trigger that
+   already exists; it must not depend on a workflow change it carries itself for its own verification.
+4. The `Mobile (rebuild-20261125)` job is added in the L2-00B work on the lane branch. After it has emitted green
+   plus a negative control, PROT-2 adds it to the required list.
+Every merge into a lane branch needs the required checks on the exact head AND on the current merge candidate.
+Post-merge CI never substitutes for either.
+
+## 6. Session isolation record (L2-R05)
+A root session is started with `Start-AdulisClaude.ps1 -Workstream root` in `Worktrees/Root-Coordination` so the
+launcher's absolute denials (generated files, `db/migrations/**`) are active. A session that is in the right
+worktree but was not launcher-started has no denial layer; it is recorded as a deviation in that batch's
+environment checkpoint, writes only to its own worktree and deliverables, and does not edit generated files or
+migrations. The L2-NIGHT-01 session is such a case (file 01 of its report). Lane 1 acknowledgement of RB27-D04 and
+RB27-D06 is NOT recorded; none exists on PR #201 (no comments, no reviews).

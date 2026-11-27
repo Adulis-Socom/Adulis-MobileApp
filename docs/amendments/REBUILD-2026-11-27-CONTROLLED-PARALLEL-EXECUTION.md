@@ -101,7 +101,12 @@ the final API, never copied between surfaces, and never imported across apps.
   that the SC-FE-12 promotion merges into `dev`.
 - Shared prerequisites reach a lane branch only as reviewed root PRs (RB27-D04). A lane branch synchronises
   from `dev` (accepted) or from a named, reviewed root-PR commit range; never by a blanket merge of a branch
-  that contains another lane's unaccepted work.
+  that contains another lane's unaccepted work. Every synchronisation is controlled: inspect the imported
+  ancestry (`git log <lane>..<source>`, `git merge-base`) and the resulting tree (`git merge-tree
+  --write-tree`); write an explicit allowed-path list first; take reviewed shared changes only, by scoped patch
+  or `git cherry-pick -x` (provenance kept) where a merge would import more; regenerate `pnpm-lock.yaml` with
+  `pnpm install` and never resolve a lockfile conflict by hand. A merge commit that carries another surface's
+  unfinished implementation into a lane branch is not permitted.
 - The FIRST promotion into `dev` remains SC-FE-12 with its atomic required-check migration
   (`docs/rebuild/DEV-PROMOTION-PROCEDURE.md`), owned by Lane 1. If a Lane 2 milestone is accepted first, its
   candidate is HELD and reported; changing the first cutover needs an explicit founder decision.
@@ -111,19 +116,33 @@ the final API, never copied between surfaces, and never imported across apps.
   merge candidate, founder approval, and post-merge verification of the `dev` SHA, tree, checks and
   protection. A candidate whose history contains incomplete work from either lane is rebuilt from reviewed
   surface-only changes, never merged whole.
+- Every promotion retains what earlier milestones accepted: application surfaces, workspace memberships,
+  dependency manifests, CI gates, fixture-release protections, architecture boundaries and security and privacy
+  behaviour. The review compares the resulting tree with the previous accepted `dev` tree and records that
+  nothing was dropped. Post-merge CI on `dev` verifies a merge that happened; it never substitutes for the
+  mandatory pre-merge checks on the exact head and on the current merge candidate.
 - Promotion into `dev` is not launch, deployment or database authorisation, and never touches `main`.
 
 ## RB27-D07 -- Protection and CI (proposal; nothing is applied by this addendum)
 Each change below is a separate founder/repository-admin action, applied only after the new check has
 emitted on a real run with a positive and a negative control, and never with an interval in which a branch
 has fewer required checks than before:
+- Order matters (CI bootstrap). The exact trigger `rebuild/l2-mobile` under `on.pull_request.branches` in
+  `.github/workflows/rebuild-ci.yml` must exist on the baseline BEFORE the lane branch is created and before any
+  Mobile activation pull request needs merge-candidate CI. It is its own root PR into `rebuild/2026-11-25`
+  (trigger only: no job, no dependency, no workspace change). A pull request must not be the only carrier of the
+  workflow that verifies it. Push runs on `rebuild/**` already give exact-head CI; the trigger adds the
+  merge-candidate run for pull requests (today only `rebuild/2026-11-25` and `dev`).
 - A ruleset for the lane integration branches by EXACT name (`refs/heads/rebuild/l2-mobile`, later
   `-storefront`, `-operator`; not a `rebuild/l2-*` wildcard, which would also capture topic branches): no
-  deletion, no non-fast-forward, pull request required with review-thread resolution, strict required checks
-  `replacement foundation (rebuild-20261125)` plus the surface job (proposed `Mobile (rebuild-20261125)`),
-  zero bypass actors.
-- `.github/workflows/rebuild-ci.yml` gains the surface job and lists the lane integration branch under
-  `pull_request.branches`, so topic PRs get a merge-candidate run (today only `rebuild/2026-11-25` and `dev`).
+  deletion, no non-fast-forward, pull request required with review-thread resolution, zero bypass actors.
+  Required checks start as the two the baseline ruleset already requires, `replacement foundation
+  (rebuild-20261125)` and `Seller Console (rebuild-20261125)`, so a lane branch never has fewer than its
+  baseline. `Mobile (rebuild-20261125)` is ADDED to that list only after the Mobile job is implemented, has
+  emitted green on a real run and has passed a negative control. Checks accepted earlier are never removed.
+- Mandatory before every merge into a lane branch or into `dev`: required checks green on the exact head AND on
+  the current merge candidate. Post-merge CI is never a substitute.
+- The Mobile job itself is added in the L2-00B activation work, on the lane branch.
 - At each surface promotion the surface check is added to `dev`'s required checks atomically, as the first
   promotion does for the replacement checks. Ruleset 28104610 and the recovery-tag ruleset are not weakened.
 
