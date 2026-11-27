@@ -17,3 +17,6 @@ credentials.json
 *.key
 *.pem
 *.mobileprovision
+
+# Release-scan and Expo export output (scripts/verify-release.mjs removes these itself)
+dist-*/
