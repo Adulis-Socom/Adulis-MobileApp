@@ -71,10 +71,14 @@ export function createInbox(kit: Kit, catalogue: Catalogue, content: Content): I
     const auto = (body: string, hoursAgo: number) => m('AUTOMATED', body, hoursAgo, { automation: { template_label: 'Provisional demonstration template', provisional: true } });
     if (sellerId === 'fx_seller_alem') {
       const p = (k: number) => product(`fx_prod_alem_${k}`);
-      const scene = (k: number, label: string): SceneSnap => ({ ref: `fx_scene_alem_${k}`, revision: 1, label });
+      // The label is the one the Scene had at the referenced revision, read from the Scene's own history, never typed in twice (FE12-07).
+      const scene = (k: number): SceneSnap => {
+        const ref = `fx_scene_alem_${k}`;
+        return { ref, revision: 1, label: content.sceneAtRevision(sellerId, ref, 1)?.label ?? ref };
+      };
       return [
         { id: 'fx_conv_alem_1', buyer: 'Demonstration buyer A', state: 'OPEN', readCount: 3, msgs: [
-          m('BUYER', 'Is the linen wrap dress still available in size S?', 5, { subject: p(1), source: scene(1, 'Linen wrap dress styled for the rainy season') }),
+          m('BUYER', 'Is the linen wrap dress still available in size S?', 5, { subject: p(1), source: scene(1) }),
           auto('Thanks for your message. A team member will reply.', 5),
           m('SELLER_TEAM', 'Yes, we have it in size S.', 4, { actor: 'Selam', subject: p(1) }),
           m('BUYER', 'Thank you, that helps.', 1),
@@ -86,8 +90,8 @@ export function createInbox(kit: Kit, catalogue: Catalogue, content: Content): I
           m('BUYER', 'Does it come in other colours?', 0.5, { subject: p(3) }),
         ] },
         { id: 'fx_conv_alem_3', buyer: 'Demonstration buyer C', state: 'OPEN', readCount: 2, msgs: [
-          m('BUYER', 'I love this look. Where is it from?', 30, { subject: { kind: 'SCENE', ...scene(6, 'The old kaftan, styled two ways') } }),
-          m('SELLER_TEAM', 'It is from our own workshop.', 29, { actor: 'Selam', subject: { kind: 'SCENE', ...scene(6, 'The old kaftan, styled two ways') } }),
+          m('BUYER', 'I love this look. Where is it from?', 30, { subject: { kind: 'SCENE', ...scene(6) } }),
+          m('SELLER_TEAM', 'It is from our own workshop.', 29, { actor: 'Selam', subject: { kind: 'SCENE', ...scene(6) } }),
         ] },
         { id: 'fx_conv_alem_4', buyer: 'Demonstration buyer D', state: 'OPEN', readCount: 1, msgs: [m('BUYER', 'Do you have a shop I can visit?', 50)] },
         { id: 'fx_conv_alem_5', buyer: 'Demonstration buyer E', state: 'OPEN', readCount: 2, msgs: [
@@ -183,9 +187,11 @@ export function createInbox(kit: Kit, catalogue: Catalogue, content: Content): I
       if ((scene_id === null) !== (scene_revision === null)) errors['scene'] = 'MESSAGE_CONTEXT_CONFLICT';
       else if (scene_id !== null && scene_revision !== null) {
         const current = content.scenesForContext(a.sellerId).find((s) => s.id === scene_id && s.isPublic);
-        tagged = content.tagsAtRevision(a.sellerId, scene_id, scene_revision);
-        if (!current || tagged === null) errors['scene'] = 'MESSAGE_SCENE_POST_INVALID';
-        else source = { ref: scene_id, revision: scene_revision, label: current.label };
+        const at = content.sceneAtRevision(a.sellerId, scene_id, scene_revision);
+        tagged = at?.productIds ?? null;
+        // The snapshot is the referenced revision's label, not the current one: a caption edited since the reply was composed does not relabel it.
+        if (!current || !at) errors['scene'] = 'MESSAGE_SCENE_POST_INVALID';
+        else source = { ref: scene_id, revision: scene_revision, label: at.label };
       }
       let product: { id: string; label: string } | null = null;
       if (product_id !== null) {
