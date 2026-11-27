@@ -67,12 +67,15 @@ function RoleEditor({ member, action, onSave, onCancel }: { member: TeamMember; 
 
 type Confirm = { kind: 'SUSPEND' | 'REINSTATE' | 'REMOVE'; member: TeamMember } | null;
 const ACTION = { SUSPEND: 'team.action.SUSPEND', REINSTATE: 'team.action.REINSTATE', REMOVE: 'team.action.REMOVE' } as const;
+const ACTION_SHORT = { SUSPEND: 'team.action_short.SUSPEND', REINSTATE: 'team.action_short.REINSTATE', REMOVE: 'team.action_short.REMOVE' } as const;
 const CONFIRM_TITLE = { SUSPEND: 'team.confirm.SUSPEND', REINSTATE: 'team.confirm.REINSTATE', REMOVE: 'team.confirm.REMOVE' } as const;
 const CONFIRM_BODY = { SUSPEND: 'team.confirm_body.SUSPEND', REINSTATE: 'team.confirm_body.REINSTATE', REMOVE: 'team.confirm_body.REMOVE' } as const;
 
 export function Team() {
   const { sellerId, membership } = useSeller();
   const query = useSellerQuery('team.get', {});
+  const market = useSellerQuery('market.context.get', {});
+  const timezone = market.state.status === 'ready' ? market.state.data.timezone : undefined;
   const run = useSellerCommand();
   const action = useAction();
   const invite = useAction();
@@ -154,15 +157,15 @@ export function Team() {
                 ) : m.allowed_actions.length > 0 ? (
                   <div className="actions">
                     {m.allowed_actions.includes('CHANGE_ROLES') ? (
-                      <button type="button" className="btn btn-quiet" onClick={() => setEditing(m.membership_id)}>
-                        {t('team.change_roles', { name: m.display_name })}
+                      <button type="button" className="btn btn-quiet" aria-label={t('team.change_roles', { name: m.display_name })} onClick={() => setEditing(m.membership_id)}>
+                        {t('team.change_roles_short')}
                       </button>
                     ) : null}
                     {(['SUSPEND', 'REINSTATE', 'REMOVE'] as const)
                       .filter((k) => m.allowed_actions.includes(k))
                       .map((k) => (
-                        <button key={k} type="button" className="btn btn-quiet" onClick={() => setConfirm({ kind: k, member: m })}>
-                          {t(ACTION[k], { name: m.display_name })}
+                        <button key={k} type="button" className="btn btn-quiet" aria-label={t(ACTION[k], { name: m.display_name })} onClick={() => setConfirm({ kind: k, member: m })}>
+                          {t(ACTION_SHORT[k])}
                         </button>
                       ))}
                   </div>
@@ -223,11 +226,11 @@ export function Team() {
                 <li key={s.session_id} className="ledger-row">
                   <div className="stack">
                     <strong>{s.member_label}</strong>
-                    <p className="ledger-meta">{t('team.session_line', { device: s.device_label, time: formatInstant(s.last_used_at) })}</p>
+                    <p className="ledger-meta">{t('team.session_line', { device: s.device_label, time: formatInstant(s.last_used_at, timezone) })}</p>
                     {view.allowed_actions.includes('REVOKE_SESSIONS') ? (
                       <div className="actions">
-                        <button type="button" className="btn btn-quiet" onClick={() => void act(() => run('team.session.revoke', { session_id: s.session_id }))}>
-                          {t('team.session_revoke', { name: s.member_label })}
+                        <button type="button" className="btn btn-quiet" aria-label={t('team.session_revoke', { name: s.member_label })} onClick={() => void act(() => run('team.session.revoke', { session_id: s.session_id }))}>
+                          {t('team.session_revoke_short')}
                         </button>
                       </div>
                     ) : null}
@@ -244,7 +247,7 @@ export function Team() {
           <ActionProblem action={transferAction} />
           {view.transfer ? (
             <div className="stack">
-              <p>{t('team.transfer_pending', { name: view.transfer.target_label, time: formatInstant(view.transfer.activates_at) })}</p>
+              <p>{t('team.transfer_pending', { name: view.transfer.target_label, time: formatInstant(view.transfer.activates_at, timezone) })}</p>
               <p className="hint">{t('team.transfer_outcome_gap')}</p>
               <div className="actions">
                 <button type="button" className="btn btn-quiet" onClick={() => void act(() => run('ownership.transfer.cancel', {}), transferAction)}>
