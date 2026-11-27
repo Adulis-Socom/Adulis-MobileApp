@@ -1,6 +1,6 @@
 // M01-R10 / M01-R04: MOB-FE-02 discovery through MOUNTED routes over the fixture world: channels, the Scene card and its photo,
 // Scene Explorer hotspots, Product, Seller, Shop, Search, and a Scene the server withdraws while it is open.
-import { act, fireEvent, screen } from 'expo-router/testing-library';
+import { act, fireEvent, screen, waitFor } from 'expo-router/testing-library';
 import { router } from 'expo-router';
 
 import { fixtureHandle } from '../fixtures';
@@ -75,6 +75,23 @@ describe('Scene Explorer', () => {
     expect(await findText('mobile.scene.gone')).toBeTruthy();
     expect(screen.queryByText(firstCaption)).toBeNull();
     expect(screen.queryByRole('image', { name: 'Photo for scene 1' })).toBeNull();
+  });
+
+  // ISS-039: a double tap opens one Explorer; a different Scene still pushes its own screen, and Back walks the stack.
+  it('a double tap on Explore opens one Scene Explorer; a related Scene pushes over it and Back returns', async () => {
+    await boot();
+    await screen.findByText(firstCaption, undefined, WAIT);
+    const explore = screen.getAllByRole('button', { name: t('mobile.scene.explore') })[0] as ReturnType<typeof screen.getByRole>;
+    await fireEvent.press(explore);
+    await fireEvent.press(explore);
+    await findText('mobile.scene.in_this_scene');
+    const inThisScene = () => screen.queryAllByText(t('mobile.scene.in_this_scene'), { includeHiddenElements: true }).length;
+    expect(inThisScene()).toBe(1);
+    await fireEvent.press(screen.getAllByRole('button', { name: t('mobile.scene.explore') })[0] as ReturnType<typeof screen.getByRole>);
+    await waitFor(() => expect(inThisScene()).toBe(2));
+    await act(() => router.back());
+    await waitFor(() => expect(inThisScene()).toBe(1));
+    expect(await screen.findByText(firstCaption, undefined, WAIT)).toBeTruthy();
   });
 
   it('a malformed Scene reference is the neutral sentence and requests nothing (the router itself resolves dot segments away)', async () => {
