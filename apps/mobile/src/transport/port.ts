@@ -83,4 +83,6 @@ export interface FixtureUi {
  */
 export interface FixtureEnvironment {
   readonly deviceId: string;
+  /** Bundled demonstration pictures for reserved media refs (the fixture side of the media seam). */
+  readonly media: (ref: string) => number | null;
 }

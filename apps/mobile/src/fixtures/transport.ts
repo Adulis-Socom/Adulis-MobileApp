@@ -5,6 +5,7 @@ import { asAccountRef, asMarketRef, MOBILE_AUDIENCE, ORDINARY_PRINCIPAL, type Bo
 import { OP_SPECS } from '../contracts/ops';
 import { TransportError, type CallContext, type MobileTransport } from '../transport/port';
 import { FIXTURE_CHALLENGE_PREFIX, FIXTURE_CREDENTIAL_PREFIX, FIXTURE_IDS, FIXTURE_REFUSAL, FIXTURE_VERSION } from './ids';
+import { CATEGORIES, CHANNELS, followedSellerRefs, knownCategory, pageOf, productDetail, productsOf, publicScene, search, sellerProfile, shopProducts, visibleScenes } from './discovery';
 import { PERSONAS, type Persona } from './personas';
 
 /** The deny-list backstop: never served, whatever the registry says (GOV-06 S2). */
@@ -23,6 +24,8 @@ export interface FixtureHandle {
   /** The next call to `op` waits until the returned function is called: deterministic late-response tests, no timers. */
   hold(op: MobileOpId): () => void;
   setClient(scenario: ClientScenario): void;
+  /** The server withdraws a Scene: it answers NOT_FOUND on open and drops out of every list (public visibility is a server fact). */
+  withdraw(sceneRef: string): void;
   /** Accounts the fixture currently has a session for (isolation tests). */
   sessionAccounts(): readonly string[];
   reset(): void;
@@ -34,6 +37,7 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
   const challenges = new Map<string, Persona | null>(); // challenge ref -> persona (null: unknown number, still answered the same)
   const holds = new Map<string, Promise<void>[]>();
   const spent = new Set<string>(); // expiry / revocation scenarios fire once per credential
+  const withdrawn = new Set<string>();
   let client: ClientScenario = 'OK';
   let sequence = 0;
 
@@ -92,6 +96,52 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
         if (ctx.bearer !== null) sessions.delete(ctx.bearer);
         return {};
       }
+      case 'home.channels.get':
+        return { channels: CHANNELS };
+      case 'feed.forYou.page':
+        return pageOf(visibleScenes(withdrawn), (input as MobileOps['feed.forYou.page']['in']).cursor);
+      case 'feed.following.page': {
+        const persona = ctx.bearer === null ? undefined : sessions.get(ctx.bearer);
+        if (persona === undefined) throw new TransportError('AUTHENTICATION_REQUIRED');
+        const followed = followedSellerRefs(persona.key);
+        return pageOf(visibleScenes(withdrawn).filter((s) => followed.includes(s.seller.sellerRef)), (input as MobileOps['feed.following.page']['in']).cursor);
+      }
+      case 'scene.get': {
+        const found = publicScene((input as MobileOps['scene.get']['in']).sceneRef, withdrawn);
+        if (found === null) throw new TransportError('NOT_FOUND');
+        return { scene: found };
+      }
+      case 'search.query': {
+        const { q, type, cursor } = input as MobileOps['search.query']['in'];
+        return { ...pageOf(search(q, type, withdrawn), cursor), type, marketState: 'RESOLVED' };
+      }
+      case 'shop.products.page': {
+        const { cursor, category } = input as MobileOps['shop.products.page']['in'];
+        if (category !== null && !knownCategory(category)) throw new TransportError('VALIDATION_FAILED');
+        return { ...pageOf(shopProducts(category), cursor), marketState: 'RESOLVED' };
+      }
+      case 'categories.list':
+        return { items: CATEGORIES };
+      case 'product.get': {
+        const found = productDetail((input as MobileOps['product.get']['in']).productRef);
+        if (found === null) throw new TransportError('NOT_FOUND');
+        return { product: found };
+      }
+      case 'seller.get': {
+        const found = sellerProfile((input as MobileOps['seller.get']['in']).sellerRef);
+        if (found === null) throw new TransportError('NOT_FOUND');
+        return { seller: found };
+      }
+      case 'seller.scenes.page': {
+        const { sellerRef, cursor } = input as MobileOps['seller.scenes.page']['in'];
+        if (sellerProfile(sellerRef) === null) throw new TransportError('NOT_FOUND');
+        return pageOf(visibleScenes(withdrawn, sellerRef), cursor);
+      }
+      case 'seller.products.page': {
+        const { sellerRef, cursor } = input as MobileOps['seller.products.page']['in'];
+        if (sellerProfile(sellerRef) === null) throw new TransportError('NOT_FOUND');
+        return pageOf(productsOf(sellerRef), cursor);
+      }
     }
   }
 
@@ -131,6 +181,7 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
     setClient(scenario) {
       client = scenario;
     },
+    withdraw: (sceneRef) => void withdrawn.add(sceneRef),
     sessionAccounts: () => [...sessions.values()].map((p) => p.accountId),
     reset() {
       log.length = 0;
@@ -138,6 +189,7 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
       challenges.clear();
       holds.clear();
       spent.clear();
+      withdrawn.clear();
       client = 'OK';
       sequence = 0;
     },

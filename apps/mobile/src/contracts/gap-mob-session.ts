@@ -5,6 +5,8 @@
 // Nothing here models an OTP provider, a code length, an attempt limit, a token lifetime or an authentication policy.
 // Where the client would need one it is an opaque value the server supplies (decision rows in the L2-MOBILE-01 register).
 
+import type { DiscoveryOps } from './gap-mob-discovery';
+
 export const CONTRACT = { gap: 'GAP-L2-01', version: 'mob-session-0', provisional: true } as const;
 
 declare const brand: unique symbol;
@@ -194,13 +196,14 @@ export interface VerifyWire {
   readonly principalKind: string;
 }
 
-export interface MobileOps {
+export interface SessionOps {
   'device.register': { in: { deviceId: DeviceId; platform: 'android' | 'ios' }; out: Empty };
   'bootstrap.get': { in: Empty; out: BootstrapView };
   'session.requestCode': { in: { destination: string }; out: { challengeRef: string; inputHint: OpaqueHint | null } };
   'session.verifyCode': { in: { challengeRef: string; code: string; intentKey: string }; out: VerifyWire };
   'session.signOut': { in: Empty; out: Empty };
 }
+export type MobileOps = SessionOps & DiscoveryOps;
 export type MobileOpId = keyof MobileOps;
 
 export interface Stamped<T> {

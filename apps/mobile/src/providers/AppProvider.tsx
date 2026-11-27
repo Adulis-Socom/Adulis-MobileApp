@@ -16,6 +16,7 @@ import type { ImageCacheControl } from '../session/private-state';
 import { secureCredentialStore } from '../session/secure-credential-store';
 import { selectTransport } from '../transport/select';
 import type { FixtureUi } from '../transport/port';
+import { liveMedia, MediaContext, type MediaResolver } from '../ui/media';
 import type { BootstrapResult } from './bootstrap';
 import { createRuntime, type EnterModeResult, type Runtime } from './runtime';
 
@@ -62,7 +63,7 @@ export function useApp(): AppValue {
 
 export function AppProvider({ children }: { readonly children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
-  const [boot, setBoot] = useState<{ readonly runtime: Runtime; readonly fixtureUi: FixtureUi | null } | null>(null);
+  const [boot, setBoot] = useState<{ readonly runtime: Runtime; readonly fixtureUi: FixtureUi | null; readonly media: MediaResolver } | null>(null);
   const [gate, dispatch] = useReducer(reduceGate, initialGate);
   const [signOutState, setSignOutState] = useState<AppValue['signOutState']>('NONE');
   const gateRef = useRef(gate);
@@ -98,7 +99,7 @@ export function AppProvider({ children }: { readonly children: ReactNode }) {
         ...(fixture ? { deviceId: fixture.deviceId } : {}),
       });
       if (!alive) return;
-      setBoot({ runtime: created, fixtureUi: selection.fixtureUi });
+      setBoot({ runtime: created, fixtureUi: selection.fixtureUi, media: fixture ? fixture.media : liveMedia });
       let result = await created.start();
       if (result.kind === 'STALE') result = await created.refresh();
       if (!alive) return;
@@ -169,7 +170,9 @@ export function AppProvider({ children }: { readonly children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Context.Provider value={value}>{children}</Context.Provider>
+      <MediaContext.Provider value={boot?.media ?? liveMedia}>
+        <Context.Provider value={value}>{children}</Context.Provider>
+      </MediaContext.Provider>
     </QueryClientProvider>
   );
 }
