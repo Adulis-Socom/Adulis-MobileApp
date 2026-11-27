@@ -8,6 +8,7 @@ import { GATED_MODES, type GatedMode, type Mode } from '../contracts/gap-mob-ses
 import { serverText, t, type UiMessageKey } from '../i18n/messages';
 import { useApp } from '../providers/AppProvider';
 import { Body, Button, Heading } from './components';
+import { theme } from './theme';
 
 const NAME: Record<Mode, UiMessageKey> = { BUYER: 'mobile.mode.buyer', SELLER_COMPANION: 'mobile.mode.seller_companion', COURIER: 'mobile.mode.courier' };
 const HOME: Record<GatedMode, string> = { SELLER_COMPANION: '/companion', COURIER: '/courier' };
@@ -23,7 +24,7 @@ export function ModeSwitcher() {
   };
 
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: theme.space.sm }}>
       <Heading>{t('mobile.account.modes')}</Heading>
       <Button label={t('mobile.mode.buyer')} kind={activeMode === 'BUYER' ? 'primary' : 'secondary'} selected={activeMode === 'BUYER'} onPress={() => go('BUYER')} />
       {eligibility === null || eligibility.epoch !== session.epoch ? <Body muted>{t('mobile.mode.checking')}</Body> : null}
@@ -34,7 +35,7 @@ export function ModeSwitcher() {
             if (answer.status === 'NOT_ELIGIBLE' || answer.status === 'REVOKED') return null;
             const usable = answer.status === 'AVAILABLE';
             return (
-              <View key={mode} style={{ gap: 4 }}>
+              <View key={mode} style={{ gap: theme.space.xs }}>
                 <Button
                   label={usable && activeMode !== mode ? t('mobile.mode.switch_to', { mode: t(NAME[mode]) }) : t(NAME[mode])}
                   kind={activeMode === mode ? 'primary' : 'secondary'}

@@ -46,7 +46,7 @@ export default function Verify() {
       <Field label={t('mobile.auth.code.label')} value={code} onChangeText={setCode} keyboardType="number-pad" autoComplete="one-time-code" textContentType="oneTimeCode" editable={!busy} />
       {busy ? <Notice text={t('mobile.auth.verifying')} /> : null}
       {problem ? <Notice tone="warn" text={problem} /> : null}
-      <Button label={t('mobile.auth.verify')} onPress={() => void verify()} disabled={code.trim() === ''} busy={busy} />
+      <Button kind="highlight" label={t('mobile.auth.verify')} onPress={() => void verify()} disabled={code.trim() === ''} busy={busy} />
       <Button
         kind="secondary"
         label={t('mobile.auth.use_other_number')}
