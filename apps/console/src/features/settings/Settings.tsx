@@ -13,7 +13,11 @@ import { Section } from '../products/Section';
 /** One row per Seller setting page that exists. Pages a later work order adds append here. */
 export function SettingsIndex() {
   const { sellerId } = useSeller();
-  const pages = [{ path: 'settings/plan', title: t('plan.title'), lead: t('plan.index_lead') }];
+  const pages = [
+    { path: 'settings/team', title: t('team.title'), lead: t('team.index_lead') },
+    { path: 'settings/plan', title: t('plan.title'), lead: t('plan.index_lead') },
+    { path: 'settings/closure', title: t('closure.title'), lead: t('closure.index_lead') },
+  ];
   return (
     <>
       <PageTitle title={t('area.settings')}>{t('area.settings')}</PageTitle>

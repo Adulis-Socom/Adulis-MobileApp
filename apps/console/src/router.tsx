@@ -14,6 +14,9 @@ import { AutomationKnowledgePage, AutomationLayout, AutomationOverviewPage, Auto
 import { Inbox } from './features/inbox/Inbox';
 import { Insights } from './features/insights/Insights';
 import { Plan, SettingsIndex } from './features/settings/Settings';
+import { Closure } from './features/settings/Closure';
+import { Team } from './features/settings/Team';
+import { AccountInvitations, AccountLayout, AccountNotifications, AccountPrivacy, AccountSecurity } from './features/account/Account';
 import { Thread } from './features/inbox/Thread';
 import { Notifications } from './features/notifications/Notifications';
 import { Trust } from './features/trust/Trust';
@@ -57,6 +60,16 @@ const children: RouteObject[] = [
     children: [
       { path: 'sellers', element: <Chooser /> },
       { path: 'become-seller', element: <BecomeSeller /> },
+      {
+        path: 'account',
+        element: <AccountLayout />,
+        children: [
+          { index: true, element: <AccountSecurity /> },
+          { path: 'notifications', element: <AccountNotifications /> },
+          { path: 'privacy', element: <AccountPrivacy /> },
+          { path: 'invitations', element: <AccountInvitations /> },
+        ],
+      },
       {
         path: 's/:sellerId',
         element: <SellerRoute />,
@@ -105,6 +118,8 @@ const children: RouteObject[] = [
           { path: 'trust', element: <Gate dest="trust"><Trust /></Gate> },
           { path: 'settings', element: <Gate dest="settings"><SettingsIndex /></Gate> },
           { path: 'settings/plan', element: <Gate dest="settings"><Plan /></Gate> },
+          { path: 'settings/team', element: <Gate dest="settings"><Team /></Gate> },
+          { path: 'settings/closure', element: <Gate dest="settings"><Closure /></Gate> },
           deferred('settings/*', 'settings'),
           { path: '*', element: <NotFoundInSeller /> },
         ],

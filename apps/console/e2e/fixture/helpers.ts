@@ -13,6 +13,7 @@ export const PHONE = {
   multirole: '+251900000016',
   invBiruk: '+251900000017',
   mixed: '+251900000018',
+  free: '+251900000019',
 } as const;
 export const CODE = '246810';
 

@@ -27,6 +27,7 @@ import { createCatalogue } from './catalogue';
 import { createContent } from './content';
 import { createInbox } from './inbox';
 import { createInsights } from './insights';
+import { createPeople, type Persona, type PersonaMembership } from './people';
 import { createStore } from './store';
 import { createTrust } from './trust';
 import type { Authz, Kit } from './kit';
@@ -69,12 +70,6 @@ interface SellerRecord {
   notifications: NotificationItem[];
 }
 
-interface Persona {
-  id: string;
-  phone: string;
-  display_name: string;
-  memberships: { sellerId: string; relationship: 'OWNER' | 'TEAM'; roles: SellerRole[] }[];
-}
 
 export const PERSONAS: readonly { id: string; phone: string; label: string }[] = [
   { id: 'fx_acct_owner', phone: '+251900000001', label: 'Owner of four stores (Alem, Biruk, Chaltu, Kidist)' },
@@ -87,6 +82,7 @@ export const PERSONAS: readonly { id: string; phone: string; label: string }[] =
   { id: 'fx_acct_multirole', phone: '+251900000016', label: 'Inventory and Sales Support at Alem Textiles' },
   { id: 'fx_acct_inv_biruk', phone: '+251900000017', label: 'Inventory at Biruk Shoes (draft store)' },
   { id: 'fx_acct_mixed', phone: '+251900000018', label: 'Owner of Lemlem Linen and Inventory at Alem Textiles' },
+  { id: 'fx_acct_free', phone: '+251900000019', label: 'Account with no Seller yet, username hana (to receive an invitation)' },
   { id: 'fx_acct_new', phone: '+251900000003', label: 'New account (no stores yet; any other number behaves the same)' },
 ];
 
@@ -171,10 +167,13 @@ function initialSellers(): Record<string, SellerRecord> {
 }
 
 function initialPersonas(): Persona[] {
-  const own = (sellerId: string) => ({ sellerId, relationship: 'OWNER' as const, roles: ['OWNER' as SellerRole] });
-  const team = (sellerId: string, roles: SellerRole[]) => ({ sellerId, relationship: 'TEAM' as const, roles });
+  let n = 0;
+  const mem = (sellerId: string, relationship: 'OWNER' | 'TEAM', roles: SellerRole[]): PersonaMembership => ({ id: `fx_mem_${(n += 1)}`, sellerId, relationship, roles, standing: 'ACTIVE', version: 1 });
+  const own = (sellerId: string) => mem(sellerId, 'OWNER', ['OWNER']);
+  const team = (sellerId: string, roles: SellerRole[]) => mem(sellerId, 'TEAM', roles);
+  // Usernames are how a team invitation names an EXISTING Account (AUTH S64); they are demonstration handles.
   const base = (id: string, display_name: string, memberships: Persona['memberships']): Persona => ({
-    id, display_name, phone: PERSONAS.find((p) => p.id === id)?.phone ?? '', memberships,
+    id, display_name, username: display_name.split(' ')[0]?.toLowerCase() ?? id, phone: PERSONAS.find((p) => p.id === id)?.phone ?? '', memberships,
   });
   return [
     base('fx_acct_owner', 'Amina (demonstration)', [own('fx_seller_alem'), own('fx_seller_biruk'), own('fx_seller_chaltu'), own('fx_seller_kidist')]),
@@ -187,6 +186,7 @@ function initialPersonas(): Persona[] {
     base('fx_acct_multirole', 'Mulu (demonstration)', [team('fx_seller_alem', ['INVENTORY', 'SALES_SUPPORT'])]),
     base('fx_acct_mixed', 'Mimi (demonstration)', [own('fx_seller_lemlem'), team('fx_seller_alem', ['INVENTORY'])]),
     base('fx_acct_inv_biruk', 'Ibsa (demonstration)', [team('fx_seller_biruk', ['INVENTORY'])]),
+    base('fx_acct_free', 'Hana (demonstration)', []),
   ];
 }
 
@@ -207,7 +207,9 @@ const CHATBOT_ALL = ['chatbot.read', 'chatbot.configure', 'chatbot.test', 'chatb
 /** AUTH-02 Appendix B analytics family: Owner, Admin and Analyst hold all seven; the Campaign Manager holds five (no business or inventory read). */
 const ANALYTICS_ALL = ['business_read', 'product_read', 'content_read', 'fyp_read', 'inventory_read', 'chatbot_read', 'quality_read'].map((c) => `analytics.${c}`);
 const ANALYTICS_CAMPAIGN = ['chatbot_read', 'content_read', 'fyp_read', 'product_read', 'quality_read'].map((c) => `analytics.${c}`);
-const WRITE_CAPS = ['catalogue.write', 'inventory.write', 'content.write', 'store.manage', 'couriers.manage', 'inbox.read', 'inbox.reply', 'trust.read', 'reviews.read', ...CHATBOT_ALL, ...ANALYTICS_ALL];
+/** AUTH-02 team and security families: Owner and Admin only. */
+const TEAM_CAPS = ['team.read', 'team.invite', 'team.roles_manage', 'team.remove', 'sessions.read', 'sessions.revoke'];
+const WRITE_CAPS = ['catalogue.write', 'inventory.write', 'content.write', 'store.manage', 'couriers.manage', 'inbox.read', 'inbox.reply', 'trust.read', 'reviews.read', ...CHATBOT_ALL, ...ANALYTICS_ALL, ...TEAM_CAPS];
 const ROLE_CAPS: Record<SellerRole, string[]> = {
   OWNER: WRITE_CAPS,
   ADMIN: WRITE_CAPS,
@@ -257,6 +259,8 @@ export interface World {
     delayNext(op: string, ms: number, times?: number): void;
     /** Remove the signed-in account's relationship with a Seller, as if it left the team mid-session. */
     revokeMembership(sellerId: string): void;
+    /** Send later requests under an earlier, still-recorded session, as another device of that account would (FE12-04 tests). */
+    resumeSession(sessionId: string): void;
     /** Every call received, with the idempotency key it carried (null for none): tests read retry identity from it. */
     callLog(): readonly { op: string; sellerId: string | null; key: string | null }[];
     /** Put a Product under restriction, as an Operator decision would. Development only. */
@@ -283,6 +287,8 @@ export function createWorld(options: WorldOptions): World {
   let sessionRevoked = false;
   // Each sign-in issues a new session (a new cookie in a real server). A request sent under an earlier one is answered as unauthenticated.
   let sessionToken = 0;
+  // The recorded session the current requests are sent under (people.ts keeps the session table): its revocation is enforced here.
+  let currentSession: string | null = null;
   let counter = 0;
   const iso = (ms: number): string => new Date(ms).toISOString();
   // Fixture-only clock skew (hook below): lets a test move past a Story's 24-hour lifetime without waiting.
@@ -294,16 +300,24 @@ export function createWorld(options: WorldOptions): World {
       session = null;
       throw new TransportError('AUTHENTICATION_REQUIRED');
     }
+    // A session revoked from another device (account.sessions.revoke, revoke_others) authorizes nothing afterwards.
+    if (currentSession !== null && !people.sessionLive(currentSession)) {
+      session = null;
+      throw new TransportError('AUTHENTICATION_REQUIRED');
+    }
     const found = personas.find((p) => p.id === session);
     if (!found) throw new TransportError('AUTHENTICATION_REQUIRED');
     return found;
   }
 
   function membership(p: Persona, sellerId: string): { m: Persona['memberships'][number]; s: SellerRecord } {
-    const m = p.memberships.find((x) => x.sellerId === sellerId);
+    // A SUSPENDED membership grants no Seller authority at all (AUTH S72): it is the same answer as no membership.
+    const m = p.memberships.find((x) => x.sellerId === sellerId && x.standing === 'ACTIVE');
     const s = sellers[sellerId];
     // Same answer whether the Seller does not exist or is not yours: existence is never disclosed.
     if (!m || !s) throw new TransportError('PERMISSION_DENIED');
+    // A session signed out of THIS Seller by its team administrators has no authority here; the rest of the account still works (FE12-04).
+    if (currentSession !== null && people.sellerAccessRevoked(currentSession, sellerId)) throw new TransportError('PERMISSION_DENIED');
     return { m, s };
   }
 
@@ -314,6 +328,8 @@ export function createWorld(options: WorldOptions): World {
     let caps = new Set<string>(['notifications.view']);
     for (const r of roles) for (const c of ROLE_CAPS[r]) caps.add(c);
     if (roles.some((r) => MANAGER_ROLES.includes(r))) caps.add('readiness.resolve').add('admission.manage');
+    // AUTH-02 R-12: ownership transfer and Seller closure are Owner-only, never reachable by a role union.
+    if (m.relationship === 'OWNER') caps.add('ownership.transfer').add('seller.close');
     if (s.summary.status === 'SUSPENDED') {
       // Seller Safety Suspension blocks forward-looking commerce and content (MOD S29): no publication, no discovery, no Inbox, no writes.
       // It preserves "required historical access" (P-70): read-only Trust and eligible historical Reviews, for the roles that already hold
@@ -455,6 +471,15 @@ export function createWorld(options: WorldOptions): World {
   const trust = createTrust(kit, catalogue);
   const automation = createAutomation(kit, catalogue);
   const insights = createInsights(kit, (id) => sellers[id]?.entitlementOff ?? []);
+  const people = createPeople({
+    kit,
+    personas: () => personas,
+    current: persona,
+    currentSession: () => currentSession,
+    sellerName: (id) => sellers[id]?.summary.display_name,
+    sellerOpenToMembers: (id) => sellers[id] !== undefined && sellers[id]?.summary.status !== 'SUSPENDED',
+    codes: DEMO_CODES,
+  });
 
   type H = { [K in OpId]: (input: OpInput<K>, ctx: CallContext) => OpOutput<K> };
   const handlers: H = {
@@ -465,6 +490,7 @@ export function createWorld(options: WorldOptions): World {
     ...trust.handlers,
     ...automation.handlers,
     ...insights.handlers,
+    ...people.handlers,
     'auth.otp.start': ({ phone }) => {
       if (!/^\+?\d{9,15}$/.test(digits(phone))) throw new TransportError('VALIDATION_FAILED', { fields: { phone: 'PHONE_INVALID' } });
       return newChallenge(digits(phone));
@@ -499,6 +525,7 @@ export function createWorld(options: WorldOptions): World {
       if (known) {
         session = known.id;
         sessionToken += 1;
+        currentSession = people.openSession(known.id);
         return { result: 'SIGNED_IN' };
       }
       pendingNew = c.phone;
@@ -507,22 +534,25 @@ export function createWorld(options: WorldOptions): World {
     'auth.declarations.accept': ({ adult_declaration, policy_accepted }) => {
       // Missing or false is denied uniformly (AUTH-02 S24): the response never says which one was missing.
       if (pendingNew === null || !adult_declaration || !policy_accepted) throw new TransportError('VALIDATION_FAILED', { fields: { declarations: 'DECLARATIONS_REQUIRED' } });
-      const p: Persona = { id: `fx_acct_new_${++counter}`, phone: pendingNew, display_name: 'New account (demonstration)', memberships: [] };
+      const p: Persona = { id: `fx_acct_new_${++counter}`, phone: pendingNew, display_name: 'New account (demonstration)', username: `new${counter}`, memberships: [] };
       personas.push(p);
       pendingNew = null;
       session = p.id;
       sessionToken += 1;
+      currentSession = people.openSession(p.id);
       return { result: 'SIGNED_IN' };
     },
     // Enumeration resistance (AUTH-02 S22): the same answer for every number.
     'auth.recovery.start': () => ({ result: 'RECORDED' }),
     'auth.session.end': () => {
+      if (currentSession !== null) people.endSession(currentSession);
+      currentSession = null;
       session = null;
       return { result: 'ENDED' };
     },
     'account.context.get': (): AccountContext => {
       const p = persona();
-      const memberships: Membership[] = p.memberships.flatMap((m) => {
+      const memberships: Membership[] = p.memberships.filter((m) => m.standing === 'ACTIVE').flatMap((m) => {
         const s = sellers[m.sellerId];
         return s ? [{ seller: s.summary, relationship: m.relationship, roles: m.roles }] : [];
       });
@@ -548,7 +578,7 @@ export function createWorld(options: WorldOptions): World {
       const id = `fx_seller_new_${++counter}`;
       const record = seller(id, input.display_name.trim(), 'DRAFT', 'NEVER_PUBLISHED', { type: input.seller_type });
       sellers[id] = record;
-      p.memberships.push({ sellerId: id, relationship: 'OWNER', roles: ['OWNER'] });
+      p.memberships.push({ id: `fx_mem_new_${id}`, sellerId: id, relationship: 'OWNER', roles: ['OWNER'], standing: 'ACTIVE', version: 1 });
       if (key) created.set(key, record.summary);
       return record.summary;
     },
@@ -647,6 +677,14 @@ export function createWorld(options: WorldOptions): World {
       revokeMembership(sellerId) {
         const who = personas.find((p) => p.id === session);
         if (who) who.memberships = who.memberships.filter((m) => m.sellerId !== sellerId);
+      },
+      resumeSession(sessionId) {
+        const owner = people.sessionPersona(sessionId);
+        if (owner === null) return;
+        session = owner;
+        currentSession = sessionId;
+        sessionRevoked = false;
+        sessionToken += 1; // a different cookie: requests already in flight under the previous one are refused
       },
       callLog: () => log,
       skewClock(ms) {
