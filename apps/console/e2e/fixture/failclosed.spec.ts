@@ -63,7 +63,7 @@ test.describe('fail closed', () => {
     await goInApp(page, `/s/${SELLER.alem.id}`);
     await expect(page.getByRole('heading', { level: 1, name: SELLER.alem.name })).toBeVisible();
     await expect(page.getByText('You are signed in as Inventory.')).toBeVisible();
-    await expect(nav.getByRole('link')).toHaveText(['Home', 'Products']);
+    await expect(nav.getByRole('link')).toHaveText(['Home', 'Products', 'Trust']);
     await expect(page.getByRole('region', { name: 'Things to do' })).toContainText('Nothing is due.');
     await goInApp(page, `/s/${SELLER.lemlem.id}`);
     await expect(page.getByText('You are signed in as Owner.')).toBeVisible();

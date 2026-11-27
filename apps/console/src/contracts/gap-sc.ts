@@ -79,7 +79,9 @@ export type Capability =
   | 'store.manage'
   | 'couriers.manage'
   | 'inbox.read'
-  | 'inbox.reply';
+  | 'inbox.reply'
+  | 'trust.read'
+  | 'reviews.read';
 export type DestinationKey = 'home' | 'products' | 'content' | 'inbox' | 'insights' | 'store' | 'trust' | 'settings';
 export interface DestinationAccess {
   readonly key: DestinationKey;
@@ -213,9 +215,10 @@ import type { CatalogueOperations } from './gap-sc-catalogue';
 import type { SceneOperations, StoryOperations } from './gap-sc-content';
 import type { InboxOperations } from './gap-sc-inbox';
 import type { StoreOperations } from './gap-sc-store';
+import type { TrustOperations } from './gap-sc-trust';
 
 // ---- the operation table the transport speaks ----------------------------------------------------------------------
-export interface Operations extends CatalogueOperations, SceneOperations, StoryOperations, StoreOperations, InboxOperations {
+export interface Operations extends CatalogueOperations, SceneOperations, StoryOperations, StoreOperations, InboxOperations, TrustOperations {
   readonly 'auth.otp.start': { in: { phone: string }; out: OtpChallenge };
   readonly 'auth.otp.status': { in: { challenge_id: string }; out: OtpStatus };
   readonly 'auth.otp.resend': { in: { challenge_id: string }; out: OtpChallenge };
@@ -296,5 +299,8 @@ export const SELLER_SCOPED_OPS = [
   'inbox.context.get',
   'inbox.reply.send',
   'inbox.read.mark',
+  'standing.get',
+  'reviews.summary.get',
+  'reviews.list',
 ] as const satisfies readonly OpId[];
 export type SellerOp = (typeof SELLER_SCOPED_OPS)[number];

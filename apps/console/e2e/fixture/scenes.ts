@@ -442,6 +442,23 @@ export const SCENES: readonly Scene[] = [
     },
   },
   {
+    name: 'trust-reviews',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/trust`);
+      await expect(p.getByRole('region', { name: 'Trust level' })).toContainText('Established');
+      await expect(p.getByRole('list', { name: 'Product review list' }).getByRole('listitem')).toHaveCount(3);
+    },
+  },
+  {
+    name: 'trust-new-no-reviews',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.biruk.name);
+      await goInApp(p, `/s/${SELLER.biruk.id}/trust`);
+      await expect(p.getByText('There are no Product reviews yet.')).toBeVisible();
+    },
+  },
+  {
     name: 'dialog-courier-revoke',
     dialog: true,
     setup: async (p) => {
