@@ -365,3 +365,11 @@ jobs:
       - name: Fixture exclusion from the release export (negative scan with its positive and planted controls)
         if: ${{ !cancelled() }}
         run: pnpm --filter @adulis/mobile verify:release
+
+      # iOS: the same export, scan and controls for the iOS JavaScript/Hermes bundle (GOV-06 S4; AUTO-R04). Runs on
+      # Linux: no Xcode, no signing, no EAS. It shows what the iOS bundle contains, NOT that the app runs on an iPhone.
+      - name: iOS release export and fixture exclusion (bundle contents only; not native-device evidence)
+        if: ${{ !cancelled() }}
+        env:
+          ADULIS_EXPORT_PLATFORM: ios
+        run: pnpm --filter @adulis/mobile verify:release

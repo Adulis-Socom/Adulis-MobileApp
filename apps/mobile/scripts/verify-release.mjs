@@ -20,6 +20,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// L2-ROOT-01: the export platform. A JavaScript/Hermes export proves bundle contents only, never behaviour on a device.
+const PLATFORM = process.env.ADULIS_EXPORT_PLATFORM === 'ios' ? 'ios' : 'android';
 
 // Markers: each is present in src/fixtures and absent from every release (GOV-06 S4 RN-1).
 const MARKERS = {
@@ -80,7 +82,7 @@ function exportBundle(outDir, extraArgs) {
   rmSync(abs, { recursive: true, force: true });
   execFileSync(
     process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
-    ['exec', 'expo', 'export', '--platform', 'android', '--output-dir', outDir, '--clear', ...extraArgs],
+    ['exec', 'expo', 'export', '--platform', PLATFORM, '--output-dir', outDir, '--clear', ...extraArgs],
     // The flag is set on purpose: a release export must ignore it.
     { cwd: root, stdio: 'inherit', shell: process.platform === 'win32', env: { ...process.env, EXPO_PUBLIC_ADULIS_FIXTURES: 'on', CI: '1' } },
   );
