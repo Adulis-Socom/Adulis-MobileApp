@@ -73,7 +73,7 @@ export function Closure() {
         </ul>
         <p className="notice">
           <Icon name="info" />
-          <span>{t('closure.no_payment')}</span>
+          <span>{t('closure.nothing_owed')}</span>
         </p>
       </Section>
       <Section id="closure" title={t('closure.request_title')}>

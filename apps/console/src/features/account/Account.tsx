@@ -251,7 +251,7 @@ export function AccountPrivacy() {
         </ul>
         <p className="notice">
           <Icon name="info" />
-          <span>{t('acct.delete_no_payment')}</span>
+          <span>{t('acct.delete_nothing_owed')}</span>
         </p>
         {d.blockers.length > 0 ? (
           <>
