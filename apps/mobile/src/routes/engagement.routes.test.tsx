@@ -170,7 +170,7 @@ describe('guest continuation and private saved content (MOB-FE-03)', () => {
     expect(r.getPathname()).toBe('/account');
   });
 
-  it('after sign-out and sign-in again, the saved list is read afresh: nothing of it is drawn from a cached copy first', async () => {
+  it('after sign-out and sign-in again, a failed read of the saved list shows an error, never the earlier list from a cached copy', async () => {
     await signedInAtHome('second');
     await fireEvent.press(await firstAsync('mobile.engagement.save'));
     await firstAsync('mobile.engagement.unsave');
@@ -181,14 +181,10 @@ describe('guest continuation and private saved content (MOB-FE-03)', () => {
     await fireEvent.press(bottomTab(t('mobile.tab.saved')));
     await findText('error.auth.authentication_required');
     expect(screen.queryByText(t('mobile.saved.scenes'))).toBeNull();
-    const release = fixtureHandle.hold('saved.list.get');
+    fixtureHandle.failNext('saved.list.get', 'NETWORK');
     await fireEvent.press(button('mobile.auth.sign_in'));
     await signInThroughScreens(phone('second'));
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    });
-    expect(screen.queryByText(t('mobile.saved.scenes'))).toBeNull(); // the held read has not answered: no cached list is drawn
-    await act(async () => release());
-    expect(await findText('mobile.saved.scenes')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: t('mobile.state.retry') }, WAIT)).toBeTruthy();
+    expect(screen.queryByText(t('mobile.saved.scenes'))).toBeNull(); // the read failed: nothing private is drawn from any earlier copy
   });
 });
