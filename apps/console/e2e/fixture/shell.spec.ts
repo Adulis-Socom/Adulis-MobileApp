@@ -81,7 +81,7 @@ test.describe('SC-FE-01: shell, navigation and denial vocabulary', () => {
 
   test('areas that are not built say so, behind their own gate, and contain no control', async ({ page }) => {
     await atSellerHome(page, PHONE.owner, SELLER.alem.name);
-    for (const [path, area] of [['inbox', 'Inbox'], ['trust', 'Trust and Reviews'], ['settings/team', 'Settings'], ['insights', 'Insights']] as const) {
+    for (const [path, area] of [['trust', 'Trust and Reviews'], ['settings/team', 'Settings'], ['insights', 'Insights']] as const) {
       await goInApp(page, `/s/${SELLER.alem.id}/${path}`);
       await expect(page.getByRole('heading', { level: 1, name: area })).toBeVisible();
       await expect(page.getByText(`${area} arrives in a later release`)).toBeVisible();

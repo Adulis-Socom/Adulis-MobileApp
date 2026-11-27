@@ -24,6 +24,7 @@ import type {
 import { TransportError, type CallContext } from '../transport/port';
 import { createCatalogue } from './catalogue';
 import { createContent } from './content';
+import { createInbox } from './inbox';
 import { createStore } from './store';
 import type { Authz, Kit } from './kit';
 
@@ -198,17 +199,17 @@ const ROLE_DEST: Record<SellerRole, DestinationKey[]> = {
 };
 const MANAGER_ROLES: SellerRole[] = ['OWNER', 'ADMIN'];
 /** Capabilities a manager holds beyond the admission ones, and what the other roles hold (CATINV S110, CONSOLE-02 S17). */
-const WRITE_CAPS = ['catalogue.write', 'inventory.write', 'content.write', 'store.manage', 'couriers.manage'];
+const WRITE_CAPS = ['catalogue.write', 'inventory.write', 'content.write', 'store.manage', 'couriers.manage', 'inbox.read', 'inbox.reply'];
 const ROLE_CAPS: Record<SellerRole, string[]> = {
   OWNER: WRITE_CAPS,
   ADMIN: WRITE_CAPS,
-  SALES_SUPPORT: [],
+  SALES_SUPPORT: ['inbox.read', 'inbox.reply'],
   INVENTORY: ['catalogue.write', 'inventory.write'],
   ANALYST: [],
   CAMPAIGN_MANAGER: ['content.write'],
 };
-/** Brief areas whose work order is built (SC-FE-04 Products and Inventory, SC-FE-05 Scenes, SC-FE-05S Stories). The rest stay DEFERRED. */
-const BUILT_AREAS = new Set(['PRODUCTS', 'INVENTORY', 'SCENES', 'STORIES']);
+/** Brief areas whose work order is built (SC-FE-04 Products and Inventory, SC-FE-05 Scenes, SC-FE-05S Stories, SC-FE-08 Inbox). The rest stay DEFERRED. */
+const BUILT_AREAS = new Set(['PRODUCTS', 'INVENTORY', 'SCENES', 'STORIES', 'INBOX']);
 const VIEW_PRIORITY: [SellerRole, RoleView][] = [
   ['OWNER', 'OWNER_ADMIN'], ['ADMIN', 'OWNER_ADMIN'], ['SALES_SUPPORT', 'SALES_SUPPORT'],
   ['INVENTORY', 'INVENTORY'], ['CAMPAIGN_MANAGER', 'CAMPAIGN_MANAGER'], ['ANALYST', 'ANALYST'],
@@ -433,12 +434,14 @@ export function createWorld(options: WorldOptions): World {
   const catalogue = createCatalogue(kit);
   const content = createContent(kit, catalogue);
   const store = createStore(kit);
+  const inbox = createInbox(kit, catalogue, content);
 
   type H = { [K in OpId]: (input: OpInput<K>, ctx: CallContext) => OpOutput<K> };
   const handlers: H = {
     ...catalogue.handlers,
     ...content.handlers,
     ...store.handlers,
+    ...inbox.handlers,
     'auth.otp.start': ({ phone }) => {
       if (!/^\+?\d{9,15}$/.test(digits(phone))) throw new TransportError('VALIDATION_FAILED', { fields: { phone: 'PHONE_INVALID' } });
       return newChallenge(digits(phone));

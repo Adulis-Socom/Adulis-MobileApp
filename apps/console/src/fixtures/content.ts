@@ -82,6 +82,8 @@ interface StoryRec {
 
 export interface Content {
   readonly handlers: Handlers<ContentOps>;
+  /** For the Inbox: this Seller's Scenes with their LIVE publicity and tagged Products. Resolved on each call, never copied. */
+  scenesForContext(sellerId: string): readonly { id: string; label: string; isPublic: boolean; productIds: readonly string[] }[];
 }
 
 const BLOCKING_MODERATION = new Set(['RESTRICTED', 'REMOVED']);
@@ -437,6 +439,7 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
   };
 
   return {
+    scenesForContext: (sellerId) => scenesOf(sellerId).map((s) => ({ id: s.id, label: s.caption.trim() === '' ? s.id : s.caption, isPublic: publicScene(sellerId, s.id), productIds: s.tags.map((t) => t.product_id) })),
     handlers: withIdempotency(kit, handlers, {
       'scenes.create': { dest: 'content', cap: 'content.write' },
       'scenes.media.set': { dest: 'content', cap: 'content.write' },

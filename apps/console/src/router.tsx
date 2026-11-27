@@ -10,6 +10,8 @@ import { Home } from './features/home/Home';
 import { SceneEditor } from './features/content/SceneEditor';
 import { Scenes } from './features/content/Scenes';
 import { Stories } from './features/content/Stories';
+import { Inbox } from './features/inbox/Inbox';
+import { Thread } from './features/inbox/Thread';
 import { Notifications } from './features/notifications/Notifications';
 import { ProductEditor } from './features/products/ProductEditor';
 import { Products } from './features/products/Products';
@@ -65,7 +67,10 @@ const children: RouteObject[] = [
           { path: 'content/scenes/:postId', element: <Gate dest="content"><SceneEditor /></Gate> },
           { path: 'content/stories', element: <Gate dest="content"><Stories /></Gate> },
           deferred('content/*', 'content'),
-          deferred('inbox/*', 'inbox'),
+          { path: 'inbox', element: <Gate dest="inbox"><Inbox /></Gate> },
+          // Scripted assistance settings: the chatbot requirements are under founder review (RB25-D09), so this is an honest "arrives later".
+          deferred('inbox/automation', 'inbox'),
+          { path: 'inbox/:conversationId', element: <Gate dest="inbox"><Thread /></Gate> },
           deferred('insights/*', 'insights'),
           {
             path: 'store',
