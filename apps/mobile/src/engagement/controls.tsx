@@ -9,9 +9,10 @@ import { Button } from '../ui/components';
 import { theme } from '../ui/theme';
 import { useEngagementState, useEngagementWrite, useRequireAccount, writeKey, type Write } from './hooks';
 
+// Toggles stay secondary: the card's one primary action is Explore the Scene. Their state shows as an outline and a changed label.
 function Toggle({ on, labelOn, labelOff, write, send, pendingKey, gate }: { readonly on: boolean; readonly labelOn: string; readonly labelOff: string; readonly write: Write; readonly send: (w: Write) => void; readonly pendingKey: string | null; readonly gate: (a: () => void) => void }) {
   const busy = pendingKey === writeKey(write);
-  return <Button kind={on ? 'primary' : 'secondary'} label={busy ? t('mobile.engagement.updating') : on ? labelOn : labelOff} selected={on} busy={busy} onPress={() => gate(() => send(write))} />;
+  return <Button kind="secondary" label={busy ? t('mobile.engagement.updating') : on ? labelOn : labelOff} selected={on} busy={busy} onPress={() => gate(() => send(write))} />;
 }
 
 /** Like and Save for one Scene (the For You card finally carries Save). */

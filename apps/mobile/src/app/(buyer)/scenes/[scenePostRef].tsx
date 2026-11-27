@@ -14,7 +14,7 @@ import { problemKind, useRead } from '../../../discovery/hooks';
 import { validRef } from '../../../discovery/params';
 import { SceneActions } from '../../../engagement/controls';
 import { t } from '../../../i18n/messages';
-import { Body, Button, Heading, Screen, StateView } from '../../../ui/components';
+import { Body, Button, Screen, StateView } from '../../../ui/components';
 import { theme } from '../../../ui/theme';
 
 const FEED_OPS = ['feed.forYou.page', 'feed.following.page', 'search.query', 'seller.scenes.page'];
@@ -74,7 +74,8 @@ export default function SceneExplorer() {
             : null}
         </View>
         <Text style={styles.seller}>{t('mobile.scene.by_seller', { seller: scene.seller.storeName })}</Text>
-        <Heading>{scene.caption}</Heading>
+        {/* The caption is the Seller's words, as long as they wrote it: body text, not a title-size wall. */}
+        <Body>{scene.caption}</Body>
         <SceneActions scene={scene} />
         <Section title={t('mobile.scene.in_this_scene')}>
           {scene.tags.map((tag) => (

@@ -36,7 +36,7 @@ export default function SignIn() {
       <Field label={t('mobile.auth.phone.label')} value={destination} onChangeText={setDestination} keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" editable={!busy} />
       {busy ? <Notice text={t('mobile.auth.sending')} /> : null}
       {problem ? <Notice tone="warn" text={problem} /> : null}
-      <Button label={t('mobile.auth.send_code')} onPress={() => void send()} disabled={destination.trim() === ''} busy={busy} />
+      <Button kind="highlight" label={t('mobile.auth.send_code')} onPress={() => void send()} disabled={destination.trim() === ''} busy={busy} />
       <Body muted>{t('mobile.auth.recovery')}</Body>
     </Screen>
   );
