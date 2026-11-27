@@ -43,9 +43,19 @@ const MARKERS = {
   'credential id prefix': 'fx_cred_demo',
   'second demonstration phone': '+251900000002',
   'operator demonstration phone': '+251900000099',
+  // MOB-FE-02, 02S and 03: the id categories the discovery, Story and engagement worlds introduce (prefixes, so a template literal still carries them).
+  'scene id prefix': 'fx_scene_demo_',
+  'product id prefix': 'fx_product_demo_',
+  'story id prefix': 'fx_story_demo_',
+  'media id prefix': 'fx_media_demo_',
+  'variant id prefix': 'fx_variant_demo_',
+  'cursor id prefix': 'fx_cursor_demo_',
+  'collection id prefix': 'fx_collection_demo_',
+  'second seller id': 'fx_seller_demo_bete',
+  'fixture scene caption': 'Demonstration scene:',
 };
 // A generic reserved-id pattern, so a fixture id that is not in the list above is still caught.
-const FIXTURE_ID = /fx_(acct|device|market|seller|scene|conv|cred|otp|product|story|collection|session|persona)_[a-z0-9]/;
+const FIXTURE_ID = /fx_(acct|device|market|seller|scene|conv|cred|otp|product|story|collection|session|persona|media|variant|cursor)_[a-z0-9]/;
 // RN-6: strings that exist only in a demonstration. Specific UI strings and marker names, not bare words: library
 // code legitimately contains words such as "payment" or "handoff", and a scan that cries wolf is switched off.
 const FORBIDDEN_IN_RELEASE = {
