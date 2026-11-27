@@ -3,7 +3,7 @@ import { ApiOperation, ApiQuery, ApiCreatedResponse, ApiExtraModels, ApiOkRespon
 import type { Response } from 'express';
 import { z } from 'zod';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
-import type { AuthedRequest } from '../../common/auth/auth.guard';
+import { ReplayGrant, type AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { ChatService } from './chat.service';
@@ -107,6 +107,7 @@ export class ChatController {
   @ApiCreatedResponse({ type: MessageSentDto })
   @ApiOptionalSellerHeader('The Seller context (ADU-API-01 S4.2). Optional: send the Seller that owns the conversation to act as the store; without it the request acts as the Buyer.')
   @Post('conversations/:id/messages')
+  @ReplayGrant('seller.messages:read', 'seller.messages:send')
   @ApiOperation({ summary: 'text or chip_id, optionally anchored on product_id or order_id; the bot replies with template_key and slots, never prose.' })
   async postMessage(
     @Req() req: AuthedRequest,

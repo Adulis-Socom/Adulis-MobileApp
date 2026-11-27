@@ -110,7 +110,7 @@ export class NotificationsController {
       }
       if (scope === 'seller') {
         const sellerId = req.ctx?.sellerId as string | null;
-        if (!sellerParam || sellerParam !== sellerId) {
+        if (typeof sellerParam !== 'string' || sellerParam.toLowerCase() !== sellerId) {
           throw new AdulisException('SCOPE_PARAMETER_REQUIRED');
         }
         await sql`

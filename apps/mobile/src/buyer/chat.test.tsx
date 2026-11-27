@@ -1990,6 +1990,32 @@ describe('Uncertain-send reliability (WO-022)', () => {
   });
 });
 
+describe('a Buyer whose Account also holds a store', () => {
+  it('Buyer messaging never names the store: the list, the history and the send carry no store header', async () => {
+    signedIn();
+    // The server says this Account has Seller access, and a store to use it on.
+    api.on('GET /v1/bootstrap', (call) =>
+      call.headers.Authorization === undefined
+        ? { status: 200, body: bootstrapBody() }
+        : { status: 200, body: bootstrapBody({ account_context: { ...SIGNED_IN_CONTEXT, seller_companion: { available: true } } }) },
+    );
+    api.on('GET /v1/seller/list', () => ({ status: 200, body: { data: [{ id: 'aaaaaaaa-0000-4000-8000-00000000000a', handle: 'store-a', store_name: 'Store A', status: 'ACTIVE', role: 'OWNER', created_at: '2026-11-01T08:00:00.000Z' }] } }));
+    const chat = installChat();
+    chat.conv(A);
+    await renderRouter(APP_DIR, { initialUrl: '/messages' });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Store 1' }));
+    await screen.findByText(en['buyer.chat.empty']);
+    await fireEvent.changeText(composer(), 'Is this in stock?');
+    await fireEvent.press(sendButton());
+    expect(await screen.findByText('Is this in stock?')).toBeOnTheScreen();
+
+    expect(sends()).toHaveLength(1);
+    const conversationCalls = api.calls.filter((call) => call.path.startsWith('/v1/conversations'));
+    expect(conversationCalls.length).toBeGreaterThanOrEqual(3); // the list, the history, the send
+    expect(api.calls.filter((call) => call.headers['X-Adulis-Seller'] !== undefined || call.query.as === 'seller')).toEqual([]);
+  });
+});
+
 /**
  * Who a message is attributed to: only the server's own sender kind decides, an automated message is
  * drawn from the catalogue and never as a person, and a sender this version does not know is not

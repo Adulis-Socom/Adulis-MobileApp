@@ -14,6 +14,7 @@ import {
 import { ApiOperation, ApiResponse, ApiQuery, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import type { Transaction } from 'kysely';
+import { ReplayGrant } from '../../common/auth/auth.guard';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
 import type { Database } from '../../common/db/database.types';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
@@ -125,6 +126,7 @@ export class OnboardingController {
   @ApiGate({ permission: ['seller.store:write'], surfaces: ['CONSOLE'] })
   @ApiCreatedResponse({ type: SocialAccountLinkedDto })
   @Post('seller/social-accounts')
+  @ReplayGrant('seller.store:write')
   @ApiOperation({ summary: 'Link a social account; issues the account-control code.' })
   async createSocialAccount(
     @Req() req: LocalizedRequest,
@@ -140,6 +142,7 @@ export class OnboardingController {
   @ApiResponse({ status: 200, description: 'The verification attempt is recorded.' })
   @ApiGate({ permission: ['seller.store:write'], surfaces: ['CONSOLE'] })
   @Post('seller/social-accounts/:id/verify')
+  @ReplayGrant('seller.store:write')
   @ApiOperation({ summary: 'Fetch and match; captures the follower count at verification.' })
   async verifySocialAccount(
     @Req() req: LocalizedRequest,

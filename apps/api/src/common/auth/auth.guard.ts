@@ -39,10 +39,26 @@ const ACTOR_ROLE_KEY = 'adulis:actor-role';
 export const ActorRole = (role: 'BUYER' | 'SELLER' | 'COURIER') =>
   SetMetadata(ACTOR_ROLE_KEY, role);
 
+export const REPLAY_GRANT_KEY = 'adulis:replay-grant';
+/**
+ * The permission code(s) the route's handler asserts through
+ * fn_has_permission. It AUTHORISES NOTHING: the idempotency lookup
+ * reads it to decide whether a stored response may be replayed to the
+ * caller's CURRENT role and surface; when it may not, the handler runs and
+ * fn_has_permission answers exactly as for a fresh request. A seller-context
+ * route without it is never served from the store: the handler decides every
+ * retry. Any other route without it keeps the standing-only replay check.
+ * idempotency/replay-grant.spec.ts also fails the build for any seller route
+ * that leaves it out.
+ */
+export const ReplayGrant = (...codes: string[]) => SetMetadata(REPLAY_GRANT_KEY, codes);
+
 export interface AuthedRequest extends Request {
   requestId?: string;
   auth?: SessionContext;
   ctx?: RequestContext;
+  /** The route's @ReplayGrant codes; empty when it declares none. */
+  replayGrants?: readonly string[];
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -200,6 +216,13 @@ export class AuthGuard implements CanActivate {
     // actually holds the seller is NOT decided here: that is
     // fn_has_permission's U0002, a 404 from below the endpoint, so this
     // header's presence check can never become a relationship oracle.
+    //
+    // THE ID IS LOWER-CASED HERE, ONCE: the form the database spells a uuid
+    // and the request hash already uses. Chat and claims choose the acting
+    // side by comparing it with the resource's store, so a spelling that
+    // differs only in case must not be able to pick a different side than the
+    // same request in lower case (which hashes alike and reaches the same
+    // stored response).
     let sellerId: string | null = null;
     const sellerHeader = req.headers['x-adulis-seller'];
     if (requiresSellerContext(req.path, req.method)) {
@@ -211,11 +234,14 @@ export class AuthGuard implements CanActivate {
           slots: { path: 'X-Adulis-Seller' },
         });
       }
-      sellerId = sellerHeader;
+      sellerId = sellerHeader.toLowerCase();
     } else if (typeof sellerHeader === 'string' && UUID_RE.test(sellerHeader)) {
       // A buyer-group call may still carry it (a seller browsing as buyer
-      // does); it is recorded for the context and decides nothing.
-      sellerId = sellerHeader;
+      // does). Nothing here authorises with it, but it is not inert: chat
+      // and claims act as that store when it names the resource's seller,
+      // and the idempotency layer scopes the request hash, replay standing
+      // and @ReplayGrant check by it.
+      sellerId = sellerHeader.toLowerCase();
     }
 
     const declaredRole = this.reflector.getAllAndOverride<
@@ -223,6 +249,11 @@ export class AuthGuard implements CanActivate {
     >(ACTOR_ROLE_KEY, [context.getHandler(), context.getClass()]);
     const actorRole =
       declaredRole ?? (requiresSellerContext(req.path, req.method) ? 'SELLER' : 'BUYER');
+    req.replayGrants =
+      this.reflector.getAllAndOverride<string[] | undefined>(REPLAY_GRANT_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]) ?? [];
 
     req.auth = session;
     req.ctx = { accountId: session.accountId, actorRole, sellerId, audience: session.audience };

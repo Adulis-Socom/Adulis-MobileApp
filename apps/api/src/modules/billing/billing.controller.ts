@@ -4,7 +4,7 @@ import type { Response } from 'express';
 import { sql, type Transaction } from 'kysely';
 import { z } from 'zod';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
-import type { AuthedRequest } from '../../common/auth/auth.guard';
+import { ReplayGrant, type AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
@@ -115,6 +115,7 @@ export class BillingController {
   }
 
   @Post('billing/purchase-intent')
+  @ReplayGrant('seller.subscription:update')
   @ApiOperation({ summary: 'Opens a 24-hour intent at the locked rate; step-up SUBSCRIPTION_CHANGE.' })
   async purchaseIntent(
     @Req() req: AuthedRequest,
@@ -159,6 +160,7 @@ export class BillingController {
   }
 
   @Post('billing/mark-transferred')
+  @ReplayGrant('seller.subscription:update')
   @HttpCode(200)
   @ApiOperation({ summary: "The seller's own assertion; reconciliation is operator work." })
   async markTransferred(

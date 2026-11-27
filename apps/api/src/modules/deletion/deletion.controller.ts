@@ -11,7 +11,7 @@ import { ApiOperation, ApiAcceptedResponse, ApiOkResponse, ApiSecurity } from '@
 import type { Response } from 'express';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
 import { IdempotencyService, hashRequest, idempotencyKey } from '../../common/idempotency/idempotency';
-import { Public, type AuthedRequest } from '../../common/auth/auth.guard';
+import { Public, ReplayGrant, type AuthedRequest } from '../../common/auth/auth.guard';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { RateLimitService, subjectHash } from '../../common/rate-limit/rate-limit.service';
 import { resolveKey } from '../../common/crypto/aead';
@@ -228,6 +228,7 @@ export class DeletionController {
   @ApiGate({ permission: ['seller.account:delete'], surfaces: ['CONSOLE'] })
   @ApiOkResponse({ type: DeletionConfirmedDto })
   @Post('seller/deletion')
+  @ReplayGrant('seller.account:delete')
   @HttpCode(200)
   @ApiOperation({ summary: 'Owner only; step-up SELLER_DELETION; blockers give the 409 its items[].' })
   async deleteSeller(
@@ -254,6 +255,7 @@ export class DeletionController {
   @ApiGate({ permission: ['seller.store:write'], surfaces: ['CONSOLE'] })
   @ApiOkResponse({ type: SellerClosureDto })
   @Post('seller/closure')
+  @ReplayGrant('seller.store:write')
   @HttpCode(200)
   @ApiOperation({ summary: 'Enters CLOSING: new reservations stop, existing orders operable.' })
   async enterClosure(

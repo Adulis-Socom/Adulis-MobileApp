@@ -1,6 +1,7 @@
 import { Controller, Delete, Get, HttpCode, Param, Post, Req, Res } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { ReplayGrant } from '../../common/auth/auth.guard';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
@@ -83,6 +84,7 @@ export class FinancialController {
   }
 
   @Post('seller/payout')
+  @ReplayGrant('seller.payout:update')
   @ApiOperation({ summary: 'Enters PENDING; activates after the delay. Step-up in the body.' })
   async requestPayoutChange(
     @Req() req: LocalizedRequest,
@@ -107,6 +109,7 @@ export class FinancialController {
   }
 
   @Post('seller/orders/:id/reissue-instructions')
+  @ReplayGrant('seller.orders:reissue_instructions')
   @ApiOperation({ summary: 'Single order only. No bulk endpoint exists (S8.5).' })
   async reissue(
     @Req() req: LocalizedRequest,
