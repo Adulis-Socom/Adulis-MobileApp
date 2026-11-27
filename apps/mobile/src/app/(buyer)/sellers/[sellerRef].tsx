@@ -11,6 +11,7 @@ import { trustText } from '../../../discovery/format';
 import { problemKind, usePaged, useRead } from '../../../discovery/hooks';
 import { validRef } from '../../../discovery/params';
 import { SellerFollow } from '../../../engagement/controls';
+import { ShareAndReport } from '../../../engagement/ShareAndReport';
 import { t, type UiMessageKey } from '../../../i18n/messages';
 import { Body, Heading, Screen, StateView } from '../../../ui/components';
 import { theme } from '../../../ui/theme';
@@ -54,6 +55,7 @@ export default function SellerProfileRoute() {
     <Screen>
       <Heading>{seller.storeName}</Heading>
       <SellerFollow sellerRef={seller.sellerRef} />
+      <ShareAndReport />
       {seller.isOpen === null ? null : <Text style={styles.small}>{t(seller.isOpen ? 'mobile.seller.open' : 'mobile.seller.closed')}</Text>}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityRole="tablist" style={styles.tabScroll} contentContainerStyle={styles.tabs}>
         {TABS.map(({ key, label }) => (

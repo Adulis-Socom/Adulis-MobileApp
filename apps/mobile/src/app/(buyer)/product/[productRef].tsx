@@ -10,6 +10,7 @@ import { availabilityText, formatMoney, priceOf, trustText } from '../../../disc
 import { problemKind, useRead } from '../../../discovery/hooks';
 import { validRef } from '../../../discovery/params';
 import { ProductSave } from '../../../engagement/controls';
+import { ShareAndReport } from '../../../engagement/ShareAndReport';
 import { t } from '../../../i18n/messages';
 import { Body, Button, Heading, Screen, StateView } from '../../../ui/components';
 import { theme } from '../../../ui/theme';
@@ -43,6 +44,7 @@ export default function ProductDetailRoute() {
         <Body>{priceOf(product)}</Body>
         <Text style={styles.available}>{availabilityText(product.available)}</Text>
         <ProductSave productRef={product.productRef} />
+        <ShareAndReport />
         <Body>{product.description}</Body>
         {product.variants.length > 0 ? (
           <Section title={t('mobile.product.options')}>

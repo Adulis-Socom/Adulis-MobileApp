@@ -169,6 +169,11 @@ export const provisionalEn = {
   'mobile.stories.time_left.one_hour': 'About 1 hour left.',
   'mobile.stories.time_left.hours': 'About {hours} hours left.',
   'mobile.market.unresolved': 'Your region is not set yet, so results may be limited.',
+  // MOB-FE-03 completeness (L2-MOBILE-03): addendum 152-155 to request SR-L2M01-LOC-01.
+  'mobile.share.entry': 'Share',
+  'mobile.share.unavailable': 'Sharing is not available yet.',
+  'mobile.report.entry': 'Report',
+  'mobile.report.unavailable': 'Reporting from the app is not available yet.',
 } as const;
 
 export type ProvisionalKey = keyof typeof provisionalEn;
