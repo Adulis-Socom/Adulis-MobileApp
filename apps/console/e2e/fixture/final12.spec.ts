@@ -371,10 +371,12 @@ test.describe('SC-FE-12 closure: targeted responsive coverage at 390px and 200% 
     }
     // Walk the section top to bottom one viewport-sized step at a time.
     await ownership.evaluate((el) => scrollTo(0, el.getBoundingClientRect().top + scrollY - 8));
-    for (let i = 1; i <= 4; i++) {
+    let lastY = -1;
+    for (let i = 1; i <= 6; i++) {
+      const y = await page.evaluate(() => scrollY);
+      if (y === lastY) break; // the end of the page: another capture would repeat the last one
+      lastY = y;
       await page.screenshot({ path: `screenshots/transfer-ineligible.phone-390-text200.step${i}.png` });
-      const atEnd = (await ownership.evaluate((el) => el.getBoundingClientRect().bottom)) < 400;
-      if (atEnd) break;
       await page.evaluate(() => scrollBy(0, innerHeight * 0.6));
     }
     // The control: reached by keyboard from the section heading, so the browser's own focus scroll is what is being tested.
@@ -394,7 +396,10 @@ test.describe('SC-FE-12 closure: targeted responsive coverage at 390px and 200% 
     expect(ring.outline || ring.shadow, `a visible focus indicator ${JSON.stringify(ring)}`).toBe(true);
     await page.screenshot({ path: 'screenshots/transfer-ineligible.phone-390-text200.cancel-focused.png' });
     await page.keyboard.press('Enter');
-    await expect(page.getByText(/Ownership will pass to Abel/)).toHaveCount(0);
+    // The ineligible state never shows the "will pass" sentence, so assert what really changes: the notice goes and, with no other active Admin, the section says to give someone the Admin role first.
+    await expect(notice).toHaveCount(0);
+    await expect(cancel).toHaveCount(0);
+    await expect(ownership.getByText('To transfer ownership, first give someone the Admin role.')).toBeVisible();
     await page.screenshot({ path: 'screenshots/transfer-ineligible.phone-390-text200.after-cancel.png' });
   });
 });
