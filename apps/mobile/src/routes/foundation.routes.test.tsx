@@ -38,6 +38,21 @@ describe('initialization and guest Buyer', () => {
     expect(await findText('error.auth.authentication_required')).toBeTruthy();
     expect(button('mobile.auth.sign_in')).toBeTruthy();
   });
+
+  // Archived deep-link-reliability parity (ISS-039): two taps before the first navigation settles push one screen.
+  it('a double tap on Sign in opens one Sign in screen, and Back returns to the prompt', async () => {
+    await boot();
+    await findAllText('mobile.home.title');
+    await fireEvent.press(bottomTab(t('mobile.tab.saved')));
+    await findText('error.auth.authentication_required');
+    const signIn = button('mobile.auth.sign_in');
+    await fireEvent.press(signIn);
+    await fireEvent.press(signIn);
+    await screen.findByLabelText(t('mobile.auth.phone.label'), undefined, WAIT);
+    expect(screen.queryAllByLabelText(t('mobile.auth.phone.label'), { includeHiddenElements: true })).toHaveLength(1);
+    await act(() => router.back());
+    expect(await findText('error.auth.authentication_required')).toBeTruthy();
+  });
 });
 
 describe('sign-in, verification and return', () => {
