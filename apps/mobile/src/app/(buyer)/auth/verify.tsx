@@ -7,7 +7,7 @@ import { t } from '../../../i18n/messages';
 import { matchRoute, pathOf } from '../../../modes/routes';
 import { useApp } from '../../../providers/AppProvider';
 import { newIntentKey } from '../../../session/intent-key';
-import { refusalText } from '../../../ui/auth-text';
+import { refusalText, SURFACE_REFUSAL_KEY } from '../../../ui/auth-text';
 import { Body, Button, Field, Heading, Notice, Screen } from '../../../ui/components';
 
 export default function Verify() {
@@ -35,7 +35,7 @@ export default function Verify() {
     } else if (outcome.kind === 'REFUSED') {
       setProblem(refusalText(outcome.refusal));
     } else if (outcome.kind === 'REJECTED_FOR_SURFACE') {
-      setProblem(t('mobile.auth.refused.generic')); // the same sentence as any failed sign-in: no hint about why
+      setProblem(t(SURFACE_REFUSAL_KEY)); // the same sentence an unknown number gets: no hint about why
     }
   };
 

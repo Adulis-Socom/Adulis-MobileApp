@@ -1,4 +1,4 @@
-// Mode eligibility, the route guard, route/link parsing and the AppGate: all pure, all server-authoritative. Rows H-008..H-016.
+// Mode eligibility, the route guard, route/link parsing and the AppGate: all pure, all server-authoritative.
 import { asAccountRef, asDeviceId, asEpoch, type ModeEligibility, type SessionState, type UpgradeRequired } from '../contracts/gap-mob-session';
 import { initialGate, reduceGate, type AppGateState } from '../gate/gate';
 import { resolveLink, parseLink } from './deep-link';
@@ -14,7 +14,7 @@ const auth: SessionState = { kind: 'AUTHENTICATED', epoch: asEpoch(2), accountRe
 const ctx = (over: Partial<GuardContext>): GuardContext => ({ app: READY, session: auth, eligibility: null, ...over });
 const UPGRADE: UpgradeRequired = { status: 'UPGRADE_REQUIRED', message: null, storeLink: null };
 
-describe('eligibility is parsed fail-closed and only from a server answer (H-011)', () => {
+describe('eligibility is parsed fail-closed and only from a server answer', () => {
   it('adopts AVAILABLE, PENDING, REVOKED and RESTRICTED as sent', () => {
     const e = adopt({ SELLER_COMPANION: { status: 'AVAILABLE' }, COURIER: { status: 'PENDING', message: { key: 'mobile.mode.pending' } } });
     expect(e.modes.SELLER_COMPANION).toEqual({ status: 'AVAILABLE' });
@@ -32,7 +32,7 @@ describe('eligibility is parsed fail-closed and only from a server answer (H-011
   });
 });
 
-describe('route guard (H-003, H-008..H-010, H-012, H-014)', () => {
+describe('route guard', () => {
   const home = { template: '/home', params: {} } as const;
   const saved = { template: '/saved', params: {} } as const;
   const companion = { template: '/companion', params: {} } as const;
@@ -70,7 +70,7 @@ describe('route guard (H-003, H-008..H-010, H-012, H-014)', () => {
   });
 });
 
-describe('routes and deep links (cold start, H-003)', () => {
+describe('routes and deep links (cold start)', () => {
   it('has no Order, delivery, handoff, claim, Reservation or Operator template', () => {
     expect(Object.keys(ROUTES).filter((r) => /order|deliver|handoff|claim|reserv|operator|checkout/i.test(r)).filter((r) => r !== '/orders')).toEqual([]);
   });
@@ -95,7 +95,7 @@ describe('routes and deep links (cold start, H-003)', () => {
   });
 });
 
-describe('AppGate (H-023, H-024)', () => {
+describe('AppGate', () => {
   const ok = { type: 'BOOTSTRAP_OK', client: { status: 'OK' }, market: { status: 'UNRESOLVED' } } as const;
   const run = (events: Parameters<typeof reduceGate>[1][]) => events.reduce(reduceGate, initialGate);
 

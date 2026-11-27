@@ -43,6 +43,11 @@ export interface SessionManagerDeps {
   readonly transport: MobileTransport;
   readonly deviceId: DeviceId;
   readonly now?: () => number;
+  /**
+   * One request was answered 403 PERMISSION_DENIED while the mode was available: a denial of that action, not the end of the
+   * mode and not an eject. The runtime refetches eligibility (the denial may mean the relationship changed).
+   */
+  readonly onPermissionDenied?: () => void;
 }
 
 const END_FOR: Partial<Record<TransportError['code'], Extract<SessionEndReason, 'EXPIRED' | 'REVOKED' | 'CREDENTIAL_REJECTED'>>> = {
@@ -309,6 +314,7 @@ export class SessionManager {
       result = await this.deps.transport.json(op, input, ctx);
     } catch (error) {
       if (!this.isCurrent(stamp)) throw new SessionChanged(); // an old session's failure is not the new one's
+      if (error instanceof TransportError && error.code === 'PERMISSION_DENIED' && op !== 'bootstrap.get') this.deps.onPermissionDenied?.();
       if (error instanceof TransportError && bearer !== null) {
         const reason = END_FOR[error.code] ?? (error.code === 'AUTHENTICATION_REQUIRED' ? 'EXPIRED' : undefined);
         if (reason !== undefined) void this.end(stamp.epoch, reason, error.serverMessage);

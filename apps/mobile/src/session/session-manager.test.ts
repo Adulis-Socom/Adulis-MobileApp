@@ -9,7 +9,7 @@ import { liveTransport } from '../transport/live';
 const phone = (key: string) => PERSONAS.find((p) => p.key === key)?.phone as string;
 const OWNER = asAccountRef(FIXTURE_IDS.account);
 
-describe('restore (H-001, H-004, H-006)', () => {
+describe('restore', () => {
   it('starts as a guest with no stored credential and sends no private request', async () => {
     const world = createFixtureTransport();
     const { runtime } = await makeRuntime(world.transport);
@@ -56,7 +56,7 @@ describe('restore (H-001, H-004, H-006)', () => {
   });
 });
 
-describe('sign-out and failed credential deletion (H-017)', () => {
+describe('sign-out and failed credential deletion', () => {
   it('signs out locally first, deletes the credential and revokes server-side', async () => {
     const world = createFixtureTransport();
     const { runtime, credentials } = await makeRuntime(world.transport);
@@ -108,7 +108,7 @@ describe('sign-out and failed credential deletion (H-017)', () => {
   });
 });
 
-describe('account switching and private state (H-018)', () => {
+describe('account switching and private state', () => {
   it('purges the first Account before the second renders, advances the epoch and revokes the first', async () => {
     const world = createFixtureTransport();
     const { runtime, queryClient } = await makeRuntime(world.transport);
@@ -152,7 +152,7 @@ describe('account switching and private state (H-018)', () => {
   });
 });
 
-describe('stale responses (H-019)', () => {
+describe('stale responses', () => {
   it('rejects a response that arrives after sign-out and adopts nothing', async () => {
     const world = createFixtureTransport();
     const { runtime } = await makeRuntime(world.transport);
@@ -195,7 +195,7 @@ describe('stale responses (H-019)', () => {
   });
 });
 
-describe('session expiry, revocation and Operator credentials (H-020, H-021, H-022)', () => {
+describe('session expiry, revocation and Operator credentials', () => {
   it('SESSION_EXPIRED ends the session, shows one notice state and deletes the credential', async () => {
     const world = createFixtureTransport();
     const { runtime, credentials } = await makeRuntime(world.transport);

@@ -51,7 +51,13 @@ export interface Runtime {
 
 export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const deviceId = await loadDeviceId(options.deviceStorage, options.deviceId === undefined ? undefined : () => options.deviceId as string);
-  const session = new SessionManager({ credentials: options.credentials, transport: options.transport, deviceId, ...(options.now ? { now: options.now } : {}) });
+  const session = new SessionManager({
+    credentials: options.credentials,
+    transport: options.transport,
+    deviceId,
+    onPermissionDenied: () => void refresh(),
+    ...(options.now ? { now: options.now } : {}),
+  });
   const device = new DeviceController(deviceId, options.platform, options.deviceStorage);
   const privateState = new PrivateStateRegistry(() => session.state().epoch);
   const eligibility = createStore<ModeEligibility | null>(null);
