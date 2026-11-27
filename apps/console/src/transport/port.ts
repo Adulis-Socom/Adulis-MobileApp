@@ -24,7 +24,9 @@ export type ProblemCode =
   | 'INTERNAL'
   | 'CONTEXT_MISMATCH'
   | 'CONFLICT'
-  | 'REFUSED';
+  | 'REFUSED'
+  /** Client-side only, never sent: the retry store is full of unconfirmed writes (FE12-01). */
+  | 'RETRY_STORE_FULL';
 
 export class TransportError extends Error {
   readonly code: ProblemCode;

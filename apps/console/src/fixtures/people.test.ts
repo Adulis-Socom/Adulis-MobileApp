@@ -372,3 +372,95 @@ describe('SC-FE-11 account: sessions, preferences, privacy and deletion', () => 
     expect(exported.export_state).toBe('PREPARING');
   });
 });
+
+describe('SC-FE-12 closure FE12-02: a challenge and its grant belong to the session that earned them', () => {
+  const sessionOf = async (world: World): Promise<string> => (await world.handle('account.sessions.get', {}, {})).sessions.find((s) => s.current)?.session_id ?? '';
+  const challengeIn = async (world: World, purpose: StepUpPurpose, sellerId: string | null) => (await world.handle('account.stepup.start', { purpose, seller_id: sellerId }, {})).challenge_id;
+  const verify = (world: World, challenge_id: string) => world.handle('account.stepup.verify', { challenge_id, code: DEMO_CODES.ok }, {});
+  const closure = (world: World, step_up_grant: string) => world.handle('seller.closure.request', { step_up_grant, typed_name: 'Alem Textiles' }, ALEM);
+
+  it('a valid challenge, verified in its own session, yields a grant that is spent once in that session', async () => {
+    const world = setup();
+    await signIn(world, 'fx_acct_owner');
+    const g = await grant(world, 'CLOSE_SELLER', 'fx_seller_alem');
+    expect((await closure(world, g)).state).toBeDefined();
+    const e = await grant(world, 'EXPORT_DATA', null);
+    await world.handle('privacy.export.request', { step_up_grant: e }, {});
+    expect((await failure(world.handle('privacy.export.request', { step_up_grant: e }, {}))).code).toBe('PERMISSION_DENIED'); // reuse
+  });
+
+  it('a challenge cannot be verified after sign-out, or from a later session of the same Account', async () => {
+    const world = setup();
+    await signIn(world, 'fx_acct_owner');
+    const c = await challengeIn(world, 'CLOSE_SELLER', 'fx_seller_alem');
+    await world.handle('auth.session.end', {}, {});
+    expect((await failure(verify(world, c))).code).toBe('AUTHENTICATION_REQUIRED');
+    await signIn(world, 'fx_acct_owner'); // same Account, a new session
+    expect((await failure(verify(world, c))).code).toBe('OTP_EXPIRED');
+  });
+
+  it('a grant cannot be spent from a later session of the same Account, and still works in its own session', async () => {
+    const world = setup();
+    await signIn(world, 'fx_acct_owner');
+    const first = await sessionOf(world);
+    const g = await grant(world, 'CLOSE_SELLER', 'fx_seller_alem');
+    await signIn(world, 'fx_acct_owner');
+    expect((await failure(closure(world, g))).code).toBe('PERMISSION_DENIED');
+    world.hooks.resumeSession(first);
+    expect((await closure(world, g)).state).toBeDefined(); // the failed attempt in the other session did not consume it
+  });
+
+  it('a grant is dead once its session is revoked at Account level', async () => {
+    const world = setup();
+    await signIn(world, 'fx_acct_owner');
+    const first = await sessionOf(world);
+    const g = await grant(world, 'CLOSE_SELLER', 'fx_seller_alem');
+    await signIn(world, 'fx_acct_owner');
+    await world.handle('account.sessions.revoke', { session_id: first }, {});
+    world.hooks.resumeSession(first);
+    expect((await failure(closure(world, g))).code).toBe('AUTHENTICATION_REQUIRED');
+  });
+
+  it('ordinary authorization runs before the grant: a session that lost Seller authority is refused whatever grant it holds', async () => {
+    const world = setup();
+    await signIn(world, 'fx_acct_admin');
+    const adminSession = await sessionOf(world);
+    await signIn(world, 'fx_acct_owner');
+    await world.handle('team.session.revoke', { session_id: adminSession }, ALEM);
+    world.hooks.resumeSession(adminSession);
+    expect((await failure(closure(world, 'fx_grant_anything'))).code).toBe('PERMISSION_DENIED');
+  });
+
+  it('refuses a session of another audience (the seeded phone session), and another Account', async () => {
+    const world = setup();
+    await signIn(world, 'fx_acct_owner');
+    const mobile = (await world.handle('account.sessions.get', {}, {})).sessions.find((s) => s.audience !== 'CONSOLE')?.session_id;
+    expect(mobile).toBeDefined();
+    world.hooks.resumeSession(mobile ?? '');
+    expect((await failure(world.handle('account.stepup.start', { purpose: 'CLOSE_SELLER', seller_id: 'fx_seller_alem' }, {}))).code).toBe('PERMISSION_DENIED');
+    await signIn(world, 'fx_acct_owner');
+    const g = await grant(world, 'CLOSE_SELLER', 'fx_seller_alem');
+    await signIn(world, 'fx_acct_admin');
+    expect((await failure(closure(world, g))).code).toBeDefined();
+  });
+
+  it('wrong purpose, wrong Seller, wrong recipient and a changed recipient version are still refused inside the right session', async () => {
+    const world = setup();
+    await signIn(world, 'fx_acct_owner');
+    const abel = await member(world, 'Abel');
+    const wrongPurpose = await grant(world, 'CLOSE_SELLER', 'fx_seller_alem');
+    expect((await failure(world.handle('ownership.transfer.start', { membership_id: abel.membership_id, step_up_grant: wrongPurpose }, ALEM))).code).toBe('PERMISSION_DENIED');
+    const forTransfer = await grant(world, 'TRANSFER_OWNERSHIP', 'fx_seller_alem', abel.membership_id);
+    await world.handle('team.roles.set', { membership_id: abel.membership_id, version: abel.version, roles: ['ADMIN', 'ANALYST'] }, ALEM);
+    expect((await failure(world.handle('ownership.transfer.start', { membership_id: abel.membership_id, step_up_grant: forTransfer }, ALEM))).code).toBe('PERMISSION_DENIED');
+  });
+
+  it('expires after the provisional 300 seconds and is never revived', async () => {
+    let now = Date.UTC(2026, 10, 27, 9, 0, 0);
+    const world = createWorld({ now: () => now, latencyMs: 0 });
+    await signIn(world, 'fx_acct_owner');
+    const g = await grant(world, 'CLOSE_SELLER', 'fx_seller_alem');
+    now += 300_000;
+    expect((await failure(closure(world, g))).code).toBe('PERMISSION_DENIED');
+  });
+});
