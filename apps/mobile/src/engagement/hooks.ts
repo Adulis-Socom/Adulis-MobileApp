@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'expo-router';
 import { AccessibilityInfo } from 'react-native';
 
-import type { MobileOps } from '../contracts/gap-mob-session';
+import { SessionChanged, type MobileOps } from '../contracts/gap-mob-session';
 import { t } from '../i18n/messages';
 import { matchRoute, pathOf } from '../modes/routes';
 import { useApp } from '../providers/AppProvider';
@@ -46,7 +46,10 @@ export function useEngagementWrite() {
   const mutation = useMutation({
     mutationFn: (w: Write) => (runtime as NonNullable<typeof runtime>).session.call(w.op, w.input as never, { idempotencyKey: newIntentKey() }),
     // The server's state is what is drawn after every attempt, success or not: a failed write is said, then re-read.
-    onError: () => void AccessibilityInfo.announceForAccessibility(t('mobile.engagement.not_confirmed')),
+    // An old session's failure is not the new one's: a write that died because the session changed says nothing.
+    onError: (error) => {
+      if (!(error instanceof SessionChanged)) AccessibilityInfo.announceForAccessibility(t('mobile.engagement.not_confirmed'));
+    },
     onSettled: () => client.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'acct' && q.queryKey[2] === 'engagement' }),
   });
   return {
