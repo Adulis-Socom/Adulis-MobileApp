@@ -124,6 +124,14 @@ export const provisionalEn = {
   'mobile.search.tab.sellers': 'Sellers',
   'mobile.shop.all': 'All',
   'mobile.list.load_more': 'Load more',
+  // MOB-FE-02S Seller Stories (same register).
+  'mobile.stories.row': 'Stories',
+  'mobile.stories.entry': 'Stories from {seller}',
+  'mobile.stories.position': 'Story {n} of {total}',
+  'mobile.stories.next': 'Next story',
+  'mobile.stories.previous': 'Previous story',
+  'mobile.stories.close': 'Close',
+  'mobile.stories.gone': 'This story is no longer available.',
   'mobile.market.unresolved': 'Your region is not set yet, so results may be limited.',
 } as const;
 

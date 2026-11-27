@@ -22,6 +22,7 @@ export const ROUTES = {
   '/product/[productRef]': { access: 'PUBLIC' },
   '/scenes/[scenePostRef]': { access: 'PUBLIC' },
   '/sellers/[sellerRef]': { access: 'PUBLIC' },
+  '/stories/[sellerRef]': { access: 'PUBLIC' },
   '/collections/[collectionRef]': { access: 'AUTHENTICATED' },
   '/chat/[conversationRef]': { access: 'AUTHENTICATED' },
   '/account/delete': { access: 'AUTHENTICATED' },

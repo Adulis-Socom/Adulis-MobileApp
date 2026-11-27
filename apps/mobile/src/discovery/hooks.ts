@@ -9,7 +9,7 @@ import { useApp } from '../providers/AppProvider';
 import { TransportError } from '../transport/port';
 
 type PagedOp = { [K in keyof DiscoveryOps]: DiscoveryOps[K]['out'] extends { nextCursor: string | null } ? K : never }[keyof DiscoveryOps];
-type ReadOp = Exclude<keyof DiscoveryOps, PagedOp>;
+type ReadOp = Exclude<keyof DiscoveryOps | 'stories.row.get' | 'stories.group.get', PagedOp>;
 
 /** How a failure is shown: offline and gone are different states, and neither is a reason the client invents. */
 export type ProblemKind = 'offline' | 'gone' | 'unavailable' | 'session';
@@ -43,12 +43,14 @@ export function usePaged<K extends PagedOp>(op: K, input: Omit<MobileOps[K]['in'
   });
 }
 
-export function useRead<K extends ReadOp>(op: K, input: MobileOps[K]['in'], options: { readonly scope?: 'public' | 'subject'; readonly enabled?: boolean } = {}) {
+export function useRead<K extends ReadOp>(op: K, input: MobileOps[K]['in'], options: { readonly scope?: 'public' | 'subject'; readonly enabled?: boolean; readonly fresh?: boolean } = {}) {
   const { runtime, ready, root, epoch } = useRoot(options.scope ?? 'public');
   return useQuery({
     queryKey: [...root, op, epoch, JSON.stringify(input)],
     enabled: ready && (options.enabled ?? true),
     queryFn: () => (runtime as NonNullable<typeof runtime>).session.call(op, input),
     retry: false,
+    // `fresh`: never serve this from a cache. Opening a Story viewer needs a new successful read, not a remembered photo.
+    ...(options.fresh ? { gcTime: 0, staleTime: 0, refetchOnMount: 'always' as const } : {}),
   });
 }
