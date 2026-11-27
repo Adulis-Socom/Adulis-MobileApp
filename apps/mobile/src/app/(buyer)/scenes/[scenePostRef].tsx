@@ -52,7 +52,7 @@ export default function SceneExplorer() {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <View onLayout={onLayout}>
+        <View onLayout={onLayout} testID="scene-photo">
           <MediaImage media={scene.image} height={imageHeight} label />
           {box.width > 0
             ? scene.tags.map((tag) => {

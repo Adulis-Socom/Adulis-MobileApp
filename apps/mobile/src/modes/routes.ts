@@ -73,6 +73,31 @@ export function matchRoute(path: string): SafeRoute | null {
   return null;
 }
 
+/**
+ * Where sign-in may return to. The destination is read from a link, so it is attacker-controlled: only Buyer destinations
+ * from this short list are kept (recovered from the archived parseReturnTo, sign-in-flow.ts). Never a mode root, Delete
+ * Account, a conversation, a private Collection, the sign-in screens or Search; anything else lands on You.
+ */
+const RETURN_DESTINATIONS: ReadonlySet<RouteTemplate> = new Set<RouteTemplate>([
+  '/home',
+  '/shop',
+  '/saved',
+  '/orders',
+  '/account',
+  '/notifications',
+  '/messages',
+  '/product/[productRef]',
+  '/scenes/[scenePostRef]',
+  '/sellers/[sellerRef]',
+]);
+export const FALLBACK_RETURN: SafeRoute = { template: '/account', params: {} };
+
+export function parseReturnTo(raw: unknown): SafeRoute | null {
+  if (typeof raw !== 'string') return null;
+  const route = matchRoute(raw);
+  return route !== null && RETURN_DESTINATIONS.has(route.template) ? route : null;
+}
+
 /** Rebuilds the path from VALIDATED parts only (never echoes raw input). */
 export function pathOf(route: SafeRoute): string {
   return route.template.replace(/\[([A-Za-z]+)\]/g, (_whole, name: string) => route.params[name] ?? '');

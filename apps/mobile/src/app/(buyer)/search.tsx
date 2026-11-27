@@ -14,6 +14,8 @@ import { t, type UiMessageKey } from '../../i18n/messages';
 import { Body, Button, Field, Heading, Notice, Screen } from '../../ui/components';
 import { theme } from '../../ui/theme';
 
+const PROBLEM_TEXT = { too_short: 'mobile.search.too_short', too_long: 'mobile.search.too_long', no_terms: 'mobile.search.no_terms' } as const;
+
 const TABS: readonly { readonly type: SearchType; readonly label: UiMessageKey }[] = [
   { type: 'TOP', label: 'mobile.search.tab.top' },
   { type: 'PRODUCT_POST', label: 'mobile.search.tab.products' },
@@ -57,7 +59,7 @@ export default function Search() {
       <Heading>{t('mobile.search.title')}</Heading>
       <Field label={t('mobile.search.field')} value={draft} onChangeText={setDraft} onSubmitEditing={submit} returnKeyType="search" autoCapitalize="none" />
       <Button label={t('mobile.search.go')} onPress={submit} disabled={draft.trim() === ''} />
-      {problem ? <Notice tone="warn" text={t(problem === 'too_short' ? 'mobile.search.too_short' : 'mobile.search.too_long')} /> : null}
+      {problem && problem !== 'empty' ? <Notice tone="warn" text={t(PROBLEM_TEXT[problem])} /> : null}
       <View accessibilityRole="tablist" style={styles.tabs}>
         {TABS.map(({ type: key, label }) => (
           <Pressable key={key} accessibilityRole="tab" accessibilityLabel={t(label)} accessibilityState={{ selected: type === key }} onPress={() => setType(key)} style={[styles.tab, type === key && styles.tabActive]}>

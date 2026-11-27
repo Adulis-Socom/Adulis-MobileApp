@@ -4,12 +4,12 @@ import { View } from 'react-native';
 
 import { serverText, t } from '../i18n/messages';
 import { useApp } from '../providers/AppProvider';
-import { Notice } from './components';
+import { Button, Notice } from './components';
 
 const MODE_NAME = { SELLER_COMPANION: 'mobile.mode.seller_companion', COURIER: 'mobile.mode.courier' } as const;
 
 export function AppNotices() {
-  const { gate, session, modeEnded, signOutIncomplete } = useApp();
+  const { gate, session, modeEnded, signOutState, retrySignOutCleanup } = useApp();
   const end = session.kind === 'GUEST' ? session.lastEnd : null;
   return (
     <View style={{ gap: 8 }}>
@@ -19,7 +19,13 @@ export function AppNotices() {
       {end?.reason === 'CREDENTIAL_REJECTED' ? <Notice text={t('error.auth.authentication_required')} /> : null}
       {end?.reason === 'ACCOUNT_DELETED' ? <Notice text={t('mobile.session.ended.deleted')} /> : null}
       {modeEnded ? <Notice text={t('mobile.mode.ended_notice', { mode: t(MODE_NAME[modeEnded]) })} /> : null}
-      {signOutIncomplete ? <Notice tone="warn" text={t('mobile.session.signout_incomplete')} /> : null}
+      {signOutState === 'NOT_CLEARED' ? <Notice tone="warn" text={t('mobile.session.signout_incomplete')} /> : null}
+      {signOutState === 'NOT_DURABLE' ? (
+        <View style={{ gap: 8 }}>
+          <Notice tone="warn" text={t('mobile.session.signout_not_durable')} />
+          <Button kind="secondary" label={t('mobile.state.retry')} onPress={retrySignOutCleanup} />
+        </View>
+      ) : null}
     </View>
   );
 }

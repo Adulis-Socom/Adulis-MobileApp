@@ -55,6 +55,7 @@ export const provisionalEn = {
   'mobile.session.ended.expired': 'Your session ended. Sign in again to continue.',
   'mobile.session.ended.revoked': 'You were signed out of this device. Sign in again to continue.',
   'mobile.session.ended.deleted': 'Your account was deleted.',
+  'mobile.session.signout_not_durable': 'This device could not finish signing out, and Adulis could not be told. Your sign-in may come back when the app restarts. Try again while connected.',
   'mobile.session.signout_incomplete': 'You are signed out, but this device could not clear its saved sign-in. Restart the app before handing this device to anyone.',
 
   'mobile.account.title': 'You',
@@ -117,6 +118,7 @@ export const provisionalEn = {
   'mobile.search.hint': 'Search for products, scenes and sellers.',
   'mobile.search.too_short': 'Type a little more to search.',
   'mobile.search.too_long': 'That search is too long.',
+  'mobile.search.no_terms': 'Type a letter or a number to search.',
   'mobile.search.no_results': 'No results for that search.',
   'mobile.search.tab.top': 'Top',
   'mobile.search.tab.products': 'Products',
