@@ -91,9 +91,9 @@ describe('fixture world', () => {
   });
 
   it('declares every operation in the registry with a gap id, and writes name their authorising work order', () => {
-    for (const [op, spec] of Object.entries(OP_SPECS)) {
+    for (const spec of Object.values(OP_SPECS)) {
       expect(spec.gap).toMatch(/^GAP-L2-/);
-      if (spec.fixture === 'SERVED_WRITE') expect(spec.writeAuthorisedBy, op).not.toBeNull();
+      if (spec.fixture === 'SERVED_WRITE') expect(spec.writeAuthorisedBy).not.toBeNull();
     }
   });
 

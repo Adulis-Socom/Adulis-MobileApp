@@ -2,13 +2,14 @@
 // reader walks, so every tab has a name and a role.
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import type { ColorValue } from 'react-native';
 
 import { t } from '../../../i18n/messages';
 import { theme } from '../../../ui/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 const icon = (name: IconName) =>
-  function TabIcon({ color, size }: { color: string; size: number }) {
+  function TabIcon({ color, size }: { color: ColorValue; size: number }) {
     return <Ionicons name={name} color={color} size={size} />;
   };
 

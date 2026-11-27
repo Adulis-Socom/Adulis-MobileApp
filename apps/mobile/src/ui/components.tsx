@@ -10,7 +10,7 @@ import { theme } from './theme';
 /** The persistent demonstration banner. Fixture-only text: it is passed in, never read from the catalogue. */
 export function FixtureBanner({ text }: { readonly text: string }) {
   return (
-    <View accessibilityRole="alert" style={styles.banner}>
+    <View accessible accessibilityRole="alert" style={styles.banner}>
       <Text style={styles.bannerText}>{text}</Text>
     </View>
   );
@@ -101,7 +101,7 @@ export function StateView({ kind, message, onRetry, action }: { readonly kind: S
 /** A one-line notice above content (offline, session ended, upgrade recommended). */
 export function Notice({ text, tone = 'info' }: { readonly text: string; readonly tone?: 'info' | 'warn' }) {
   return (
-    <View accessibilityLiveRegion="polite" accessibilityRole="alert" style={[styles.notice, tone === 'warn' ? styles.noticeWarn : styles.noticeInfo]}>
+    <View accessible accessibilityLiveRegion="polite" accessibilityRole="alert" style={[styles.notice, tone === 'warn' ? styles.noticeWarn : styles.noticeInfo]}>
       <Text style={styles.noticeText}>{text}</Text>
     </View>
   );
