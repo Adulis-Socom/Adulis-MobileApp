@@ -1,6 +1,6 @@
 // M01-R10: MOB-FE-01 behaviour through MOUNTED routes: the real src/app tree, root layout, providers and gate, booted by
 // expo-router's renderRouter. Fixture mode unless a case says otherwise (the live transport fails closed: nothing to sign in to).
-import { act, fireEvent, screen } from 'expo-router/testing-library';
+import { act, fireEvent, screen, waitFor } from 'expo-router/testing-library';
 import { router } from 'expo-router';
 
 import { FIXTURE_BANNER, fixtureHandle, PERSONAS } from '../fixtures';
@@ -76,8 +76,12 @@ describe('sign-in, verification and return', () => {
     expect(secondCode.props.value).toBe(''); // never the previous attempt's text
     await fireEvent.changeText(secondCode, '246810');
     await fireEvent.press(button('mobile.auth.verify'));
-    expect(await findText('mobile.saved.empty')).toBeTruthy();
-    expect(r.getPathname()).toBe('/saved');
+    // Saved's own content differs between work orders; the continuation is the destination and no sign-in prompt left behind.
+    await waitFor(() => {
+      expect(r.getPathname()).toBe('/saved');
+      expect(screen.queryByText(t('error.auth.authentication_required'))).toBeNull();
+    }, WAIT);
+    expect(screen.queryByLabelText(t('mobile.auth.code.label'))).toBeNull();
   });
 
   it('signs in from the Saved prompt and returns to Saved, signed in', async () => {
