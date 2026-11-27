@@ -29,6 +29,21 @@ export interface Collection {
   readonly name: string;
 }
 
+/** A Collection member as written: what kind it is and its ref. */
+export interface CollectionItemRef {
+  readonly kind: 'SCENE_POST' | 'PRODUCT_POST';
+  readonly ref: string;
+}
+
+/**
+ * A Collection member as read. A member that stopped being public (withdrawn, private, gone) is UNAVAILABLE and carries no
+ * name, store, caption or picture, whatever it once was: only what is needed to remove it.
+ */
+export type CollectionItem =
+  | { readonly kind: 'SCENE_POST'; readonly scene: SceneCardUnit }
+  | { readonly kind: 'PRODUCT_POST'; readonly product: ProductTile }
+  | { readonly kind: 'UNAVAILABLE'; readonly item: CollectionItemRef };
+
 export interface EngagementOps {
   'engagement.state.get': { in: { sceneRefs: readonly string[]; productRefs: readonly string[]; sellerRefs: readonly string[] }; out: EngagementState };
   'scene.like.set': { in: { sceneRef: string; liked: boolean }; out: SceneEngagement };
@@ -38,4 +53,9 @@ export interface EngagementOps {
   'saved.list.get': { in: Readonly<Record<string, never>>; out: { scenes: readonly SceneCardUnit[]; products: readonly ProductTile[] } };
   'collections.list.get': { in: Readonly<Record<string, never>>; out: { collections: readonly Collection[] } };
   'collection.create': { in: { name: string }; out: { collection: Collection } };
+  'collection.get': { in: { collectionRef: string }; out: { collection: Collection; items: readonly CollectionItem[] } };
+  'collection.rename': { in: { collectionRef: string; name: string }; out: { collection: Collection } };
+  'collection.delete': { in: { collectionRef: string }; out: Readonly<Record<string, never>> };
+  'collection.item.add': { in: { collectionRef: string; item: CollectionItemRef }; out: { item: CollectionItemRef } };
+  'collection.item.remove': { in: { collectionRef: string; item: CollectionItemRef }; out: { item: CollectionItemRef } };
 }

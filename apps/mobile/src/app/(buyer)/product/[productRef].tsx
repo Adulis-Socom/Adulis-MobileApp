@@ -56,6 +56,7 @@ export default function ProductDetailRoute() {
           </Section>
         ) : null}
         <Button kind="secondary" label={t('mobile.scene.by_seller', { seller: product.seller.storeName })} onPress={() => router.push(`/sellers/${product.seller.sellerRef}`)} />
+        <Button kind="secondary" label={t('mobile.product.reviews')} onPress={() => router.push(`/sellers/${product.seller.sellerRef}?tab=reviews`)} />
         {trust ? <Body muted>{trust}</Body> : null}
       </ScrollView>
     </Screen>

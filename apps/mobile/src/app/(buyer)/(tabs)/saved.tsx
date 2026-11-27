@@ -55,7 +55,7 @@ function SavedContent() {
       ) : null}
       <Section title={t('mobile.collections.title')}>
         {collections.status === 'success' && collections.data.collections.length === 0 ? <Body muted>{t('mobile.collections.empty')}</Body> : null}
-        {collections.status === 'success' ? collections.data.collections.map((c) => <Body key={c.collectionRef}>{c.name}</Body>) : null}
+        {collections.status === 'success' ? collections.data.collections.map((c) => <Button key={c.collectionRef} kind="secondary" label={c.name} onPress={() => router.push(`/collections/${c.collectionRef}`)} />) : null}
         <Field label={t('mobile.collections.name')} value={name} onChangeText={setName} />
         {create.isError ? <Notice tone="warn" text={t('mobile.engagement.not_confirmed')} /> : null}
         <Button label={t('mobile.collections.create')} disabled={name.trim() === ''} busy={create.isPending} onPress={() => create.mutate()} />

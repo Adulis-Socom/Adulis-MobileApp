@@ -37,9 +37,9 @@ function ProductsTab({ sellerRef }: { readonly sellerRef: string }) {
 
 export default function SellerProfileRoute() {
   const router = useRouter();
-  const { sellerRef } = useLocalSearchParams<{ sellerRef?: string }>();
+  const { sellerRef, tab: initialTab } = useLocalSearchParams<{ sellerRef?: string; tab?: string }>();
   const ref = validRef(sellerRef);
-  const [tab, setTab] = useState<Tab>('scenes');
+  const [tab, setTab] = useState<Tab>(() => (TABS.some((entry) => entry.key === initialTab) ? (initialTab as Tab) : 'scenes'));
   const query = useRead('seller.get', { sellerRef: ref ?? '' }, { enabled: ref !== null });
 
   if (ref === null || (query.status === 'error' && problemKind(query.error) === 'gone')) {

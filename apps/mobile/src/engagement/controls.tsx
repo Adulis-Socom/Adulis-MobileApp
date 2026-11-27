@@ -4,6 +4,7 @@ import { View } from 'react-native';
 
 import type { SceneCardUnit } from '../contracts/gap-mob-discovery';
 import { t } from '../i18n/messages';
+import { useApp } from '../providers/AppProvider';
 import { Button } from '../ui/components';
 import { theme } from '../ui/theme';
 import { useEngagementState, useEngagementWrite, useRequireAccount, writeKey, type Write } from './hooks';
@@ -15,6 +16,11 @@ function Toggle({ on, labelOn, labelOff, write, send, pendingKey, gate }: { read
 
 /** Like and Save for one Scene (the For You card finally carries Save). */
 export function SceneActions({ scene }: { readonly scene: SceneCardUnit }) {
+  const { session } = useApp();
+  return <SceneActionsForSession key={session.epoch} scene={scene} />;
+}
+
+function SceneActionsForSession({ scene }: { readonly scene: SceneCardUnit }) {
   const state = useEngagementState({ sceneRefs: [scene.sceneRef] });
   const { send, pendingKey } = useEngagementWrite();
   const gate = useRequireAccount();
@@ -30,6 +36,11 @@ export function SceneActions({ scene }: { readonly scene: SceneCardUnit }) {
 }
 
 export function ProductSave({ productRef }: { readonly productRef: string }) {
+  const { session } = useApp();
+  return <ProductSaveForSession key={session.epoch} productRef={productRef} />;
+}
+
+function ProductSaveForSession({ productRef }: { readonly productRef: string }) {
   const state = useEngagementState({ productRefs: [productRef] });
   const { send, pendingKey } = useEngagementWrite();
   const gate = useRequireAccount();
@@ -38,6 +49,11 @@ export function ProductSave({ productRef }: { readonly productRef: string }) {
 }
 
 export function SellerFollow({ sellerRef }: { readonly sellerRef: string }) {
+  const { session } = useApp();
+  return <SellerFollowForSession key={session.epoch} sellerRef={sellerRef} />;
+}
+
+function SellerFollowForSession({ sellerRef }: { readonly sellerRef: string }) {
   const state = useEngagementState({ sellerRefs: [sellerRef] });
   const { send, pendingKey } = useEngagementWrite();
   const gate = useRequireAccount();

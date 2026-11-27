@@ -51,4 +51,9 @@ export const OP_SPECS: Readonly<Record<MobileOpId, OpSpec>> = {
   'product.save.set': write([['productRef']]),
   'seller.follow.set': write([['sellerRef']]),
   'collection.create': write([]),
+  'collection.get': read('AUTHENTICATED', [['collectionRef']]),
+  'collection.rename': write([['collectionRef']]),
+  'collection.delete': write([['collectionRef']]),
+  'collection.item.add': write([['collectionRef'], ['item', 'ref']]),
+  'collection.item.remove': write([['collectionRef'], ['item', 'ref']]),
 };

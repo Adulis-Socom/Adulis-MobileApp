@@ -1,14 +1,18 @@
 // DEVELOPMENT ONLY. Per-Account engagement state for the fixture world: Likes and Saves on Scenes, Saves on Products, Follows on
 // Sellers, and private Collections. State is in memory and keyed by persona, so two Accounts never see each other's, and it is
 // lost on restart by design. Writes are idempotent by desired state. No count exists anywhere.
-import type { EngagementState, Collection } from '../contracts/gap-mob-engagement';
+import type { Collection, CollectionItemRef, EngagementState } from '../contracts/gap-mob-engagement';
+
+interface StoredCollection extends Collection {
+  items: CollectionItemRef[];
+}
 
 interface Book {
   likedScenes: Set<string>;
   savedScenes: Set<string>;
   savedProducts: Set<string>;
   following: Set<string>;
-  collections: Collection[];
+  collections: StoredCollection[];
 }
 
 export function createEngagementWorld() {
@@ -53,13 +57,35 @@ export function createEngagementWorld() {
       return { following: book(personaKey).following.has(sellerRef) };
     },
     saved: (personaKey: string) => ({ scenes: [...book(personaKey).savedScenes], products: [...book(personaKey).savedProducts] }),
-    collections: (personaKey: string): readonly Collection[] => book(personaKey).collections,
+    collections: (personaKey: string): readonly Collection[] => book(personaKey).collections.map(({ collectionRef, name }) => ({ collectionRef, name })),
+    /** Another Account's Collection is not found, exactly like one that never existed. */
+    collection: (personaKey: string, collectionRef: string): StoredCollection | undefined => book(personaKey).collections.find((c) => c.collectionRef === collectionRef),
+    rename(personaKey: string, collectionRef: string, name: string): Collection | 'NOT_FOUND' | 'INVALID' {
+      const found = book(personaKey).collections.find((c) => c.collectionRef === collectionRef);
+      if (found === undefined) return 'NOT_FOUND';
+      if (name.trim() === '') return 'INVALID';
+      found.name = name.trim();
+      return { collectionRef, name: found.name };
+    },
+    remove(personaKey: string, collectionRef: string): boolean {
+      const b = book(personaKey);
+      const before = b.collections.length;
+      b.collections = b.collections.filter((c) => c.collectionRef !== collectionRef);
+      return b.collections.length < before;
+    },
+    setMember(personaKey: string, collectionRef: string, item: CollectionItemRef, member: boolean): boolean {
+      const found = book(personaKey).collections.find((c) => c.collectionRef === collectionRef);
+      if (found === undefined) return false;
+      found.items = found.items.filter((i) => !(i.kind === item.kind && i.ref === item.ref));
+      if (member) found.items.push({ kind: item.kind, ref: item.ref });
+      return true;
+    },
     createCollection(personaKey: string, name: string): Collection | null {
       const trimmed = name.trim();
       if (trimmed === '') return null;
       sequence += 1;
       const collection = { collectionRef: `fx_collection_demo_${sequence}`, name: trimmed };
-      book(personaKey).collections.push(collection);
+      book(personaKey).collections.push({ ...collection, items: [] });
       return collection;
     },
     isFollowing: (personaKey: string, sellerRef: string) => book(personaKey).following.has(sellerRef),

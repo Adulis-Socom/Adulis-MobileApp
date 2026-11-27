@@ -32,6 +32,8 @@ export interface FixtureHandle {
   expireStories(sellerRef: string): void;
   /** Linked content (a Product or Scene ref) stopped being public: its Story is suppressed. */
   makeStoryTargetPrivate(ref: string): void;
+  /** The next call of `op` fails with `code` (failure-state tests). */
+  failNext(op: MobileOpId, code: 'NETWORK' | 'INTERNAL' | 'NOT_FOUND'): void;
   /** The fixture server clock (null: the real clock). Story publication and expiry are re-taken from it on reset(). */
   setNow(now: (() => number) | null): void;
   /** Accounts the fixture currently has a session for (isolation tests). */
@@ -49,6 +51,7 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
   const spent = new Set<string>(); // expiry / revocation scenarios fire once per credential
   const withdrawn = new Set<string>();
   const engagement = createEngagementWorld();
+  const failures = new Map<string, 'NETWORK' | 'INTERNAL' | 'NOT_FOUND'>();
   let client: ClientScenario = 'OK';
   let sequence = 0;
 
@@ -151,6 +154,40 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
         if (created === null) throw new TransportError('VALIDATION_FAILED');
         return { collection: created };
       }
+      case 'collection.get': {
+        const found = engagement.collection(personaOf(ctx).key, (input as MobileOps['collection.get']['in']).collectionRef);
+        if (found === undefined) throw new TransportError('NOT_FOUND');
+        const items = found.items.map((item) => {
+          const scene = item.kind === 'SCENE_POST' && !withdrawn.has(item.ref) ? sceneUnit(item.ref) : undefined;
+          if (scene) return { kind: 'SCENE_POST' as const, scene };
+          const product = item.kind === 'PRODUCT_POST' ? productTile(item.ref) : undefined;
+          if (product) return { kind: 'PRODUCT_POST' as const, product };
+          return { kind: 'UNAVAILABLE' as const, item }; // no name, caption or picture of what it once was
+        });
+        return { collection: { collectionRef: found.collectionRef, name: found.name }, items };
+      }
+      case 'collection.rename': {
+        const { collectionRef, name } = input as MobileOps['collection.rename']['in'];
+        const renamed = engagement.rename(personaOf(ctx).key, collectionRef, name);
+        if (renamed === 'NOT_FOUND') throw new TransportError('NOT_FOUND');
+        if (renamed === 'INVALID') throw new TransportError('VALIDATION_FAILED');
+        return { collection: renamed };
+      }
+      case 'collection.delete': {
+        // Deleting what is already gone is the outcome asked for (recovered from the archived saved-privacy cases).
+        engagement.remove(personaOf(ctx).key, (input as MobileOps['collection.delete']['in']).collectionRef);
+        return {};
+      }
+      case 'collection.item.add':
+      case 'collection.item.remove': {
+        const { collectionRef, item } = input as MobileOps['collection.item.add']['in'];
+        const adding = op === 'collection.item.add';
+        // Only something public can be added; anything can be removed (including what stopped being public).
+        const publicNow = item.kind === 'SCENE_POST' ? sceneUnit(item.ref) !== undefined && !withdrawn.has(item.ref) : productTile(item.ref) !== undefined;
+        if (adding && !publicNow) throw new TransportError('NOT_FOUND');
+        if (!engagement.setMember(personaOf(ctx).key, collectionRef, item, adding)) throw new TransportError('NOT_FOUND');
+        return { item };
+      }
       case 'stories.row.get':
         return { groups: stories.row(), nextCursor: null };
       case 'stories.group.get': {
@@ -216,6 +253,12 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
       }
       const queued = holds.get(op)?.shift();
       if (queued) await queued;
+      const failure = failures.get(op);
+      if (failure !== undefined) {
+        failures.delete(op);
+        log.push({ op, outcome: 'SERVED' });
+        throw new TransportError(failure);
+      }
       let value: unknown;
       try {
         value = serve(op, input, ctx);
@@ -245,6 +288,7 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
     withdraw: (sceneRef) => void withdrawn.add(sceneRef),
     expireStories: (sellerRef) => stories.makeUnavailable(sellerRef),
     makeStoryTargetPrivate: (ref) => stories.makeTargetPrivate(ref),
+    failNext: (op, code) => void failures.set(op, code),
     setNow(now) {
       clock = now;
     },
@@ -258,6 +302,7 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
       withdrawn.clear();
       stories.reset();
       engagement.reset();
+      failures.clear();
       client = 'OK';
       sequence = 0;
     },

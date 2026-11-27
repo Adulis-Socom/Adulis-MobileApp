@@ -8,7 +8,7 @@ import { AccessibilityInfo } from 'react-native';
 
 import { SessionChanged, type MobileOps } from '../contracts/gap-mob-session';
 import { t } from '../i18n/messages';
-import { matchRoute, pathOf } from '../modes/routes';
+import { parseReturnTo, pathOf } from '../modes/routes';
 import { useApp } from '../providers/AppProvider';
 import { newIntentKey } from '../session/intent-key';
 
@@ -67,7 +67,7 @@ export function useRequireAccount() {
   return (action: () => void) => {
     if (session.kind === 'AUTHENTICATED') return action();
     if (session.kind !== 'GUEST') return undefined;
-    const here = matchRoute(pathname); // allowlist: only a known route is carried as returnTo
+    const here = parseReturnTo(pathname); // the return allow-list: anywhere else, sign-in lands Home
     router.push(here ? `/auth/sign-in?returnTo=${encodeURIComponent(pathOf(here))}` : '/auth/sign-in');
     return undefined;
   };
