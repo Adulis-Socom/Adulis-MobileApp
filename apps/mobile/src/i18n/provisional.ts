@@ -132,6 +132,22 @@ export const provisionalEn = {
   'mobile.stories.previous': 'Previous story',
   'mobile.stories.close': 'Close',
   'mobile.stories.gone': 'This story is no longer available.',
+  // MOB-FE-03 engagement and Saved (same register).
+  'mobile.engagement.like': 'Like',
+  'mobile.engagement.unlike': 'Unlike',
+  'mobile.engagement.save': 'Save',
+  'mobile.engagement.unsave': 'Unsave',
+  'mobile.engagement.follow': 'Follow',
+  'mobile.engagement.unfollow': 'Unfollow',
+  'mobile.engagement.updating': 'Updating.',
+  'mobile.engagement.not_confirmed': 'We could not confirm that change. Showing what is saved.',
+  'mobile.saved.scenes': 'Saved scenes',
+  'mobile.saved.products': 'Saved products',
+  'mobile.saved.empty': 'Nothing saved yet.',
+  'mobile.collections.title': 'Collections',
+  'mobile.collections.empty': 'No collections yet.',
+  'mobile.collections.name': 'Collection name',
+  'mobile.collections.create': 'Create collection',
   'mobile.market.unresolved': 'Your region is not set yet, so results may be limited.',
 } as const;
 

@@ -6,6 +6,7 @@
 // Where the client would need one it is an opaque value the server supplies (decision rows in the L2-MOBILE-01 register).
 
 import type { DiscoveryOps } from './gap-mob-discovery';
+import type { EngagementOps } from './gap-mob-engagement';
 import type { StoriesOps } from './gap-mob-stories';
 
 export const CONTRACT = { gap: 'GAP-L2-01', version: 'mob-session-0', provisional: true } as const;
@@ -204,7 +205,7 @@ export interface SessionOps {
   'session.verifyCode': { in: { challengeRef: string; code: string; intentKey: string }; out: VerifyWire };
   'session.signOut': { in: Empty; out: Empty };
 }
-export type MobileOps = SessionOps & DiscoveryOps & StoriesOps;
+export type MobileOps = SessionOps & DiscoveryOps & StoriesOps & EngagementOps;
 export type MobileOpId = keyof MobileOps;
 
 export interface Stamped<T> {

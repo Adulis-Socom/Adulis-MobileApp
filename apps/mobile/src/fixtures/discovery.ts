@@ -130,6 +130,12 @@ export function sellerProfile(ref: string): SellerProfile | null {
   return seller ? { sellerRef: seller.sellerRef, storeName: seller.storeName, description: `Demonstration profile for ${seller.storeName}.`, trustLevel: 'ESTABLISHED', isOpen: seller === alem } : null;
 }
 
+export const sceneUnit = (ref: string): SceneCardUnit | undefined => sceneByRef.get(ref);
+export const productTile = (ref: string): ProductTile | undefined => {
+  const found = productByRef.get(ref);
+  return found === undefined ? undefined : tile(found);
+};
+
 export const productsOf = (sellerRef: string): ProductTile[] => PRODUCTS.filter((p) => p.seller.sellerRef === sellerRef).map(tile);
 export const shopProducts = (category: string | null): ProductTile[] => PRODUCTS.filter((p) => category === null || p.category === category).map(tile);
 export const knownCategory = (code: string) => CATEGORIES.some((c) => c.code === code);

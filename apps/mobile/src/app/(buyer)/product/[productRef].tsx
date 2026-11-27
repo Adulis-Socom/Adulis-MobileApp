@@ -9,6 +9,7 @@ import { MediaImage, Section } from '../../../discovery/components';
 import { availabilityText, formatMoney, priceOf, trustText } from '../../../discovery/format';
 import { problemKind, useRead } from '../../../discovery/hooks';
 import { validRef } from '../../../discovery/params';
+import { ProductSave } from '../../../engagement/controls';
 import { t } from '../../../i18n/messages';
 import { Body, Button, Heading, Screen, StateView } from '../../../ui/components';
 import { theme } from '../../../ui/theme';
@@ -41,6 +42,7 @@ export default function ProductDetailRoute() {
         <Heading>{product.name}</Heading>
         <Body>{priceOf(product)}</Body>
         <Text style={styles.available}>{availabilityText(product.available)}</Text>
+        <ProductSave productRef={product.productRef} />
         <Body>{product.description}</Body>
         {product.variants.length > 0 ? (
           <Section title={t('mobile.product.options')}>

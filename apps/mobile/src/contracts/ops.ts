@@ -18,6 +18,8 @@ export interface OpSpec {
 
 const read = (access: OpAccess, refFields: readonly (readonly string[])[] = [], gap: OpSpec['gap'] = 'GAP-L2-02'): OpSpec => ({ gap, access, refFields, fixture: 'SERVED_READ', writeAuthorisedBy: null });
 
+const write = (refFields: readonly (readonly string[])[]): OpSpec => ({ gap: 'GAP-L2-02', access: 'AUTHENTICATED', refFields, fixture: 'SERVED_WRITE', writeAuthorisedBy: 'MOB-FE-03' });
+
 export const OP_SPECS: Readonly<Record<MobileOpId, OpSpec>> = {
   // MOB-FE-01 session, device and bootstrap (GAP-L2-01)
   'device.register': { gap: 'GAP-L2-01', access: 'PUBLIC', refFields: [['deviceId']], fixture: 'SERVED_WRITE', writeAuthorisedBy: 'MOB-FE-01' },
@@ -40,4 +42,13 @@ export const OP_SPECS: Readonly<Record<MobileOpId, OpSpec>> = {
   // MOB-FE-02S Buyer Stories (SC-BE-05S is the authoritative owner; its live implementation is not a prerequisite for fixtures)
   'stories.row.get': read('PUBLIC', [], 'SC-BE-05S'),
   'stories.group.get': read('PUBLIC', [['sellerRef']], 'SC-BE-05S'),
+  // MOB-FE-03 engagement (GAP-L2-02): Account-bound; the writes carry the desired state and are authorised for the fixture by this order
+  'engagement.state.get': read('AUTHENTICATED', [['sceneRefs'], ['productRefs'], ['sellerRefs']]),
+  'saved.list.get': read('AUTHENTICATED'),
+  'collections.list.get': read('AUTHENTICATED'),
+  'scene.like.set': write([['sceneRef']]),
+  'scene.save.set': write([['sceneRef']]),
+  'product.save.set': write([['productRef']]),
+  'seller.follow.set': write([['sellerRef']]),
+  'collection.create': write([]),
 };

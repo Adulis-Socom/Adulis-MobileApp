@@ -32,7 +32,7 @@ export function TagLine({ tag }: { readonly tag: Pick<SceneTag, 'name' | 'availa
 }
 
 /** The For You / Following card: photo, caption, tags in words, ONE primary action. No hotspot, no overlay, no Like count. */
-export function SceneCard({ scene, onExplore }: { readonly scene: SceneCardUnit; readonly onExplore: () => void }) {
+export function SceneCard({ scene, onExplore, actions }: { readonly scene: SceneCardUnit; readonly onExplore: () => void; readonly actions?: ReactNode }) {
   return (
     <View style={styles.card}>
       <Pressable accessible={false} onPress={onExplore}>
@@ -46,6 +46,7 @@ export function SceneCard({ scene, onExplore }: { readonly scene: SceneCardUnit;
         <TagLine key={tag.position} tag={tag} />
       ))}
       <Button label={t('mobile.scene.explore')} onPress={onExplore} />
+      {actions}
     </View>
   );
 }

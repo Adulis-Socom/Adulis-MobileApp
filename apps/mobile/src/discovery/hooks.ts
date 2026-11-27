@@ -9,7 +9,7 @@ import { useApp } from '../providers/AppProvider';
 import { TransportError } from '../transport/port';
 
 type PagedOp = { [K in keyof DiscoveryOps]: DiscoveryOps[K]['out'] extends { nextCursor: string | null } ? K : never }[keyof DiscoveryOps];
-type ReadOp = Exclude<keyof DiscoveryOps | 'stories.row.get' | 'stories.group.get', PagedOp>;
+type ReadOp = Exclude<keyof DiscoveryOps | 'stories.row.get' | 'stories.group.get' | 'saved.list.get' | 'collections.list.get', PagedOp>;
 
 /** How a failure is shown: offline and gone are different states, and neither is a reason the client invents. */
 export type ProblemKind = 'offline' | 'gone' | 'unavailable' | 'session';
