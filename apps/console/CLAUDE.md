@@ -1,245 +1,125 @@
-# `apps/console` — the seller console PWA
+# `apps/console` -- the Seller Console (clean replacement, rebuild-20261125)
 
-Loaded together with the root `CLAUDE.md`. **Start your session here, not at the
-repository root.**
+Loaded together with the root `CLAUDE.md`. **Start your session here, not at the repository root**: the 15 permission
+denials in `.claude/settings.json` load only from the directory a session starts in. `/context` and `/permissions` show
+what loaded. This file describes the REPLACEMENT Console only; the archived Console (106 files, Reservation, payment,
+payout and Orders screens) lives at tag `recovery/legacy-dev-20261125` and is evidence, never imported or restored.
 
-**Governing documents:** ADU-CON-03 v1.3 (thirty screens, five destinations, twelve
-states) · ADU-CON-02 **v3.2** (system design, CSP) · ADU-ARCH-01 v2.0 · ADU-AUTH-01
-**v2.8** (**v2.5** still canonical for the permission catalogue) · ADU-API-01 **v1.11** · ADU-DB-01 **v1.16** · **ADU-REPO-01 §9** (cited across this repository and installed
-nowhere: it is absent from `docs/` and from DOCUMENT_AUTHORITY's supplied baseline,
-and no register entry recorded that until D-94; this file's §9.2/§9.5 transcriptions
-are the working copy). Versions corrected at T7 Phase 4; `docs/amendments/README.md`
-is always the authority on what governs.
+**Governing documents** (effective 24 Nov 2026 editions, `docs/rebuild/SC-FE-00-CONSOLE-SOURCE-TO-SCREEN.md` is the
+route map and authorization matrix): ADU-CONSOLE-02 v4.3, ADU-ONB-01 v3.2, ADU-AUTH-02 v3.3, ADU-PRV-01 v3.3,
+ADU-MKT-01 v3.3; founder decisions D24-01..D24-18, RB25-D01..D14, B02-D03, B02B-D01..D03. `docs/rebuild/GOV-06-FIXTURE-AND-RELEASE-BOUNDARY.md`
+governs fixtures. Where this file and a citation disagree, the citation governs.
 
-> **Ownership (T7 §0/§6):** the console is no longer a separate workstream's -- the
-> COO/CTO has left, and this workstream is worked by the agent under the one remaining
-> owner. **ADU-REPO-01 §4's dependency rules hold in full.** One owner is not a reason
-> for `apps/console` to import from `apps/api`: the rules exist so the workstreams stay
-> separable, and that matters MORE with one person, not less -- separability is now the
-> only thing keeping a console defect from becoming a backend session's problem.
+## Scope of the workstream (Batch 02A: SC-FE-01 to SC-FE-03, Batch 02B: SC-FE-04 to SC-FE-06, Batch 02C/02D: SC-FE-07 to SC-FE-11)
 
-**What this is:** the *full* seller management system. **Nine of the ten
-publication-readiness items are reachable from nowhere else**, so this is the only
-surface on which a person becomes a seller. It also carries **one screen for a different
-user entirely** — the courier (SC-C1): same deployment, same audience value, separate
-route tree, **no seller navigation**.
+Built: shell, routing, Seller context, session boundary, sign-in/OTP/recovery/declarations, Seller chooser and switcher,
+Seller admission (`/become-seller`), Publication Readiness Hub, Home (role-aware, readiness or operating brief),
+Notification centre (read); **SC-FE-04** Products, Variants and Inventory (`products/`: taxonomy-driven editor, ledger stock,
+publication blockers); **SC-FE-05** Scene Post authoring (`content/`: tagged Products, accessible hotspots, resolved visibility);
+**SC-FE-05S** Seller Stories (`content/stories`: one photo, optional eligible link, server-authored lifetime);
+**SC-FE-06** Store settings and Courier relationships (`store/`: profile, structured location, explicit service coverage,
+opening hours, the three fulfilment modes, invite and revoke); **SC-FE-07** the internal Order experience simulation (fixture builds only);
+**SC-FE-08** Inbox (one subject plus Scene provenance per message, high-water read mark) and scripted-assistance administration
+(`inbox/automation`, gated by the chatbot capabilities, deterministic, provisional dialogue); **SC-FE-09** Trust and Reviews (read only,
+kept for a safety-suspended Seller); **SC-FE-10** nonfinancial Insights and Plan status (`settings/plan`, Option B, nothing to buy);
+**SC-FE-11** Team, ownership transfer and closure (`settings/team`, `settings/closure`) and the Account's own pages (`/account/*`: sessions,
+notifications, privacy and deletion, invitations) with purpose-bound step-up. Nothing deletes, closes or transfers for real. **Not built,
+and the routes show an honest "arrives later" state:** company details, other `settings/*` and `insights/*` sub-pages. **Never build here:** payment, payout, Order,
+Reservation, revenue, GMV, paid-Order counts, delivery tracking, trust advancement, Government-ID capture, any backend feature, Mobile,
+Storefront, Operator. Courier work is relationship management only: no assignment, handoff, delivery states or compensation (B02B-D02).
+The taxonomy is submitted and unratified (`docs/rebuild/taxonomy/`): the editor hard-codes no category, attribute, value or required rule,
+and a category whose attributes are not defined says so on screen.
 
-> **This file CITES the specifications; it does not replace them** (ADU-REPO-01 v1.2 S6).
-> Where a rule is inlined below for practicality, **the citation beside it governs, and the
-> inlined line is the first thing to check when the two disagree.** A rule kept in two
-> places grows a stale copy, and the copy an agent reads first is the one it follows.
+## Toolchain (exact versions are in package.json; no ranges)
 
-## November 24 2026 amendments that bear on this workstream (documentation only)
+React 19 + Vite 7 SPA, `react-router` 7 (`createBrowserRouter`), TypeScript strict (shared `@adulis/config` base, DOM
+lib), hand-written CSS over `@adulis/tokens` custom properties (no Tailwind, no UI kit, no state library, no data
+library: staged, add one when a screen earns it). Messages come only from `@adulis/locale` (console catalogue
+`en.console.ts`; a missing Amharic entry is a compile error). Unit tests: vitest (node environment, pure modules).
+Browser tests: Playwright + `@axe-core/playwright`, run in CI.
 
-Source: `Governance/DECISION_REGISTER_2026-11-24.md` and the Console amendment of the Nov 24
-pack. Working authority, not a signed approval. **No Console code was changed by this note.**
+## Commands (run from `apps/console`; heavy ones run in CI under the RAM policy)
 
-- **Payment controls are legacy, not approved MVP behaviour (D24-01).** *Confirm Payment
-  Received*, *Payment Not Received*, bank-proof/evidence viewing and every Seller-written PAID
-  control are to be removed or quarantined from active MVP routes by a console work order. The
-  "verbatim labels" and "payment decisions" rules below describe the code that exists today and
-  keep applying to it **until that quarantine lands**; do not extend them, do not add payment
-  UI, and do not delete the code in passing.
-- **Seller Stories are in the MVP (D24-04)**: Console editor, list, withdraw and preview, one
-  photo and short text, one same-Seller Product or Scene link, a 24-hour public life; the
-  backend owns time and visibility. No screen exists yet.
-- **Frontend first with typed fixtures (D24-16).** For a screen the founder has approved whose
-  endpoint does not exist yet, a **versioned, typed fixture adapter that cannot reach a live
-  mutation, payment endpoint or moderation action** is permitted. This narrows, and does not
-  repeal, the rule below that a screen whose endpoint does not exist is not built: a fixture is
-  never shipped to release, never hand-writes `contracts/openapi.json`, and never imports from
-  another app.
-- **Theme and language:** the CTO palette through shared semantic tokens (B02-D03; the earlier prototype terracotta theme is superseded); English
-  first, with the Amharic key rule unchanged until the founder rules otherwise.
-- **Stack:** the console is a React/Vite SPA and is unaffected by the backend target stack
-  (Fastify, Drizzle, BullMQ on Valkey) decided in D24-08..D24-10. That migration is not
-  authorised here, and a Console session never works on it.
+| Command | What |
+|---|---|
+| `pnpm typecheck` | `tsc --noEmit` over `src`, `e2e`, configs |
+| `pnpm lint` | ESLint (typescript-eslint, react-hooks, jsx-a11y), `--max-warnings 0` |
+| `pnpm test` | vitest unit tests |
+| `pnpm build` | release build (fixtures impossible) |
+| `pnpm build:fixture-control` | fixture-enabled build, for CI journeys and as the positive control |
+| `pnpm verify:release` | RN-1/RN-6 scan: release build with the fixture flag set has no fixture marker; the control build has all |
+| `pnpm test:e2e` | Playwright journeys, isolation, responsive, axe, screenshots (`pnpm exec playwright install chromium` first) |
+| `pnpm dev:fixtures` | Vite dev server with fixtures on (`ADULIS_FIXTURES=on`) |
 
-## The boundary
+`pnpm test:e2e` has three projects: `fixture` (the fixture-control build), `release` (the plain build) and `harness` (`e2e/harness`, a test-only page that throws while rendering to prove the crash panel; not the Console, never a release).
 
-- **May import:** `@adulis/api-client`, `@adulis/locale`, `@adulis/tokens`, `@adulis/config`.
-- **May never import anything under `apps/`.** Not `apps/api/` for a type, not for a Zod
-  schema, not for a constant. **This is rule 2, and the console is where it will first be
-  tempting**, because the backend defines every shape the console renders.
-- **The types you need are generated** into `packages/api-client` from
-  `contracts/openapi.json`. If a type is missing there, **the endpoint does not exist
-  yet** — and the answer is the contract -- the mock, for contract-only work -- never a reach across.
-- **Build against the real API** (T7 §7): the full recipe, because two
-  commands are not enough. `docker compose up -d` (Postgres ONLY -- the API is not a
-  compose service), `cp .env.example .env`, `pnpm db:migrate`, `pnpm db:seed`, then
-  start the API **with that environment loaded into the shell**: `apps/api` reads no
-  `.env` of its own (register D-99), so `pnpm dev:api` from a clean shell gets an
-  empty `DATABASE_URL` and an empty `CONSOLE_ORIGIN` -- which makes CORS a wildcard
-  the browser refuses on a credentialed request, and 403s every cookie-carried write.
-  Then `VITE_API_BASE_URL=http://localhost:3000` **in the shell** -- Vite reads
-  `VITE_`-prefixed variables from `process.env`, and this app's `envDir` is
-  deliberately its own directory, never the workspace root: pointing it at the
-  root would pull in `NODE_ENV=development` and ship React's development build
-  (the `production-react` gate fails on exactly that). The mock (`pnpm mock:api`,
-  `http://127.0.0.1:4010`) remains for contract-only work; its purpose was to unblock
-  a workstream that no longer needs unblocking.
+CI job: `Seller Console (rebuild-20261125)` in `.github/workflows/rebuild-ci.yml`. Repository-level checks the Console job
+also runs from the root: `pnpm verify:tokens`, `depcruise apps/console packages --config .dependency-cruiser.cjs`, and
+`bash apps/console/scripts/verify-deps-fires.sh`.
 
-## The stack, and what of it has actually landed
-
-**Landed at C-1/C-2 (T7 Phase 5):** React 19 + Vite, `react-router` 7.18.3
-(pinned), and hand-written CSS over `@adulis/tokens`' custom properties.
-**Still the destination, deliberately deferred to C-3+:** TanStack Query (it
-earns its keep at catalogue scale, not on two screens), Tailwind 4 (it arrives
-with the first catalogue-scale screens), and React Hook Form + Zod. This is a
-STAGING decision, not a deviation from the ruled stack -- recorded here, in
-`src/console.css`'s header and in the T7 report, so the next agent adds the
-library when its screen arrives instead of re-deciding the stack.
-
-**The harness landed at T10 Phase 4, one stage late.** `pnpm verify:console-e2e`
-(gate `console-e2e`) builds the console, resets the database, starts the real API
-and drives the built artifact with Playwright. `pnpm --filter @adulis/console test`
-is still an echo -- there are no unit tests here and none are owed; the console
-computes no business state, so what is worth asserting is what a browser does.
-
-**Sign-in lives in exactly one file: `e2e/helpers/session.ts`.** No test names a
-phone number and no test knows what an OTP is. ADU-AUTH-01 v2.6 is under
-evaluation and NOT installed -- when the mechanism is ruled, `signInAs` changes
-and no test does. Keep it that way.
-
-**One sign-in per run.** `globalSetup` signs in and saves `storageState`; the OTP
-budget is 3/hour per phone and a per-test sign-in spent it by the fourth test
-(D-124's class -- a 429 about nothing). The sign-in path is still exercised for
-real on every run.
-
-**Assert where the browser ENDED UP, not what the page contains** (D-152). The
-first regression test written here PASSED against the regression it was written
-for: `page.goto(href)` resolves before the router's catch-all `<Navigate>` has
-run, so a check that Home's list was absent was true for an instant and false
-after. A redirect happens slightly later. Use `toHaveURL`.
-
-C-1 through C-3 are also held up by typecheck (which covers `e2e/` via
-`tsconfig.e2e.json` -- a harness with no type gate is one whose own typo surfaces
-as a red test about the product), lint, and the `no-unsafe-eval`,
-`production-react` and `boot-smoke` gates. What the harness does NOT yet cover is
-most of C-1 and C-2: T10 S4 scoped it to the twelve states, SC-01's readiness,
-the chooser's labelled gap and a planted `UPGRADE_REQUIRED`, and said not to
-backfill. It earns its place on C-4.
-
-## The rules an agent working here needs
-
-- **The seller id lives in the URL** (`/s/:sellerId/*`), **never in a store.** Two stores
-  in two tabs are two URLs and cannot be confused (ADU-AUTH-01 §8.3). The failure this
-  prevents is a seller confirming a payment on the wrong store.
-- **The console computes no business state.** It renders `state`, `allowed_actions` and
-  `readiness[]` as the server resolved them. A countdown may *display* a server deadline;
-  it may not *decide* anything when it reaches zero — it refetches.
-- **The verbatim labels** of ADU-CON-03 §4.1. *"Confirm Payment Received"*, **never**
-  *"Accept Payment"*. The verify-in-your-own-bank sentence is adjacent, always visible,
-  never behind a disclosure.
-- **The forbidden controls** of ADU-CON-03 §16: no accept-reservation, no review reply or
-  hide, no level control, no delivery tracking, no countdown on a confirmed order, no
-  generative assistance. These are the client-side face of the load-bearing absences —
-  building one puts a control on screen for a capability the server will refuse.
-- **Every input has a `<label for>`. Every list has an empty state.** Validation renders a
-  summary of anchor links **plus** per-field messages.
-- **No `localStorage`, no `sessionStorage`, no token in JavaScript.** The session is an
-  httpOnly cookie the console cannot read and does not need to. An XSS on this origin must
-  not be able to reach the credential, because this is the origin where payout details
-  change.
-- **The service worker precaches the app shell only.** `/v1/*` is `NetworkOnly`. Never an
-  authenticated response, never an offline queue.
-- **No fixed heights on anything holding translated text.** Amharic runs 30–50% longer.
-- **A missing Amharic key is a compile error**, not a fallback.
-- **Idempotency keys are minted on control *mount*, not on click** — a key minted on click
-  is a new key per tap, which is exactly the retry the header exists to defeat.
-- **Evidence is viewed through a blob URL, revoked on unmount.** Never a predictable URL,
-  never in a notification preview.
-- **Screens whose endpoints do not exist are not built.** ADU-CON-03 §17 lists the four.
-
-### C-4's four rules, and where each one lives
-
-Every one of these is transcribed from ADU-CON-03 v1.1 S7 (carried unchanged through v1.3 S7), not designed. They
-are the rules most likely to be "improved" by someone who has not read why.
-
-- **The three clock treatments are ONE module** -- `lib/clock.tsx`. SC-03's row
-  and SC-04's clock region ask it the same question, so they cannot drift.
-  `CREATED`/`NOTIFIED` shows the reservation window; `PAYMENT_SUBMITTED` shows
-  the CONFIRMATION window and **not** the reservation one ("irrelevant", S7);
-  `PAYMENT_CONFIRMED` and after show **no countdown at all** -- not a stopped
-  one, not "0:00". `<Deadline>` renders null, so a paid order has no clock
-  region to mistake for a stopped one.
-  **`if (Date.now() > order.expiresAt)` is the defining violation of "the
-  console computes no business state."** At zero the countdown REFETCHES and
-  the server says what the order is. It also measures against `serverTime`
-  from `/v1/bootstrap`, not the device clock.
-- **The payment decisions are equally weighted, and `.decision` has no
-  variant.** No `.primary`, no `.danger`. The only difference between the two
-  buttons is the words. **"Confirm Payment Received", verbatim, never "Accept
-  Payment."** The verify-in-your-own-bank sentence renders before both, always,
-  never inside a disclosure. Confirming WITHOUT opening the evidence is a
-  normal path (ADU-ARCH-01 S3.3) -- nothing nags, blocks, or badges the
-  evidence as unread. Rejection is two steps and step two states the
-  consequence in full.
-- **R20: the handoff region is DISABLED, not hidden**, and that is all four
-  controls. `disabled` is the only thing state changes; the region and its
-  explaining line stay in the document. "A region that disappears makes a
-  seller wonder what they broke."
-- **Evidence renders from a blob URL revoked on unmount**, with no download,
-  print, share, save or "looks valid" affordance of any kind. The revoke is
-  asserted by FETCHING the URL after close and requiring it to fail --
-  checking the `<img>` is gone would pass with the blob still alive.
-
-## Structure (§9.2)
-
-`features/` mirrors ADU-CON-03's groups and **folder names carry screen IDs**, so the
-mapping from specification to code is mechanical and coverage is checkable by listing a
-directory.
+## Architecture (what each directory is for)
 
 ```
 src/
-  router.tsx        /s/:sellerId/*  and  /courier
-  api/client.ts     thin wrapper over @adulis/api-client. DO NOT hand-edit types.
-  auth/             SC-00 sign-in, SC-31 step-up, remember-device (R17), idle warning
-  layout/           Shell (sidebar >=1024px, bottom bar <1024px), SellerSwitcher, nav
-  features/
-    entry/          SC-01 SC-02          trade/     SC-03 SC-04 SC-05 SC-06
-    catalogue/      SC-07 .. SC-11       conversation/ SC-20 SC-21
-    trust/          SC-12 .. SC-16       store/     SC-17 SC-18 SC-19 SC-22 SC-23
-    admin/          SC-24 .. SC-29       notifications/ SC-30
-  courier/          SC-C1. No seller nav. Mobile layout only.
-  components/       primitives on @adulis/tokens
-  lib/              intl.ts · idempotency.ts · blob-viewer.ts · states.ts
+  main.tsx, router.tsx     entry, route table (URL carries the Seller: /s/:sellerId/*)
+  transport/               THE choke point. port.ts (types), live.ts (generated client; no Seller operation exists, so
+                           every call is an honest UNAVAILABLE), select.ts (build-time choice)
+  contracts/gap-sc.ts      PROVISIONAL, versioned fixture contracts GAP-SC-01..07. Never the API contract.
+  fixtures/                DEVELOPMENT ONLY. Reached only through the dynamic import in transport/select.ts behind
+                           the build-time constant __FIXTURES__. Nothing else may import it (lint + depcruise enforce).
+  session/                 session boundary, account context, sign-out cleanup
+  seller/                  Seller-context boundary keyed by sellerId, capabilities, destinations, scoped data hook
+  features/                auth/ entry/ onboarding/ readiness/ home/ notifications/ unavailable/
+  components/              primitives, state panels, dialog, status mark, icons
+  styles/                  tokens-driven CSS
+e2e/                       Playwright (never imports src/ fixtures; it drives the built artifact)
+scripts/                   release scan, dependency-rule fire test
 ```
 
-`SellerSwitcher` renders **only** when the account holds more than one seller.
-`nav.ts` carries **five destinations, no more.**
+## Rules that bite
 
-## Build order (§9.5)
+1. **Seller context is the URL.** No mutable "selected Seller" store. The Seller subtree is keyed by `sellerId`; every
+   Seller call carries the id; a response is committed only if its sellerId is still the current one (scoped data hook).
+2. **The Console computes no business state.** It renders what the server resolved: capabilities, destinations,
+   readiness items, eligibility outcome, countdown deadlines. Role names explain; capabilities authorize. At a deadline it
+   refetches, it does not decide.
+3. **Denial vocabulary:** missing permission HIDES; missing entitlement shows DISABLED with a reason; deferred feature =
+   "arrives later" (non-interactive); unauthenticated = sign-in; restricted Seller = banner plus limited surface; unknown
+   authorization outcome = fail closed ("could not confirm your access").
+4. **Fixtures:** `FIXTURES_ON` is build-time. A release build cannot contain the fixture module, an `fx_` id, the banner
+   sentence or the refusal code (RN-1). Fixture mode makes no network request (RN-2), fails closed on unsupported
+   operations (RN-3), and shows the persistent Demonstration-data strip. The live transport refuses an `fx_` id (RN-5).
+   Never hand-write `contracts/openapi.json` or `packages/api-client` to make a fixture type-check.
+5. **No web storage, no token in JavaScript** (`localStorage`, `sessionStorage`, `document.cookie` are lint errors). The
+   fixture session is in memory and is lost on reload by design.
+6. **Every input has a `<label>`; validation renders a summary of anchor links plus per-field messages; every list has an
+   empty state; a failed request is never rendered as an empty result.** One lime (`highlight`) action per screen, dark text.
+7. **No fixed heights on anything holding text.** Amharic runs 30-50% longer. Layout in `rem`; tested at 150% and 200%.
+8. **Palette is the tokens, nothing else.** No hex literal in `src/` (all colour is `var(--adu-...)`).
+   No dark theme, no blue, no terracotta. Status is icon plus word, never colour alone.
+9. **Generated files are never edited**, and the Console never imports from `apps/*` (rule 2 of the repository).
+10. **Provisional decisions made without a governing requirement** are listed in `docs/rebuild/SC-FE-01-03-PROPOSALS.md` as
+    proposals, not product rules.
 
-The console cannot be built screen-by-screen in specification order — most screens need
-the shell, the states and the client first.
+## Lessons that each cost a CI cycle (do not relearn them)
 
-| Stage | Done when |
-|---|---|
-| **C-1** | A placeholder route renders inside the shell at both breakpoints, with the twelve states demonstrable |
-| **C-2** | A seeded seller signs in against the real API and is warned before idle expiry (T7 §7.1; was "the mock" before Tier 3 existed) |
-| **C-3** | Nine readiness items render from `readiness[]`, in any order, resumable -- **landed T9 Phase 4**: SC-01 Life 1 and SC-02, with the market-context provider (D-103). Life 2, the daily brief, waits for C-4's clock rules (D-148) |
-| **C-4** | Three clock treatments visible; handoff gated on `PAYMENT_CONFIRMED`; payment decisions equally weighted -- **landed T10 Phase 5**: SC-03, SC-04, SC-05, SC-06, each rule asserted by `console-e2e` and proved by planting its violation. Six gaps found and stated rather than filled (D-153 buyer name, D-154 no filter parameter, D-155 no `allowed_actions`, D-156 QR serialisation, D-157 courier ids, D-158 evidence bytes) |
-| **C-5** | Set-count and confirm-stock are visibly **two** actions |
-| **C-6** | Payout's five disclosures; cancel present **only** with a pending change |
-| **C-7** | Reviews read-only; the empty claims list reads as good news |
-| **C-8** | SC-C1 courier: mobile only, no seller nav, QR only after custody |
+- `Intl.DateTimeFormat` throws if `timeStyle` is combined with `timeZoneName`: use `timeStyle: 'long'` (src/i18n/t.ts has unit tests for both branches).
+- The fixture session lives in memory, so a full `page.goto` resets the world. Tests navigate inside the app with `goInApp`, and use `signInHere` after sign-out, never `signIn`.
+- A draft Seller Home has BOTH the readiness and Alerts headings: never assert exactly one of them with `.or()` without `.first()`.
+- Text scaling is tested by setting the root font size; `scaleText` attaches on `readystatechange` and every scaled test calls `expectTextScale`, because an earlier version silently did nothing. The overflow assertion names the offending elements.
+- Every one-column grid uses `grid-template-columns: minmax(0, 1fr)`, and flex children that hold text carry `min-width: 0`; an `input` is about 368px wide at doubled text.
+- axe `target-size` is evaluated at the END of the page, where the sticky bottom bar covers nothing; everything else is evaluated at the top.
+- `pnpm lint` has `--max-warnings 0` and `jsx-a11y/label-has-associated-control` depth 3; a type-only import counts as an edge for dependency-cruiser (keep shared types in `transport/port.ts`).
 
-> **The unblock note that used to sit here is history** (T7 Phase 4): Tier 3 landed,
-> the contract is committed with its 110 `/v1` path keys (four governing-document
-> sites still print 124 -- register D-100; the contract in the tree is the authority), and the auth endpoints exist
-> -- C-2 and everything after it are gated by build order alone. Two of its rules are
-> permanent and stay: **do not hand-write `contracts/openapi.json`** (a hand-authored
-> contract is the lie with authority §5.1 forbids), and a screen whose endpoint does
-> not exist is not built.
->
-> C-2's done-clause reads "against the real API" since T7 §7.1 . The seeded seller it needs comes
-> from `pnpm db:seed`, which is still the Tier-0 stub at THIS commit -- the real seed
-> lands with C-2 in Phase 5, and this line becomes present tense there.
+- Authorization is per navigation: `SellerScope` serves a grant only for its (account, Seller, path) generation (`seller/grant.ts`); while the answer is pending nothing of the Seller mounts or fetches. Race tests use the fixture hook `delayNext(op, ms)`.
 
-## CSP
+## Design
 
-`public/_headers` — `script-src 'self'`, **no nonce** (ADU-CON-02 §3.9). A static SPA
-needs no inline bootstrap script, which is precisely why this workstream is Vite and not
-Next.js. CI asserts `unsafe-eval` is absent from the build and that React's production
-build shipped.
+`PRODUCT.md` (product truth), `DESIGN.md` and `.impeccable/` (Impeccable direction contract, surface brief, design sidecar) describe the visual system: a ruled-row ledger, one lime action per screen, status as icon plus word. Change them with the CSS, not instead of it.
+
+## Boundary
+
+May import `@adulis/api-client`, `@adulis/locale`, `@adulis/tokens`, `@adulis/config`. Never anything under `apps/`.
+The 15 `permissions.deny` entries must not be weakened, and a denied sibling path is not to be read through any other
+tool. Shared edits (`pnpm-workspace.yaml`, `.github/workflows/`, `pnpm-lock.yaml`, `packages/locale`) are made only as
+labelled, separate commits recorded in the delivery report; the lockfile is generated by CI and never hand-merged.

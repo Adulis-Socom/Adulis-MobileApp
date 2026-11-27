@@ -1,12 +1,12 @@
 ---
 name: adulis-migration-engineer
 description: >-
-  Authors and reviews Adulis PostgreSQL migrations preserving SQL-first migration history during authorized Drizzle migration, with role/grant safety, deterministic schema output, lock/rewrite analysis, and Appendix-C verification. Use whenever creating or changing database migrations.
+  Authors and reviews Adulis PostgreSQL migrations: the clean replacement lineage's own Drizzle migrations with reviewed SQL for RLS, constraints and functions (RB25-D01), and, for the archived legacy lineage only, its SQL-first history, with role/grant safety, deterministic schema output, lock/rewrite analysis, and Appendix-C verification. Use whenever creating or changing database migrations.
 allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "CEO-backend"
   priority: "P0"
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Adulis Migration Engineer
@@ -18,7 +18,7 @@ Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` fr
 
 ## Current MVP constraints — 24 November 2026
 
-Approved target Fastify, Drizzle, BullMQ/Valkey, not immediate execution. Follow CONTROLLED_MIGRATION_PLAN_2026-11-24.md: inventory/restore proof, HTTP parity, Drizzle domain migration preserving SQL/RLS, one consumer per job family at cutover, generated contracts/CI, authorized retirement. Preserve data by default; no schema push, snapshot recreation, rewrite of applied migrations or persistent operation without approval. PostgreSQL outbox durable. The Reservation model is RETIRED (B02B-D01): retirement needs a controlled forward migration with a manifest (the Reservation dependency inventory), tested only on disposable databases; any persistent-data reconciliation needs separate founder approval.
+Approved target Fastify, Drizzle, BullMQ/Valkey, not immediate execution. Follow CONTROLLED_MIGRATION_PLAN_2026-11-24.md: inventory/restore proof, HTTP parity, Drizzle domain migration preserving SQL/RLS, one consumer per job family at cutover, generated contracts/CI, authorized retirement. Preserve data by default; no schema push, snapshot recreation, rewrite of applied migrations or persistent operation without approval. PostgreSQL outbox durable. The Reservation model is RETIRED (B02B-D01): retirement needs a controlled forward migration with a manifest (the Reservation dependency inventory), tested only on disposable databases; any persistent-data reconciliation needs separate founder approval. CLEAN REBUILD (RB25-D01/D02): the replacement lineage has its own migration chain from an empty baseline (ARC-BE-03); it never imports the legacy 0001-0063 chain or #191's 0063, never runs against adulis-postgres, and copies no real data. The controlled-migration plan, node-pg-migrate pinning and Appendix-C counts below govern the ARCHIVED legacy lineage only. What carries: one migration actor, transaction-local context, reviewed SQL for RLS and grants, two clean builds that converge, disposable targets only, no table-count assumptions.
 
 ## Governing sources (legacy executable references unless noted)
 - `ADU-DB-01_Database_and_Data_Model_v1_27_ASCII.md`
@@ -27,14 +27,15 @@ Approved target Fastify, Drizzle, BullMQ/Valkey, not immediate execution. Follow
 
 ## Current migration posture
 - PostgreSQL 17.
-- Hand-authored SQL migrations through the repository's node-pg-migrate workflow.
+- REPLACEMENT lineage (Batch 01B, the active one on the rebuild branch): reviewed SQL in `apps/api/db/migrations/NNNN_name.sql`, listed in `apps/api/db/migrations/meta/_journal.json`, applied by `pnpm db:migrate` (Drizzle migrator, advisory lock, target guard first) as `adulis_migrator`. Statements separated by `--> statement-breakpoint`. `apps/api/src/db/schema.ts` mirrors the SQL and `test/lineage.int.ts` fails on drift.
+- ARCHIVED legacy lineage only: hand-authored SQL through node-pg-migrate.
 - The migration role is not a runtime role.
 - Generated ORM DDL is not authoritative.
 - Apply migrations twice to empty databases and diff schema dumps for determinism.
 - Integration tests use a real PostgreSQL service; constraints/triggers/RLS are not mockable.
 
 ## Procedure
-1. Locate existing migration conventions and numbering; do not invent a parallel system.
+1. Locate existing migration conventions and numbering; do not invent a parallel system. (Legacy lineage only: in the clean replacement lineage the conventions are the ones ARC-BE-03 establishes, RB25-D01.)
 2. Read the exact DB section/manifest entry being implemented.
 3. Verify current manifest and governing contract; stop on unreissued changes.
 4. Analyze: lock strength, table rewrite, backfill, index build, constraint validation, rollback, grants, RLS, function ownership, search_path, triggers.
@@ -43,7 +44,8 @@ Approved target Fastify, Drizzle, BullMQ/Valkey, not immediate execution. Follow
 7. Make the migration deterministic and rerunnable only through the migration framework, not ad-hoc shell SQL.
 8. Update tests and relevant Appendix-C checks.
 9. Highlight migrations affecting stock/state machines for manual line-by-line review.
-10. Pin the new file in the same change with `pnpm db:migration-pin` and commit `ops/migrations.manifest.json`; apply it only with `pnpm db:migrate` (it runs the migration-file guard). Never start `node-pg-migrate` directly.
+10. Replacement lineage: add the journal entry in the same change; grant only what `adulis_api`/`adulis_worker` need (never to PUBLIC, never DELETE on facts); run `pnpm --filter @adulis/api test:integration` (clean init, two-database determinism, roles, target safety) and `pnpm verify:retired`, locally only within the RAM policy, otherwise in Rebuild CI. Never point anything at adulis-postgres; never weaken `src/db/target-guard.ts` to make a database accept.
+11. ARCHIVED legacy lineage only: pin the new file in the same change with `pnpm db:migration-pin` and commit `ops/migrations.manifest.json`; apply it only with `pnpm db:migrate` (it runs the migration-file guard). Never start `node-pg-migrate` directly.
 
 ## Hard blocks
 - A migration depending on unreissued contracts without explicit interim authorization.

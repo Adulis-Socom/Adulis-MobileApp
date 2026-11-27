@@ -2,17 +2,19 @@
   "name": "@adulis/locale",
   "version": "0.0.0",
   "private": true,
-  "description": "Typed message catalogue. A missing Amharic string is a compile error.",
+  "description": "Typed, English-first message catalogue. A missing Amharic entry is a compile error; no Amharic is public before human review.",
   "license": "UNLICENSED",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
-  "exports": { ".": "./src/index.ts", "./mobile": "./src/mobile.ts" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./mobile": "./src/mobile.ts"
+  },
   "scripts": {
     "build": "echo \"@adulis/locale: consumed as TypeScript source\"",
-    "test": "tsc --noEmit -p tsconfig.test.json && node test/mobile-boundary.mjs && node test/shape.mjs && node test/copy-claims.mjs && echo \"locale: catalogues complete and well shaped, mobile catalogue isolated, Buyer copy claims held\"",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint src"
+    "test": "tsc --noEmit -p tsconfig.test.json && node test/catalogue.test.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@adulis/config": "workspace:*",

@@ -1,200 +1,148 @@
-/**
- * features/store/Couriers.tsx -- SC-23 Couriers (ADU-CON-03 v1.2 S11).
- *
- * GET / POST / DELETE /v1/seller/couriers. The endpoint v1.2 S17 still lists
- * as "Owed -- D-157" EXISTS and is real (couriers.controller.ts); what it
- * returns is narrower than the wireframe drew: { id, phone, invited_at,
- * claimed_at } -- claimed_at non-null IS the claimed marker, and pending
- * invites sit in the same list. No name, no assignment count, no last
- * activity, and -- sharpest -- no account_id, though courier ASSIGNMENT
- * (SC-04) requires courier_account_id in its body. Every one of those
- * absences is named on screen and registered (D-224); none is faked.
- *
- * Invite is by phone; the courier authenticates with THEIR OWN OTP, never
- * shared credentials, and the invite form says so. There is deliberately no
- * duplicate-invite error and no unknown-phone error (G1.8, the
- * registration-oracle closure) -- the same 201 either way, so this screen
- * never claims to know whether a number has an account.
- *
- * Revoking ends access IMMEDIATELY, including orders the courier held
- * (assignment-scoped visibility) -- the warning renders BEFORE the confirm,
- * as a two-step control.
- */
-import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router';
-import { en } from '@adulis/locale';
-import { api, ApiError } from '../../api/client';
-import { ProblemBanner } from '../../components/Feedback';
-import { ScreenState } from '../../components/ScreenState';
-import { useIdempotencyKey } from '../../lib/idempotency';
-import type { UiState, AdulisProblem } from '../../lib/states';
-import { stateFromProblem } from '../../lib/states';
-import { useMarketContext } from '../../lib/market';
-import { timeFormatter } from '../../lib/intl';
-import type { CourierRow } from './types';
+import { useState, type FormEvent } from 'react';
+import type { CourierRelationship, RelationshipStatus } from '../../contracts/gap-sc-store';
+import { Badge, type Tone } from '../../components/Badge';
+import { Dialog } from '../../components/Dialog';
+import { Field } from '../../components/Form';
+import type { IconName } from '../../components/Icon';
+import { Icon } from '../../components/Icon';
+import { PageTitle } from '../../components/PageTitle';
+import { Skeleton } from '../../components/Skeleton';
+import { StatePanel } from '../../components/StatePanel';
+import { formatInstant, label, t } from '../../i18n/t';
+import { useSellerCommand } from '../../seller/useSellerCommand';
+import { useSellerQuery } from '../../seller/useSellerQuery';
+import { ActionProblem } from '../shared/ActionProblem';
+import { StoreNav } from './StoreFrame';
+import { useAction } from '../shared/useAction';
 
-export function Couriers() {
-  const { sellerId } = useParams<{ sellerId: string }>();
-  const market = useMarketContext();
-  const [rows, setRows] = useState<readonly CourierRow[] | null>(null);
-  const [state, setState] = useState<UiState>('LOADING');
-  const [loadProblem, setLoadProblem] = useState<AdulisProblem | null>(null);
-  const [phone, setPhone] = useState('');
-  const [confirming, setConfirming] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<ApiError | null>(null);
-  const [fieldError, setFieldError] = useState<string | null>(null);
-  const inviteKey = useIdempotencyKey();
+const LOOK: Record<RelationshipStatus, { tone: Tone; icon: IconName }> = {
+  INVITED: { tone: 'info', icon: 'clock' },
+  ACTIVE: { tone: 'success', icon: 'check' },
+  DECLINED: { tone: 'neutral', icon: 'x' },
+  REVOKED: { tone: 'neutral', icon: 'x' },
+};
 
-  const load = useCallback(async () => {
-    if (!sellerId) return;
-    setState((s) => (s === 'READY' || s === 'EMPTY' ? 'STALE' : 'LOADING'));
-    try {
-      const r = await api<{ data: CourierRow[] }>(`/seller/couriers`, { sellerId });
-      setRows(r.data);
-      setLoadProblem(null);
-      setState(r.data.length === 0 ? 'EMPTY' : 'READY');
-    } catch (e) {
-      if (e instanceof ApiError) {
-        setLoadProblem(e.problem);
-        setState(stateFromProblem(e.problem));
-      } else setState('TRANSPORT_ERROR');
-    }
-  }, [sellerId]);
+function Row({ item, timezone, onChange }: { item: CourierRelationship; timezone: string | undefined; onChange: () => void }) {
+  const run = useSellerCommand();
+  const action = useAction();
+  const [confirm, setConfirm] = useState(false);
+  const look = LOOK[item.status] ?? { tone: 'neutral' as const, icon: 'circle' as const };
+  const pending = item.status === 'INVITED';
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const invite = async () => {
-    if (!sellerId) return;
-    setFieldError(null);
-    if (!phone.trim()) {
-      setFieldError(en['console.store.couriers.phone_required']);
-      return;
-    }
-    setBusy(true);
-    setProblem(null);
-    try {
-      await api(`/seller/couriers`, {
-        method: 'POST',
-        sellerId,
-        idempotencyKey: inviteKey.current(),
-        body: { phone: phone.trim() },
-      });
-      inviteKey.remint();
-      setPhone('');
-      void load();
-    } catch (e) {
-      if (e instanceof ApiError) setProblem(e);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const remove = async (id: string) => {
-    if (!sellerId) return;
-    setBusy(true);
-    setProblem(null);
-    try {
-      await api(`/seller/couriers/${id}`, { method: 'DELETE', sellerId });
-      setConfirming(null);
-      void load();
-    } catch (e) {
-      if (e instanceof ApiError) setProblem(e);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (state === 'NO_PERMISSION') return null;
-  if (rows === null) {
-    return (
-      <ScreenState
-        state={state}
-        onRetry={() => void load()}
-        {...(loadProblem ? { problem: loadProblem } : {})}
-      />
-    );
+  async function revoke() {
+    const next = await action.run(() => run('couriers.revoke', { relationship_id: item.id }));
+    setConfirm(false);
+    if (next) onChange();
   }
 
-  const fmt = market ? timeFormatter(market) : null;
-
   return (
-    <section aria-labelledby="couriers-heading" data-screen="SC-23" className="couriers">
-      <h1 id="couriers-heading">{en['console.store.couriers.heading']}</h1>
-
-      {problem ? <ProblemBanner problem={problem.problem} /> : null}
-      {state === 'TRANSPORT_ERROR' ? (
-        <p className="problem" role="alert">
-          {en['console.common.refetch_failed']}
-        </p>
-      ) : null}
-      {fieldError ? (
-        <p className="field-error" role="alert">
-          {fieldError}
-        </p>
-      ) : null}
-
-      <section aria-labelledby="invite-heading" className="invite">
-        <h2 id="invite-heading">{en['console.store.couriers.invite_heading']}</h2>
-        <label htmlFor="courier-phone">{en['console.store.couriers.phone']}</label>
-        <input
-          id="courier-phone"
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-        />
-        {/* Their own OTP, never shared credentials (S11). */}
-        <p className="hint">{en['console.store.couriers.own_code']}</p>
-        <button type="button" className="button primary" disabled={busy} onClick={() => void invite()}>
-          {en['console.store.couriers.send_invitation']}
-        </button>
-      </section>
-
-      {rows.length === 0 ? (
-        <div className="empty" data-state="EMPTY">
-          <h3>{en['console.store.couriers.empty_heading']}</h3>
-          <p>{en['console.store.couriers.empty_body']}</p>
+    <li className="ledger-row">
+      <div className="stack">
+        <div className="row-start">
+          <span className="ledger-title">{item.courier_display_name}</span>
+          <Badge tone={look.tone} icon={look.icon}>
+            {label('courier.status', item.status)}
+          </Badge>
         </div>
-      ) : (
+        <p className="ledger-meta">
+          {t('couriers.status_since')} <time dateTime={item.status_at}>{formatInstant(item.status_at, timezone)}</time>
+        </p>
+        <ActionProblem action={action} onReload={onChange} />
+        {item.allowed_actions.includes('REVOKE') ? (
+          <div className="actions">
+            <button type="button" className="btn btn-quiet" onClick={() => setConfirm(true)}>
+              {pending ? t('couriers.withdraw_invitation', { name: item.courier_display_name }) : t('couriers.revoke', { name: item.courier_display_name })}
+            </button>
+          </div>
+        ) : null}
+      </div>
+      <Dialog open={confirm} onClose={() => setConfirm(false)} title={pending ? t('couriers.withdraw_title') : t('couriers.revoke_title')}>
+        <p>{pending ? t('couriers.withdraw_body', { name: item.courier_display_name }) : t('couriers.revoke_body', { name: item.courier_display_name })}</p>
+        <div className="actions">
+          <button type="button" className="btn btn-primary" aria-disabled={action.busy} onClick={() => void revoke()}>
+            {pending ? t('couriers.withdraw_confirm') : t('couriers.revoke_confirm')}
+          </button>
+          <button type="button" className="btn btn-quiet" onClick={() => setConfirm(false)}>
+            {t('couriers.keep')}
+          </button>
+        </div>
+      </Dialog>
+    </li>
+  );
+}
+
+function Invite({ onInvited }: { onInvited: () => void }) {
+  const run = useSellerCommand();
+  const action = useAction();
+  const [phone, setPhone] = useState('');
+  async function invite(event: FormEvent) {
+    event.preventDefault();
+    const next = await action.run(() => run('couriers.invite', { phone }));
+    if (next) {
+      setPhone('');
+      onInvited();
+    }
+  }
+  return (
+    <form onSubmit={(e) => void invite(e)} noValidate className="stack">
+      <h2>{t('couriers.invite_title')}</h2>
+      <ActionProblem action={action} />
+      <Field id="phone" label={t('couriers.phone_label')} hint={t('couriers.phone_hint')} error={action.fields['phone']}>
+        {(control) => <input {...control} className="text-input" type="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} />}
+      </Field>
+      <div className="actions">
+        <button type="submit" className="btn btn-primary" aria-disabled={action.busy}>
+          {t('couriers.invite')}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Courier relationships (CONSOLE-02 S108, FUL-01 S13 and S16, B02B-D02): invite a Courier, see where each invitation stands, revoke.
+ * That is all this release retains. Assigning a Courier to a delivery, handing items over, delivery states and Courier compensation are
+ * deferred, and the server says so (`delivery_execution`), so the Console states it instead of showing any delivery state.
+ */
+export function Couriers() {
+  const { state, retry } = useSellerQuery('couriers.list', {});
+  const market = useSellerQuery('market.context.get', {});
+  const timezone = market.state.status === 'ready' ? market.state.data.timezone : undefined;
+  return (
+    <>
+      <PageTitle title={t('couriers.page')}>{t('couriers.page')}</PageTitle>
+      <StoreNav />
+      <p className="lead">{t('couriers.lead')}</p>
+      {state.status === 'error' ? (
+        <StatePanel kind="danger" alert title={t('couriers.error_title')} actions={<button type="button" className="btn btn-primary" onClick={retry}>{t('state.retry')}</button>}>
+          <p>{t('state.transport_error_body')}</p>
+        </StatePanel>
+      ) : null}
+      {state.status === 'loading' ? <Skeleton rows={3} /> : null}
+      {state.status === 'ready' ? (
         <>
-          <ul className="courier-list">
-            {rows?.map((r) => (
-              <li key={r.id} className="courier-row">
-                <span className="courier-phone">{r.phone}</span>
-                <span className={`badge badge-${r.claimed_at ? 'claimed' : 'pending'}`}>
-                  {r.claimed_at
-                    ? en['console.store.couriers.claimed']
-                    : en['console.store.couriers.pending']}
-                </span>
-                <span className="courier-invited">
-                  {fmt ? fmt.format(new Date(r.invited_at)) : r.invited_at}
-                </span>
-                {confirming === r.id ? (
-                  <span className="confirm-remove">
-                    {/* The consequence, stated BEFORE the second tap. */}
-                    <span className="warn">{en['console.store.couriers.remove_warning']}</span>
-                    <button type="button" className="button" disabled={busy} onClick={() => void remove(r.id)}>
-                      {en['console.store.couriers.remove_confirm']}
-                    </button>
-                    <button type="button" className="button" onClick={() => setConfirming(null)}>
-                      {en['console.store.couriers.remove_cancel']}
-                    </button>
-                  </span>
-                ) : (
-                  <button type="button" className="button" onClick={() => setConfirming(r.id)}>
-                    {en['console.store.couriers.remove']}
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-          {/* D-224: what the wireframe drew and the wire cannot carry --
-              name, assignment count, last activity -- named, not faked. */}
-          <p className="hint">{en['console.store.couriers.columns_owed']}</p>
+          {state.data.delivery_execution === 'UNAVAILABLE' ? (
+            <p className="notice">
+              <Icon name="info" />
+              <span>{t('couriers.execution_unavailable')}</span>
+            </p>
+          ) : null}
+          {state.data.allowed_actions.includes('INVITE') ? <Invite onInvited={retry} /> : null}
+          <section className="section" aria-labelledby="relationships-h">
+            <h2 id="relationships-h">{t('couriers.list_title')}</h2>
+            {state.data.items.length === 0 ? (
+              <p className="empty">{t('couriers.empty')}</p>
+            ) : (
+              <ul className="ledger" aria-label={t('couriers.list_label')} aria-busy={state.refreshing}>
+                {state.data.items.map((c) => (
+                  <Row key={c.id} item={c} timezone={timezone} onChange={retry} />
+                ))}
+              </ul>
+            )}
+            <p className="hint">{t('couriers.capacity_note')}</p>
+          </section>
         </>
-      )}
-    </section>
+      ) : null}
+    </>
   );
 }

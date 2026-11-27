@@ -1,20 +1,38 @@
-/** @type {import('jest').Config} */
+// Jest (DEPLOY-01 S100) through SWC, which, unlike esbuild, emits the decorator metadata Nest's DI reads.
+// unit: src/**/*.spec.ts, no services. integration: test/**/*.int.ts, real PostgreSQL and Valkey (CI services
+// or the disposable target); they FAIL, never skip, when the services are absent.
+const transform = {
+  '^.+\\.ts$': [
+    '@swc/jest',
+    {
+      jsc: {
+        parser: { syntax: 'typescript', decorators: true },
+        transform: { legacyDecorator: true, decoratorMetadata: true },
+        target: 'es2023',
+      },
+      module: { type: 'commonjs' },
+    },
+  ],
+  // ESM-only dependencies that Node 22 loads natively (require(esm)) but Jest's module runtime cannot.
+  '^.+\\.js$': ['@swc/jest', { jsc: { parser: { syntax: 'ecmascript' }, target: 'es2023' }, module: { type: 'commonjs' } }],
+};
+// ESM-only: path-to-regexp@9 (via @fastify/middie) and cookie@2 (via light-my-request). Every other dependency
+// stays untransformed; add a package here only when Jest reports it.
+const ESM_ONLY = '(?:path-to-regexp|cookie)';
+const transformIgnorePatterns = [`/node_modules/(?!\\.pnpm/${ESM_ONLY}@|${ESM_ONLY}/)`];
+
 module.exports = {
-  moduleFileExtensions: ['js', 'json', 'ts'],
-  rootDir: '.',
-  testRegex: '.*\\.spec\\.ts$',
-  transform: { '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json' }] },
-  collectCoverageFrom: ['src/**/*.ts'],
-  coverageDirectory: './coverage',
-  testEnvironment: 'node',
-  // WO-INFRA-012: refuses any database not marked disposable (test/db-target.ts) before a suite runs.
-  globalSetup: '<rootDir>/test/global-setup.ts',
-  // ...and after the last suite, fails the run on any orphan beyond the known test leaks.
-  globalTeardown: '<rootDir>/test/global-teardown.ts',
-  // Every real response is checked against the schema the contract declares for it (test/contract-conformance.ts).
-  setupFilesAfterEnv: ['<rootDir>/test/contract-conformance.ts'],
-  // Tests and hooks alike. The e2e setups build the Nest app and their fixtures through the API;
-  // under parallel workers several exceeded the 5 s default in their beforeAll, failing whole
-  // suites intermittently (ON-20261111-011). Assertions are unaffected.
-  testTimeout: 30_000,
+  projects: [
+    { displayName: 'unit', rootDir: __dirname, testEnvironment: 'node', transform, transformIgnorePatterns, setupFiles: ['reflect-metadata'], testMatch: ['<rootDir>/src/**/*.spec.ts'] },
+    {
+      displayName: 'integration',
+      rootDir: __dirname,
+      testEnvironment: 'node',
+      transform,
+      transformIgnorePatterns,
+      setupFiles: ['reflect-metadata'],
+      testMatch: ['<rootDir>/test/**/*.int.ts'],
+      testTimeout: 60000,
+    },
+  ],
 };

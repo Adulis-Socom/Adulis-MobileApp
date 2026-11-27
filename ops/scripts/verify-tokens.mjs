@@ -1,473 +1,114 @@
 #!/usr/bin/env node
 /**
- * `pnpm verify:tokens` -- the comparator `packages/tokens/README.md` has been
- * asking for since the package stopped being a placeholder:
+ * `pnpm verify:tokens` (ARC-BE-05, RB25-D05) -- the shared token gate for the replacement theme.
  *
- *   "One source would be better than two; until a build step derives one from
- *    the other, A DRIFT BETWEEN THESE FILES IS A DEFECT TO FIX IN BOTH."
- *
- * A rule that depends on someone remembering is a rule that holds until the
- * week someone is busy. This is the comparison, and it exists for the same
- * reason `verify:permission-doc` and `verify:appendix` do: A VALUE GIVEN IN TWO
- * FORMS IS NOT VERIFIED UNTIL A COMPARATOR RUNS. Two forms that nothing
- * compares are two chances to be wrong, not a check.
- *
- * T20 S6.3 made this urgent rather than merely owed. Dark mode DOUBLED the
- * number of places a value can hide, and it did so in the worst possible shape:
- * the dark role values are written TWICE inside tokens.css -- once under
- * `prefers-color-scheme` for the OS default and once under `[data-theme=dark]`
- * for an explicit choice -- because a theme has three states and CSS gives no
- * way to say "these two selectors, one body" without a preprocessor this
- * repository does not have. Two hand-maintained copies of thirty values is a
- * drift waiting for its first hurried edit, and the failure is silent: the
- * toggle and the OS preference would simply disagree, on one machine, for one
- * user, in one direction.
- *
- * FOUR THINGS ARE CHECKED, and the last two are the ones dark mode added:
- *
- *   1. every TS export has its custom property, and every custom property has
- *      its export -- BOTH DIRECTIONS, per group;
- *   2. the VALUES agree;
- *   3. MODE PARITY: colorDark has exactly the keys color has. A dark value with
- *      no light twin is a token no design tool can express as a mode and no
- *      component can switch on (T20 S7.3's Light/Dark collection is precisely
- *      this shape);
- *   4. the two dark blocks in tokens.css are byte-identical to each other.
- *
- * The group table below maps a TS path to a CSS prefix. It is STRUCTURE, not
- * values -- the naming is irregular enough (`font.lineHeight` is
- * `--adu-line-height-*`, not `--adu-font-line-height-*`) that inferring it would
- * be guessing, and a comparator that guesses its own mapping can pass by
- * mapping two wrong things onto each other.
+ *  1. PARITY: every token in packages/tokens/src/index.ts has its custom property in tokens.css and every
+ *     custom property has its token, with the same resolved value (both directions; var() resolved).
+ *  2. CTO PALETTE: the base values are exactly the approved ones.
+ *  3. RETIRED THEME ABSENT: no legacy blue, no dark mode (no colorDark/neutralDark export, no
+ *     prefers-color-scheme or data-theme block).
+ *  4. CONTRAST (WCAG 2.x): every text pair >= 4.5:1, every control/indicator pair >= 3:1, and the two
+ *     forbidden uses (white on lime, the CTO red as text) are proven to FAIL, so the rule is seen to bite.
  */
-
-import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(here, '..', '..');
-const TS = path.join(root, 'packages/tokens/src/index.ts');
-const CSS = path.join(root, 'packages/tokens/tokens.css');
-
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const tsText = readFileSync(path.join(root, 'packages/tokens/src/index.ts'), 'utf8');
+const cssText = readFileSync(path.join(root, 'packages/tokens/tokens.css'), 'utf8');
 const failures = [];
-const pass = (l, d = '') => console.log(`  PASS  ${l}${d ? `  ${d}` : ''}`);
-const fail = (l, d = '') => {
-  console.log(`  FAIL  ${l}${d ? `  ${d}` : ''}`);
-  failures.push(l);
+const pass = (m) => console.log(`  PASS  ${m}`);
+const fail = (m) => {
+  console.log(`  FAIL  ${m}`);
+  failures.push(m);
 };
 
-/**
- * TS export name (and optional nested key) -> the custom-property prefix.
- *
- * T21 S2 ADDED THE LAST FOUR ROWS, AND THE REASON IS THE TABLE ITSELF. This
- * list is hand-maintained, and "both directions" is only true of a property
- * that some row's prefix actually matches: the orphan loop below iterates
- * `table.keys()` filtered by `g.prefix`, so a custom property matched by NO row
- * is visited by no direction of no check. `--adu-focus-ring-*`, `--adu-touch-*`
- * and `--adu-font-family`/`--adu-font-mono` were in exactly that position --
- * declared in tokens.css, exported from index.ts, and compared by nothing.
- *
- * The hole was not theoretical. `focus.ringColor` was `color.accent`, which
- * TypeScript freezes at the LIGHT accent at the point of definition, while
- * tokens.css wrote `var(--adu-color-accent)` and kept the reference live. In
- * dark mode the two files therefore disagreed -- CSS gave the light-on-dark
- * accent (#8ab0ff), TS gave the dark-on-light one (#1e40af), which is a focus
- * ring the colour of the page it sits on. The web surfaces read the CSS and
- * were right; anything reading the TS (React Native has no other source) was
- * wrong, in the mode nobody develops in. See D-271 for that value, and
- * D-272 for this table having been able to hide it.
- */
-const GROUPS = [
-  { export: 'neutral', prefix: '--adu-neutral-', mode: 'light' },
-  { export: 'neutralDark', prefix: '--adu-neutral-', mode: 'dark' },
-  { export: 'color', prefix: '--adu-color-', mode: 'light' },
-  { export: 'colorDark', prefix: '--adu-color-', mode: 'dark' },
-  { export: 'space', prefix: '--adu-space-', mode: 'light' },
-  { export: 'radius', prefix: '--adu-radius-', mode: 'light' },
-  { export: 'font', nested: 'size', prefix: '--adu-font-size-', mode: 'light' },
-  { export: 'font', nested: 'weight', prefix: '--adu-font-weight-', mode: 'light' },
-  { export: 'font', nested: 'lineHeight', prefix: '--adu-line-height-', mode: 'light' },
-  // The font's own top-level keys. `except` hands the three nested groups above
-  // back to their own rows -- without it this row's orphan direction would
-  // report every --adu-font-size-* and --adu-font-weight-* as unexported.
-  {
-    export: 'font',
-    prefix: '--adu-font-',
-    mode: 'light',
-    except: ['--adu-font-size-', '--adu-font-weight-'],
-  },
-  { export: 'touchTarget', prefix: '--adu-touch-', mode: 'light' },
-  { export: 'focus', prefix: '--adu-focus-', mode: 'light' },
-  { export: 'focusDark', prefix: '--adu-focus-', mode: 'dark' },
-];
+const js = ts.transpileModule(tsText, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const T = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
 
-const kebab = (k) => k.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+// --- 1. parity ---------------------------------------------------------------------------------------
+const kebab = (k) => String(k).replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+const expected = new Map();
+for (const [k, v] of Object.entries(T.neutral)) expected.set(`--adu-neutral-${k}`, v);
+for (const [k, v] of Object.entries(T.color)) expected.set(`--adu-color-${kebab(k)}`, v);
+expected.set('--adu-font-family', T.font.family);
+expected.set('--adu-font-mono', T.font.mono);
+for (const [k, v] of Object.entries(T.font.size)) expected.set(`--adu-font-size-${k}`, v);
+for (const [k, v] of Object.entries(T.font.weight)) expected.set(`--adu-font-weight-${k}`, v);
+for (const [k, v] of Object.entries(T.font.lineHeight)) expected.set(`--adu-line-height-${kebab(k)}`, v);
+for (const [k, v] of Object.entries(T.space)) expected.set(`--adu-space-${k}`, v);
+for (const [k, v] of Object.entries(T.radius)) expected.set(`--adu-radius-${k}`, v);
+expected.set('--adu-touch-min', T.touchTarget.min);
+for (const [k, v] of Object.entries(T.focus)) expected.set(`--adu-focus-${kebab(k)}`, v);
 
-/** Collapse whitespace runs to one space, for comparing wrapped font stacks. */
-const flat = (v) => String(v).replace(/\s+/g, ' ').trim();
-
-/** Strip // and block comments so a commented-out value is never read as one. */
-function decomment(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
-}
-
-/** The body of `export const <name> = { ... } as const;` */
-function exportBody(src, name) {
-  const start = src.indexOf(`export const ${name} = {`);
-  if (start < 0) return null;
-  let i = src.indexOf('{', start);
-  let depth = 0;
-  for (let j = i; j < src.length; j += 1) {
-    if (src[j] === '{') depth += 1;
-    else if (src[j] === '}') {
-      depth -= 1;
-      if (depth === 0) return src.slice(i + 1, j);
-    }
-  }
-  return null;
-}
-
-/**
- * Top-level `key: value` pairs, ignoring anything nested.
- *
- * SPLIT ON COMMAS AT DEPTH ZERO, NOT ON LINES. The first draft was line-based
- * and silently mis-read every single-line object -- `weight: { regular: 400,
- * medium: 500, ... }` came back as ONE key whose value was the rest of the
- * line. It then reported the other three as missing from index.ts, which is the
- * comparator accusing the source of its own parsing bug. A comparator that can
- * do that is worse than none: it trains the reader to disbelieve it.
- */
-function pairs(body) {
-  const items = [];
-  let depth = 0;
-  let quote = null;
-  let cur = '';
-  for (const ch of body) {
-    // T21 S2: AND NOT ON COMMAS INSIDE A STRING, which is the same bug one
-    // level down. `font.family` is a font stack -- 'system-ui, -apple-system,
-    // "Segoe UI", ...' -- so a depth-only split cut it into six items and kept
-    // `system-ui` as the whole value. The check then reported a disagreement
-    // between a value and its own first word: the comparator accusing the
-    // source of its own parsing bug, exactly as the comment above describes.
-    // It stayed invisible because until T21 no GROUPS row reached a value
-    // containing a comma.
-    if (quote) {
-      if (ch === quote) quote = null;
-    } else if (ch === "'" || ch === '"') {
-      quote = ch;
-    } else {
-      if (ch === '{' || ch === '[') depth += 1;
-      if (ch === '}' || ch === ']') depth -= 1;
-      if (ch === ',' && depth === 0) {
-        items.push(cur);
-        cur = '';
-        continue;
-      }
-    }
-    cur += ch;
-  }
-  items.push(cur);
-
-  const out = new Map();
-  for (const item of items) {
-    const m = /^\s*'?([A-Za-z0-9_$-]+)'?\s*:\s*([\s\S]+)$/.exec(item.trim());
-    if (!m) continue;
-    const v = m[2].trim();
-    if (v.startsWith('{') || v.startsWith('[')) continue; // nested; handled separately
-    out.set(m[1], v.replace(/^['"]|['"]$/g, ''));
-  }
-  return out;
-}
-
-/**
- * Resolve an index.ts value that NAMES another token rather than stating one:
- * `neutral[500]`, `neutralDark[0]`, `color.accent`, `colorDark.accent`.
- *
- * The bracket form was always here for the ramp. The DOT form is T21 S2's
- * addition and it is the TS-side twin of `resolveCss` below: index.ts writes
- * `ringColor: color.accent` exactly as tokens.css writes
- * `var(--adu-color-accent)`, and a comparator that resolves one side's
- * indirection but not the other reports a disagreement where there is none --
- * which is how the first version of this check read `'color.accent' !==
- * '#1e40af'` and blamed the source for its own blind spot.
- *
- * Resolution is iterative and depth-capped: a token may name a token that names
- * a ramp step, and a cycle must not hang the gate.
- */
-function resolve(value, tables) {
-  let v = value;
-  for (let hop = 0; hop < 4; hop += 1) {
-    const bracket = /^([A-Za-z][A-Za-z0-9_$]*)\[(\d+)\]$/.exec(v);
-    const dot = /^([A-Za-z][A-Za-z0-9_$]*)\.([A-Za-z][A-Za-z0-9_$]*)$/.exec(v);
-    const m = bracket ?? dot;
-    if (!m) return v;
-    const next = tables[m[1]]?.get(m[2]);
-    if (next === undefined || next === v) return v;
-    v = next;
-  }
-  return v;
-}
-
-/**
- * Resolve a CSS value one hop through the ramp, in the given mode.
- *
- * THE INDIRECTION IS THE DESIGN, NOT AN INCONSISTENCY. index.ts writes
- * `bg: neutral[0]`, which TypeScript evaluates to '#ffffff' at the point of
- * definition; tokens.css writes `--adu-color-bg: var(--adu-neutral-0)` and
- * keeps the reference live, which is exactly what lets a dark block redefine
- * eleven ramp values and move every role with them. Comparing the two without
- * resolving both sides reports thirty-eight disagreements where there are none
- * -- which is what the first run of this script did.
- */
-function resolveCss(value, table) {
-  let v = value;
-  for (let hop = 0; hop < 4; hop += 1) {
-    // T21 S2: any --adu-* reference, not just the ramp. The focus ring points
-    // at a ROLE (`var(--adu-color-accent)`), which points at nothing in light
-    // and at an overridden literal in dark -- two hops in one mode, one in the
-    // other. A ramp-only regex saw the outer var() and gave up, so the focus
-    // row could never have been compared even once it was in the table above.
-    const m = /^var\((--adu-[a-z0-9-]+)\)$/.exec(String(v).trim());
-    if (!m) return v;
-    const next = table.get(m[1]);
-    if (next === undefined || next === v) return v;
-    v = next;
-  }
-  return v;
-}
-
-// ---------------------------------------------------------------- read
-const tsSrc = decomment(await readFile(TS, 'utf8'));
-const cssSrc = await readFile(CSS, 'utf8');
-
-/**
- * The index.ts tables a value may NAME. The two ramps were always here; `color`
- * and `colorDark` join them so `focus.ringColor: color.accent` resolves the
- * same way `--adu-focus-ring-color: var(--adu-color-accent)` does on the CSS
- * side. Resolution is per-mode by construction: the light rows resolve through
- * `color`, the dark rows through `colorDark`, because that is what the value
- * literally names.
- */
-const ramps = {
-  neutral: pairs(exportBody(tsSrc, 'neutral') ?? ''),
-  neutralDark: pairs(exportBody(tsSrc, 'neutralDark') ?? ''),
-  color: pairs(exportBody(tsSrc, 'color') ?? ''),
-  colorDark: pairs(exportBody(tsSrc, 'colorDark') ?? ''),
-  // `focusDark` names `focus.ringWidth`/`focus.ringOffset` rather than
-  // restating '2px' twice -- the ring's GEOMETRY does not change with the
-  // theme, only its colour does, and saying so once is the point. Resolving
-  // that reference is this table's job; refusing it would push the source into
-  // duplicating a value to satisfy its own comparator.
-  focus: pairs(exportBody(tsSrc, 'focus') ?? ''),
+const rootBlock = /:root\s*\{([^}]*)\}/.exec(cssText)?.[1] ?? '';
+const declared = new Map([...rootBlock.matchAll(/(--adu-[a-z0-9-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].replace(/\s+/g, ' ').trim()]));
+const resolve = (value, depth = 0) => {
+  const ref = /^var\((--adu-[a-z0-9-]+)\)$/.exec(value);
+  if (!ref || depth > 10) return value;
+  return declared.has(ref[1]) ? resolve(declared.get(ref[1]), depth + 1) : `unresolved ${ref[1]}`;
 };
-
-/** Custom properties declared in a block of CSS text. */
-function cssVars(block) {
-  const out = new Map();
-  for (const m of block.matchAll(/(--adu-[a-z0-9-]+)\s*:\s*([^;]+);/g)) {
-    out.set(m[1], m[2].trim().replace(/\s*\/\*[\s\S]*?\*\/\s*/g, '').trim());
-  }
-  return out;
+const norm = (v) => String(v).replace(/\s+/g, ' ').trim().toLowerCase();
+const before = failures.length;
+for (const [name, value] of expected) {
+  if (!declared.has(name)) fail(`${name} exported by index.ts is missing from tokens.css`);
+  else if (norm(resolve(declared.get(name))) !== norm(value)) fail(`${name}: css ${resolve(declared.get(name))} vs ts ${value}`);
 }
+for (const name of declared.keys()) if (!expected.has(name)) fail(`${name} in tokens.css has no token in index.ts`);
+if (failures.length === before) pass(`parity: ${expected.size} tokens agree between index.ts and tokens.css in both directions`);
 
-/** The `:root { ... }` that opens the file: the light values. */
-function rootBlock(src) {
-  const start = src.indexOf(':root {');
-  const end = src.indexOf('\n}', start);
-  return src.slice(start, end);
-}
+// --- 2. CTO palette ----------------------------------------------------------------------------------
+const CTO = {
+  primary: '#111111', secondary: '#f4f5f7', highlight: '#c4fe29', like: '#ef4444', borderStrong: '#7e8494', border: '#e5e7eb', bg: '#f5f5f7',
+  surface: '#ffffff', textMuted: '#5b6272', danger: '#b91c1c', highlightText: '#111111',
+};
+const ctoWrong = Object.entries(CTO).filter(([role, hex]) => norm(T.color[role]) !== hex);
+if (ctoWrong.length) for (const [role, hex] of ctoWrong) fail(`color.${role} is ${T.color[role]}, the CTO palette says ${hex}`);
+else pass(`CTO palette: ${Object.keys(CTO).length} base and semantic values exact`);
 
-/** The two dark blocks, in source order. */
-function darkBlocks(src) {
-  const blocks = [];
-  for (const m of src.matchAll(/:root:not\(\[data-theme='light'\]\)\s*\{|:root\[data-theme='dark'\]\s*\{/g)) {
-    let depth = 0;
-    const open = src.indexOf('{', m.index);
-    for (let j = open; j < src.length; j += 1) {
-      if (src[j] === '{') depth += 1;
-      else if (src[j] === '}') {
-        depth -= 1;
-        if (depth === 0) {
-          blocks.push(src.slice(open + 1, j));
-          break;
-        }
-      }
-    }
-  }
-  return blocks;
-}
+// --- 3. retired theme absent ------------------------------------------------------------------------
+const LEGACY_BLUE = /#(1e40af|1a3a9c|16327f|eef2ff|c7d2fe|8ab0ff|a4c2ff|bcd3ff|1b2740|33509c)\b/i;
+const retired = [];
+if (LEGACY_BLUE.test(tsText) || LEGACY_BLUE.test(cssText)) retired.push('a legacy blue value');
+for (const name of ['colorDark', 'neutralDark', 'colorModes', 'focusDark', 'focusModes']) if (name in T) retired.push(`export ${name}`);
+if (Object.keys(T.color).some((k) => k.startsWith('accent'))) retired.push('an accent* role');
+if (/prefers-color-scheme|data-theme/.test(cssText)) retired.push('a dark-mode block in tokens.css');
+if (retired.length) for (const r of retired) fail(`retired theme present: ${r}`);
+else pass('retired theme absent: no legacy blue, no accent role, no dark mode');
 
-const light = cssVars(rootBlock(cssSrc));
-const dark = darkBlocks(cssSrc);
-
-// ---------------------------------------------------------------- 4. the two dark blocks
-if (dark.length !== 2) {
-  fail(`expected exactly two dark blocks in tokens.css, found ${dark.length}`);
-} else {
-  const [a, b] = dark.map((d) => [...cssVars(d)].map(([k, v]) => `${k}:${v}`).sort().join('\n'));
-  if (a === b) {
-    pass('the OS-preference and explicit-choice dark blocks declare identical values');
-  } else {
-    fail('the two dark blocks have DRIFTED -- the toggle and the OS preference disagree');
-    const av = cssVars(dark[0]);
-    const bv = cssVars(dark[1]);
-    for (const k of new Set([...av.keys(), ...bv.keys()])) {
-      if (av.get(k) !== bv.get(k)) console.log(`          ${k}: media=${av.get(k) ?? '(absent)'}  explicit=${bv.get(k) ?? '(absent)'}`);
-    }
-  }
-}
-
-// The dark CSS is the union of the light root (roles, declared once as var()
-// references) and whatever the dark blocks override.
-const darkVars = dark.length > 0 ? new Map([...light, ...cssVars(dark[0])]) : light;
-
-// ---------------------------------------------------------------- 1 + 2. both directions, values
-for (const g of GROUPS) {
-  const body = exportBody(tsSrc, g.export);
-  if (body === null) {
-    fail(`export '${g.export}' not found in index.ts`);
-    continue;
-  }
-  const scope = g.nested ? pairs(nestedBody(body, g.nested)) : pairs(body);
-  const table = g.mode === 'dark' ? darkVars : light;
-
-  const missing = [];
-  const wrong = [];
-  for (const [k, rawV] of scope) {
-    const prop = `${g.prefix}${kebab(k)}`;
-    const expected = String(resolve(rawV, ramps));
-    if (!table.has(prop)) {
-      missing.push(`${g.export}.${k} -> ${prop}`);
-      continue;
-    }
-    const actual = String(resolveCss(table.get(prop), table));
-    // Compare on collapsed whitespace. The font stacks are wrapped across lines
-    // in BOTH files, at different columns, by the same formatter that is not
-    // allowed to change their meaning -- a line break inside a comma-separated
-    // list is formatting, not a value. Every other token is a single word, so
-    // this loosens nothing that was previously tight.
-    if (flat(actual) !== flat(expected)) wrong.push(`${prop}: css='${actual}' ts='${expected}'`);
-  }
-  // The other direction, for the groups whose prefix is theirs alone.
-  const orphan = [];
-  if (g.prefix !== '--adu-color-' || g.mode === 'light') {
-    for (const prop of table.keys()) {
-      if (!prop.startsWith(g.prefix)) continue;
-      if (g.except?.some((p) => prop.startsWith(p))) continue;
-      const key = prop.slice(g.prefix.length);
-      if (![...scope.keys()].some((k) => kebab(k) === key)) orphan.push(prop);
-    }
-  }
-
-  const label = `${g.export}${g.nested ? `.${g.nested}` : ''} <-> ${g.prefix}* (${g.mode})`;
-  if (missing.length === 0 && wrong.length === 0 && orphan.length === 0) {
-    pass(label, `${scope.size} values`);
-  } else {
-    fail(label);
-    for (const m of missing) console.log(`          no custom property for  ${m}`);
-    for (const w of wrong) console.log(`          value disagrees         ${w}`);
-    for (const o of orphan) console.log(`          no export for           ${o}`);
-  }
-}
-
-/** `font` holds nested objects; pull one out by name. */
-function nestedBody(body, name) {
-  const start = body.indexOf(`${name}: {`);
-  if (start < 0) return '';
-  let depth = 0;
-  const open = body.indexOf('{', start);
-  for (let j = open; j < body.length; j += 1) {
-    if (body[j] === '{') depth += 1;
-    else if (body[j] === '}') {
-      depth -= 1;
-      if (depth === 0) return body.slice(open + 1, j);
-    }
-  }
-  return '';
-}
-
-// ---------------------------------------------------------------- 3. mode parity
-const lightKeys = [...pairs(exportBody(tsSrc, 'color') ?? '').keys()].sort();
-const darkKeys = [...pairs(exportBody(tsSrc, 'colorDark') ?? '').keys()].sort();
-if (lightKeys.join(',') === darkKeys.join(',')) {
-  pass('mode parity: colorDark has exactly the keys color has', `${lightKeys.length} roles`);
-} else {
-  fail('mode parity broken: a role exists in one mode and not the other');
-  for (const k of lightKeys.filter((k) => !darkKeys.includes(k))) console.log(`          light only: ${k}`);
-  for (const k of darkKeys.filter((k) => !lightKeys.includes(k))) console.log(`          dark only:  ${k}`);
-}
-
-// ---------------------------------------------------------------- 5. contrast (DS-TOK-01, B02-D04)
-// The CTO palette is only safe if its pairs stay readable. WCAG 2.x, computed from the RESOLVED
-// index.ts values in BOTH modes (never copies). Text 4.5:1, non-text 3:1. A new role, or a changed
-// value, that stops clearing its target fails here, in the gate, not in a screenshot review.
-function lum(hex) {
-  const n = hex.replace('#', '');
-  const c = [0, 2, 4].map((i) => parseInt(n.slice(i, i + 2), 16) / 255);
-  const l = c.map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2];
-}
+// --- 4. contrast ------------------------------------------------------------------------------------
+const lum = (hex) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
 const ratio = (a, b) => {
-  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
-  return (hi + 0.05) / (lo + 0.05);
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
 };
-const resolved = (name) =>
-  new Map([...ramps[name]].map(([k, val]) => [k, String(resolve(val, ramps))]));
-const modes = { light: resolved('color'), dark: resolved('colorDark') };
-const TEXT = 4.5;
-const NONTEXT = 3;
-const CONTRAST_PAIRS = [
-  ['text', 'bg', TEXT], ['text', 'surface', TEXT], ['text', 'surfaceMuted', TEXT],
-  ['textSecondary', 'bg', TEXT], ['textSecondary', 'surface', TEXT], ['textSecondary', 'surfaceMuted', TEXT],
-  ['textMuted', 'bg', TEXT], ['textMuted', 'surface', TEXT], ['textMuted', 'surfaceMuted', TEXT],
-  ['borderStrong', 'bg', NONTEXT], ['borderStrong', 'surface', NONTEXT], ['borderStrong', 'surfaceMuted', NONTEXT],
-  ['primaryText', 'primary', TEXT], ['primaryText', 'primaryHover', TEXT], ['primaryText', 'primaryActive', TEXT],
-  ['secondaryText', 'secondary', TEXT], ['secondaryText', 'secondaryHover', TEXT], ['secondaryText', 'secondaryActive', TEXT],
-  ['highlightText', 'highlight', TEXT], ['highlightText', 'highlightHover', TEXT], ['highlightText', 'highlightActive', TEXT],
-  ['highlightBorder', 'bg', NONTEXT], ['highlightBorder', 'surface', NONTEXT],
-  ['danger', 'bg', TEXT], ['danger', 'surface', TEXT], ['danger', 'dangerBg', TEXT],
-  ['like', 'bg', NONTEXT], ['like', 'surface', NONTEXT],
-  ['dangerSolid', 'bg', NONTEXT], ['dangerSolid', 'surface', NONTEXT],
+if (Math.abs(ratio('#000000', '#ffffff') - 21) > 0.01) fail('contrast formula self-check (black on white must be 21:1)');
+const c = T.color;
+const TEXT = [
+  ['text', 'bg'], ['text', 'surface'], ['textSecondary', 'bg'], ['textSecondary', 'surface'], ['textMuted', 'bg'], ['textMuted', 'surface'], ['textMuted', 'surfaceMuted'],
+  ['primaryText', 'primary'], ['primaryText', 'primaryHover'], ['primaryText', 'primaryActive'], ['secondaryText', 'secondary'], ['secondaryText', 'secondaryHover'], ['secondaryText', 'secondaryActive'],
+  ['highlightText', 'highlight'], ['highlightText', 'highlightHover'], ['highlightText', 'highlightActive'],
+  ['danger', 'surface'], ['danger', 'bg'], ['danger', 'dangerBg'], ['success', 'surface'], ['success', 'successBg'], ['warn', 'surface'], ['warn', 'warnBg'], ['info', 'surface'], ['info', 'infoBg'],
 ];
-// PRE-EXISTING, not introduced by DS-TOK-01: the dark theme's textMuted (#8b8478) on surfaceMuted (#26231e) is
-// 4.23:1. The dark theme is not in this work order's scope (B02-D03 adds no dark theme), so it is named here,
-// printed on every run, and registered (B2-013) rather than silently fixed or silently skipped.
-const KNOWN_DEBT = new Set(['dark:textMuted/surfaceMuted']);
-const knownDebt = [];
-const lowContrast = [];
-let measured = 0;
-for (const [mode, table] of Object.entries(modes)) {
-  const ringTable = { light: ramps.focus, dark: pairs(exportBody(tsSrc, 'focusDark') ?? '') }[mode];
-  const ring = String(resolve(ringTable.get('ringColor') ?? '', { ...ramps, focus: ringTable }));
-  const roles = new Map([...table, ['focusRing', ring]]);
-  // The ring is drawn 2px OFF the control, so it is read against the page or a surface, never against the
-  // control's own fill (lime included); that is why there is no focusRing-on-highlight pair.
-  const all = [...CONTRAST_PAIRS, ['focusRing', 'bg', NONTEXT], ['focusRing', 'surface', NONTEXT]];
-  for (const [fg, bgName, need] of all) {
-    const a = roles.get(fg);
-    const b = roles.get(bgName);
-    if (!/^#[0-9a-f]{6}$/i.test(a ?? '') || !/^#[0-9a-f]{6}$/i.test(b ?? '')) {
-      lowContrast.push(`${mode}: ${fg} on ${bgName} is not two resolvable hex colours (${a} / ${b})`);
-      continue;
-    }
-    measured += 1;
-    const r = ratio(a, b);
-    if (r < need && KNOWN_DEBT.has(`${mode}:${fg}/${bgName}`)) { knownDebt.push(`${mode}: ${fg} on ${bgName} = ${r.toFixed(2)}:1`); continue; }
-    if (r < need) lowContrast.push(`${mode}: ${fg} (${a}) on ${bgName} (${b}) = ${r.toFixed(2)}:1, needs ${need}:1`);
-  }
-}
-if (lowContrast.length === 0) {
-  pass('contrast: every declared pair clears its target in both modes', `${measured} pairs`);
-  for (const d of knownDebt) console.log(`          known pre-existing exemption (B2-013): ${d}`);
-} else {
-  fail('contrast: a declared pair no longer clears its target');
-  for (const l of lowContrast) console.log(`          ${l}`);
-}
+const NON_TEXT = [['borderStrong', 'bg'], ['borderStrong', 'surface'], ['highlightBorder', 'bg'], ['highlightBorder', 'surface'], ['like', 'bg'], ['like', 'surface'], ['dangerSolid', 'surface']];
+const pairs = [
+  ...TEXT.map(([fg, bg]) => [`text ${fg} on ${bg}`, c[fg], c[bg], 4.5]),
+  ...NON_TEXT.map(([fg, bg]) => [`non-text ${fg} on ${bg}`, c[fg], c[bg], 3]),
+  ...['bg', 'surface', 'highlight', 'secondary'].map((s) => [`focus ring on ${s}`, T.focus.ringColor, c[s], 3]),
+];
+for (const [label, fg, bg, min] of pairs) if (ratio(fg, bg) < min) fail(`${label}: ${ratio(fg, bg).toFixed(2)}:1 < ${min}`);
+// The forbidden uses must be measured as failing, or the rules above prove nothing.
+if (ratio('#ffffff', c.highlight) >= 4.5) fail('white on lime unexpectedly passes: the highlightText rule is not biting');
+if (ratio(c.like, c.surface) >= 4.5) fail('the CTO red passes as text: re-check the like/danger split');
+if (!failures.some((f) => f.includes(' on '))) pass(`contrast: ${pairs.length} pairs clear their targets; white-on-lime and red-as-text measured as failing`);
 
-console.log(
-  failures.length === 0
-    ? '\nPASS  index.ts and tokens.css agree, in both modes and both directions.\n'
-    : `\nFAIL  ${failures.length} token disagreement(s).\n`,
-);
-process.exit(failures.length === 0 ? 0 : 1);
+if (failures.length) {
+  console.log(`verify:tokens: ${failures.length} failure(s)`);
+  process.exit(1);
+}
+console.log('verify:tokens: ok');

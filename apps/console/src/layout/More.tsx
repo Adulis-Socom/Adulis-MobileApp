@@ -1,87 +1,59 @@
-/**
- * layout/More.tsx -- the fifth destination's full-page menu (v1.2 S2.1/S2.3):
- * Insights, Store, Settings, Billing. A full page, not a drawer that traps
- * focus.
- *
- * S2.3's table carries v1.0-era screen NUMBERS (SC-20 Identity, SC-25
- * Sessions...); the group F/G table and the section headers carry the v1.2
- * numbering, and names win over stale numbers -- the entries here are the
- * NAMES, mapped to the routes this router serves. Payout appears under no
- * S2.3 section at all (a doc gap, register D-224); it sits under Billing
- * beside Subscription as the minimal reading, recorded rather than silent.
- *
- * Insights' three screens are C-7 and route to placeholders -- the D-146
- * lesson: a menu entry that silently returns you to Home teaches that the
- * menu is decorative, so the placeholder says what it is instead.
- */
-import { Link, useParams } from 'react-router';
-import { en } from '@adulis/locale';
+import { Link } from 'react-router';
+import { Icon } from '../components/Icon';
+import { PageTitle } from '../components/PageTitle';
+import { t } from '../i18n/t';
+import { can, navFor, sellerPath } from '../seller/access';
+import { useSeller } from '../seller/context';
 
-interface Entry {
-  readonly to: string;
-  readonly label: string;
-}
-interface Group {
-  readonly heading: string;
-  readonly entries: readonly Entry[];
-}
-
-const GROUPS: readonly Group[] = [
-  {
-    heading: en['console.more.insights'],
-    entries: [
-      { to: 'insights', label: en['console.more.analytics'] },
-      { to: 'insights/trust', label: en['console.more.trust'] },
-      { to: 'insights/reviews', label: en['console.more.reviews'] },
-    ],
-  },
-  {
-    heading: en['console.more.store'],
-    entries: [
-      { to: 'profile', label: en['console.more.profile'] },
-      { to: 'fulfilment', label: en['console.more.fulfilment'] },
-      { to: 'availability', label: en['console.more.availability'] },
-      { to: 'eligibility', label: en['console.more.identity'] },
-      { to: 'couriers', label: en['console.more.couriers'] },
-    ],
-  },
-  {
-    heading: en['console.more.settings'],
-    entries: [
-      { to: 'sessions', label: en['console.more.sessions'] },
-      { to: 'notification-preferences', label: en['console.more.notifications'] },
-      { to: 'team', label: en['console.more.team'] },
-      { to: 'closure', label: en['console.more.closure'] },
-    ],
-  },
-  {
-    heading: en['console.more.billing'],
-    entries: [
-      { to: 'subscription', label: en['console.more.subscription'] },
-    ],
-  },
-];
-
+/** "More" on the narrow layout: everything the bottom bar does not carry, with the reason beside any disabled entry. */
 export function More() {
-  const { sellerId } = useParams<{ sellerId: string }>();
+  const { sellerId, access } = useSeller();
+  const nav = navFor(access);
   return (
-    <section aria-labelledby="more-heading" className="more-menu">
-      <h1 id="more-heading">{en['console.nav.more']}</h1>
-      {GROUPS.map((g) => (
-        <section key={g.heading} aria-label={g.heading} className="more-group">
-          <h2>{g.heading}</h2>
-          <ul>
-            {g.entries.map((e) => (
-              <li key={e.to}>
-                <Link to={`/s/${sellerId}/${e.to}`}>{e.label}</Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
-    </section>
+    <>
+      <PageTitle title={t('more.title')}>{t('more.title')}</PageTitle>
+      <p className="lead">{t('more.lead')}</p>
+      <ul className="ledger">
+        {nav.more.map((item) =>
+          item.access === 'NO_ENTITLEMENT' ? (
+            <li key={item.meta.key} className="ledger-row">
+              <span className="ledger-main">
+                <span className="ledger-title">{t(item.meta.label)}</span>
+                <span className="ledger-meta">{t('nav.entitlement_reason')}</span>
+              </span>
+            </li>
+          ) : (
+            <li key={item.meta.key}>
+              <Link className="ledger-link" to={sellerPath(sellerId, item.meta.path)}>
+                <span className="ledger-main">
+                  <span className="ledger-title">{t(item.meta.label)}</span>
+                </span>
+                <Icon name="arrow" />
+              </Link>
+            </li>
+          ),
+        )}
+        {can(access, 'chatbot.read') ? (
+          <li>
+            <Link className="ledger-link" to={sellerPath(sellerId, 'inbox/automation')}>
+              <span className="ledger-main">
+                <span className="ledger-title">{t('auto.title')}</span>
+              </span>
+              <Icon name="arrow" />
+            </Link>
+          </li>
+        ) : null}
+        {can(access, 'notifications.view') ? (
+          <li>
+            <Link className="ledger-link" to={sellerPath(sellerId, 'notifications')}>
+              <span className="ledger-main">
+                <span className="ledger-title">{t('topbar.notifications')}</span>
+              </span>
+              <Icon name="arrow" />
+            </Link>
+          </li>
+        ) : null}
+      </ul>
+    </>
   );
 }
-
-/** The same groups, for the desktop sidebar's expanded More (S2.1). */
-export const MORE_GROUPS = GROUPS;

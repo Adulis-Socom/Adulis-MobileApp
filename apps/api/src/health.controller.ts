@@ -1,113 +1,59 @@
-import { Controller, Get, Res, HttpStatus, Inject } from '@nestjs/common';
-import type { Response } from 'express';
-import { Kysely, sql } from 'kysely';
-import { Public } from './common/auth/auth.guard';
-import { pingDatabase } from './common/db/database';
-import { APP_DATABASE } from './common/db/database.module';
-import type { Database } from './common/db/database.types';
-import { HEARTBEAT_STALE_AFTER_SECONDS } from './jobs/heartbeat';
+import { Controller, Get, Inject, Res, type BeforeApplicationShutdown } from '@nestjs/common';
+import { ApiOkResponse, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
+import type { FastifyReply } from 'fastify';
+import type { Pool } from 'pg';
+import { Public } from './platform/auth';
 
-export interface HealthResponse {
-  status: 'ok' | 'degraded';
-  db: 'up' | 'down';
-  worker: 'up' | 'stale' | 'never_started';
-  worker_last_beat_at?: string | null;
-  /**
-   * T11 Phase 1 -- process identity, not liveness. The console-e2e gate mints
-   * a marker per run and passes it as ADULIS_BOOT_MARKER; this echoes it back
-   * so the gate can prove the /healthz that answered is THE PROCESS IT
-   * SPAWNED. The gate's first outing ran sixteen tests against a zombie from
-   * a previous run, and /healthz answering was read as a healthy start
-   * (D-160): "is it up?" and "is MY one up?" are different questions, and
-   * this field answers the second. Null outside the harness; additive, so no
-   * client changes (ADU-API-01's additive-compatibility rule).
-   */
-  boot_marker?: string | null;
-}
+export const PG_POOL = Symbol('PG_POOL');
+const READINESS_TIMEOUT_MS = 2_000;
+const statusSchema = (value: string) => ({ type: 'object', required: ['status'], properties: { status: { type: 'string', enum: [value] } } });
 
 /**
- * ADU-CON-02 v3.0 sections 15, 18 and 20.2.
- *
- * `db` is a real SELECT 1, not a cached flag: section 20.2 puts an uptime
- * ping on this endpoint so a database the API cannot reach pages a human,
- * and section 18's Render topology names /healthz as the API health check,
- * so a 503 here is what stops a bad instance taking traffic.
- *
- * `worker` is the section 20.2 heartbeat, live since T4. "A worker heartbeat
- * row every 5 minutes; /healthz reddens when stale — A DEAD WORKER IS
- * DISCOVERED BY US, NOT BY 48-HOUR-OLD UNEXPIRED ORDERS." That sentence is
- * the whole reason this check exists: the worker holds the reservation
- * clock, and its silence has no other symptom until a seller notices.
- *
- * DECIDED (T4, register D-51) — A STALE WORKER REDDENS THE BODY, NOT THE
- * STATUS CODE. Sections 20.2 and 18 give this one endpoint two jobs that
- * conflict exactly here: 20.2 wants it to go red when the worker dies, and
- * 18 makes a 503 the signal that "stops a bad instance taking traffic". A
- * 503 for a dead WORKER would pull every healthy API instance out of
- * rotation and turn "orders stop expiring" into "the storefront is down" —
- * a strictly worse outcome, and one caused by the monitoring rather than the
- * fault. So the status code answers only "can this instance serve?", and
- * `status: "degraded"` with `worker: "stale"` is what the uptime check
- * alarms on. Recorded for ADU-CON-02's next reissue.
+ * DEPLOY-01 S30-S31: minimal unauthenticated liveness and readiness. Readiness is PostgreSQL accepting
+ * canonical writes (reachable, not a read-only standby) and the process not draining. The rebuildable cache is
+ * deliberately NOT a readiness input. No hostname, URL, schema or secret state ever appears in a response.
  */
+@ApiTags('health')
 @Controller()
-export class HealthController {
-  constructor(@Inject(APP_DATABASE) private readonly db: Kysely<Database>) {}
+export class HealthController implements BeforeApplicationShutdown {
+  private draining = false;
 
-  /**
-   * @Public IS LOAD-BEARING, and its absence was a live defect (register
-   * D-79). The AuthGuard is APP_GUARD-global, so without this decorator
-   * /healthz answers 401 SESSION_EXPIRED in the assembled application --
-   * and section 18 makes this the route Render polls, with no Authorization
-   * header, to decide whether an instance may take traffic. Every instance
-   * would have been marked unhealthy and no deploy would ever have gone
-   * live.
-   *
-   * It went unseen because BOTH tests built a standalone module
-   * (DatabaseModule + this controller) where no global guard exists. The
-   * assertion that defends it now is in
-   * apps/api/test/t6-parked-decisions.spec.ts, against the real AppModule.
-   *
-   * Public means AUTH-OPTIONAL, never auth-ignored: a caller who presents a
-   * dead token is still refused. Render presents none.
-   */
+  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+
   @Public()
-  @Get('/healthz')
-  async healthz(@Res() res: Response): Promise<void> {
-    const up = await pingDatabase(this.db);
-    if (!up) {
-      const down: HealthResponse = { status: 'degraded', db: 'down', worker: 'never_started' };
-      res.status(HttpStatus.SERVICE_UNAVAILABLE).json(down);
-      return;
-    }
+  @Get('livez')
+  @ApiOkResponse({ description: 'The process is running.', schema: statusSchema('ok') })
+  livez(): { status: 'ok' } {
+    return { status: 'ok' };
+  }
 
-    let worker: HealthResponse['worker'] = 'never_started';
-    let lastBeat: string | null = null;
+  @Public()
+  @Get('healthz')
+  @ApiOkResponse({ description: 'Ready to serve normal traffic.', schema: statusSchema('ok') })
+  @ApiServiceUnavailableResponse({ description: 'Not ready: database unavailable or read-only, or draining.', schema: statusSchema('unavailable') })
+  async healthz(@Res({ passthrough: true }) reply: FastifyReply): Promise<{ status: 'ok' | 'unavailable' }> {
+    if (!this.draining && (await this.writable())) return { status: 'ok' };
+    void reply.status(503);
+    return { status: 'unavailable' };
+  }
+
+  beforeApplicationShutdown(): void {
+    this.draining = true;
+  }
+
+  private async writable(): Promise<boolean> {
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(false), READINESS_TIMEOUT_MS);
+    });
+    const probe = this.pool.query('select not pg_is_in_recovery() as writable').then(
+      (r) => (r.rows[0] as { writable: boolean } | undefined)?.writable === true,
+      () => false,
+    );
     try {
-      const beat = await sql<{ beat_at: Date; stale: boolean }>`
-        SELECT beat_at,
-               now() > beat_at + make_interval(secs => ${HEARTBEAT_STALE_AFTER_SECONDS}) AS stale
-          FROM jobs.worker_heartbeat`.execute(this.db);
-      const row = beat.rows[0];
-      if (row) {
-        lastBeat = row.beat_at.toISOString();
-        worker = row.stale ? 'stale' : 'up';
-      }
-    } catch {
-      // A readable database with an unreadable heartbeat is still a
-      // degraded system, and saying so is better than pretending the
-      // worker is fine — but it must not be reported as a DB outage.
-      worker = 'never_started';
+      return await Promise.race([probe, timeout]);
+    } finally {
+      clearTimeout(timer);
     }
-
-    const body: HealthResponse = {
-      status: worker === 'up' ? 'ok' : 'degraded',
-      db: 'up',
-      worker,
-      boot_marker: process.env['ADULIS_BOOT_MARKER'] ?? null,
-      worker_last_beat_at: lastBeat,
-    };
-    // 200 even when degraded: this instance can serve. See the DECIDED note.
-    res.status(HttpStatus.OK).json(body);
   }
 }

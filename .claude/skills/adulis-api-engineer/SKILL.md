@@ -6,7 +6,7 @@ allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "CEO-backend"
   priority: "P0"
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Adulis API Engineer
@@ -18,7 +18,9 @@ Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` fr
 
 ## Current MVP constraints — 24 November 2026
 
-Target NestJS/Fastify + PostgreSQL/Drizzle; current Express/Kysely until authorized migration. Preserve named SQL functions, transaction-local scope, errors, idempotency and wire compatibility. Stories use server-owned expiry and same-Seller/Market validation. No payment or real paid commerce. Frontend work does not authorize API changes. The Reservation model is RETIRED (B02B-D01): add no Reservation endpoint, database-function call, job or DTO field; a retired operation fails closed and is never extended; drain-only workers keep releasing historical holds.
+Target NestJS/Fastify + PostgreSQL/Drizzle; current Express/Kysely until authorized migration. Preserve named SQL functions, transaction-local scope, errors, idempotency and wire compatibility. Stories use server-owned expiry and same-Seller/Market validation. No payment or real paid commerce. Frontend work does not authorize API changes. The Reservation model is RETIRED (B02B-D01): add no Reservation endpoint, database-function call, job or DTO field; a retired operation fails closed and is never extended; drain-only workers keep releasing historical holds. CLEAN REBUILD (RB25-D01): in the replacement lineage the API is NestJS on Fastify from the Stage B skeleton; no Express or Kysely runtime and no import of a legacy module; unreleased legacy contracts need no compatibility (pre-launch). What carries: the problem shape, idempotency, transaction-local scope and named SQL functions for invariants. No business endpoint before its assigned stage.
+
+REPLACEMENT FOUNDATION (Batch 01B, `apps/api/CLAUDE.md`): routes live under `/v1` in a module of `apps/api/src`; every route is `@Public()` or `@Audiences(...)` (the global AccessGuard denies everything else, and the only Authenticator is 'nobody' until AUTH-02); bodies are validated with `ZodPipe`; errors are `AdulisException` codes from the CLOSED catalogue in `src/platform/problem.ts`, each with its `error.<group>.<code>` key in `@adulis/locale`; cross-domain facts leave only through `appendEvent(tx, ...)` in the owner's transaction; no `console.*`. Contract changes reach clients only through `pnpm verify:contract` in Rebuild CI. Kysely and Express references below describe the ARCHIVED lineage.
 
 ## Governing sources (legacy executable references unless noted)
 - `ADU-API-01_API_Contract_v1_11_ASCII.md` — wire authority.

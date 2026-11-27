@@ -70,7 +70,8 @@ identify the governing ADU document and read `.claude/reference/DOCUMENT_AUTHORI
   checkout is Option A (real Cart, review only, never submits) plus Option C (isolated,
   development-only simulation); Seller Stories are in the MVP; the whole of Ethiopia is the
   first active Market; the build order is one surface at a time, frontend then backend,
-  Seller Console first. The legacy payment code that still exists is **not** approved
+  Seller Console first (scheduling amended by RB27-D01..D08, effective on its merge: two
+  controlled lanes, one surface at a time PER LANE). The legacy payment code that still exists is **not** approved
   behaviour: do not extend it, and do not delete it without a work order.
 - **Never invent an answer to an open product, database, API, legal, security or
   infrastructure question.** Report the gap; do not fill it.
@@ -198,6 +199,24 @@ rather than kept as placeholders.
   remove it, and keep every SQL migration, function and RLS policy as written. The old K-3
   and K-8 "awaiting a founder ruling" wording is superseded by those decisions; the
   migration itself stays unauthorised.
+- **Clean rebuild lineage (25 November 2026, RB25-D01..D11,
+  `docs/amendments/REBUILD-2026-11-25-CLEAN-LINEAGE.md`).** The founder directs a clean replacement, not
+  an in-place migration. On the rebuild integration branch `rebuild/2026-11-25` the paragraph
+  above describes the ARCHIVED legacy lineage only (dev 64d2e8c, migrations 0001-0062, draft #191's
+  0063). The replacement lineage builds the target stack clean in Stage B (ARC-BE-01..06) only after
+  Batch 01A is accepted, with its own migrations and gates; it never points at `adulis-postgres`,
+  copies no real data, and contains no Express, Kysely, Graphile Worker or node-pg-migrate runtime,
+  no Reservation, legacy Order, payment, handoff or payout model, and no paid-commerce placeholder
+  table. The mechanics in this section (transaction-local `set_config`, the generated-file rule, the
+  load-bearing absences, no secrets) carry into the replacement unchanged. The same applies to
+  every workstream CLAUDE.md on the rebuild branch: the migration discipline in `apps/api/CLAUDE.md`
+  (node-pg-migrate pinning, `pnpm db:migrate`, Appendix C) and its fixed table and enum counts, and
+  the `db:migrate`/seed steps in `apps/console/CLAUDE.md`, describe the archived lineage only until
+  each file is rewritten with its replacement app (ARC-BE-02, SC-FE-01); the replacement asserts no
+  table counts (ARC-BE-03). Since Batch 01B the rebuild branch's ACTIVE workspace is `apps/api` and
+  `packages/*` only (`pnpm-workspace.yaml`); `apps/api/CLAUDE.md` is rewritten for the replacement; the
+  legacy gates, `ops/scripts/gates.mjs`, the Prism mock (`pnpm mock:api`) and `.github/workflows/ci.yml` are
+  archived; replacement verification is `.github/workflows/rebuild-ci.yml` (see `docs/rebuild/README.md`).
 
 ## Collision surfaces (§6)
 
@@ -221,6 +240,17 @@ starts from the current verified `origin/dev` on its own `<track>/<work-order>` 
 `dev`, and is merged only with CI green. Historical branches are preserved, never deleted or rewritten, and
 never used as a starting point. Automated tests never use a persistent database or object store. Full policy:
 `docs/engineering/DEVELOPMENT-BRANCH-POLICY.md`.
+
+**Rebuild lineage, RB26-D01 (26 November 2026):** work-order PRs integrate into `rebuild/2026-11-25`; each ACCEPTED surface milestone
+(SC-FE-12, SC-BE-08, MOB-FE-12, MOB-BE-09, SF-FE-07, SF-BE-05, OP-FE-09, OP-BE-07, REL-08) is promoted into `dev` by a normal reviewed PR
+with every required check, no second approval needed for the merge. First promotion after SC-FE-12:
+`docs/rebuild/DEV-PROMOTION-PROCEDURE.md`. It is not launch, deployment or database authorisation, and never touches `main`.
+
+**Controlled parallel execution, RB27-D01..D08 (27 November 2026, effective only on the founder's merge of its PR):** Lane 1 = Seller
+Console FE then BE (unchanged branches into `rebuild/2026-11-25`); Lane 2 = Mobile, then Storefront, then Operator frontends, integrating
+into its own lane branch (`rebuild/l2-mobile`, ...), with their backends only after all three frontends are accepted. A root coordinator
+alone writes shared resources (API/schema/migrations/events/auth, generated contract and client, tokens, locale, workspace, lockfile, CI,
+governance). `docs/amendments/REBUILD-2026-11-27-CONTROLLED-PARALLEL-EXECUTION.md`, `docs/rebuild/GOV-PARALLEL-01-EXECUTION-CONTROLS.md`.
 
 ## Development storage (every work order)
 

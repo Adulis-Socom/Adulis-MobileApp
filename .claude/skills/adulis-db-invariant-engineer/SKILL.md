@@ -6,7 +6,7 @@ allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "CEO-backend"
   priority: "P0"
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Adulis DB Invariant Engineer
@@ -18,7 +18,9 @@ Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` fr
 
 ## Current MVP constraints — 24 November 2026
 
-Drizzle is the approved target, not authority to bypass PostgreSQL constraints, RLS or named SQL functions. Preserve transaction-local set_config and migration history. PostgreSQL durable truth; Valkey rebuildable coordination/cache. Story/Scene eligibility is server-owned, same-Seller/Market and fail-closed; expiry independent of delayed jobs. No new financial state or DDL outside authorized work orders. The Reservation model is RETIRED (B02B-D01): add no Reservation constraint, trigger or function; physical retirement is a controlled forward migration with a manifest, never a rewrite of applied migrations, a dropped table or deleted stock/audit history.
+Drizzle is the approved target, not authority to bypass PostgreSQL constraints, RLS or named SQL functions. Preserve transaction-local set_config and migration history. PostgreSQL durable truth; Valkey rebuildable coordination/cache. Story/Scene eligibility is server-owned, same-Seller/Market and fail-closed; expiry independent of delayed jobs. No new financial state or DDL outside authorized work orders. The Reservation model is RETIRED (B02B-D01): add no Reservation constraint, trigger or function; physical retirement is a controlled forward migration with a manifest, never a rewrite of applied migrations, a dropped table or deleted stock/audit history. CLEAN REBUILD (RB25-D01/D04): those preservation rules bind the ARCHIVED legacy lineage and its database. In the replacement lineage, 'migration history' means the replacement's own chain; model only active domains as their stage arrives; no Reservation, legacy Order family, payment, payout, handoff or paid-commerce placeholder table; invariants still live in PostgreSQL (constraints, RLS, functions).
+
+REPLACEMENT FOUNDATION (Batch 01B): roles `adulis_migrator` (owner), `adulis_api`, `adulis_worker`, none superuser or BYPASSRLS; `withRequestContext` in `apps/api/src/db/client.ts` sets the three settings with `set_config(..., true)` first; RLS policies key on `current_setting('adulis.account_id', true)` (pattern proven in `test/roles-and-rls.int.ts`); the eventing tables are `platform.*` with an immutability trigger on outbox facts. New domain invariants arrive with their domain migration, never as placeholders.
 
 ## Governing sources (legacy executable references unless noted)
 - `ADU-DB-01_Database_and_Data_Model_v1_27_ASCII.md` — primary.

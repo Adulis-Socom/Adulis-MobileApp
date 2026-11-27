@@ -6,10 +6,12 @@ allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "COO-CTO-frontend"
   priority: "P0"
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Adulis API Client
+
+REPLACEMENT FOUNDATION (Batch 01B): `contracts/openapi.json` is generated from the replacement API and today holds only `/livez` and `/healthz`; `packages/api-client/src/schema.d.ts` is generated from it; both are committed from the Rebuild CI `generated-contract` artifact and checked by `pnpm verify:contract`. The Prism mock (`pnpm mock:api`) is archived. A missing endpoint is GAP-RB-06: use the typed fixture port (GOV-06), never a hand-written DTO.
 
 
 ## Shared source protocol

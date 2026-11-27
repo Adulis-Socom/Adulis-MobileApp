@@ -1,5 +1,11 @@
 # @adulis/tokens
 
+> **Replacement theme (ARC-BE-05, RB25-D05).** The CTO palette, **light only**: the dark mode and the
+> legacy blue accent are not part of the active theme (archive: tag `recovery/legacy-dev-20261125`).
+> Action roles are `primary`, `secondary` and `highlight` (lime, one standout action per screen, dark text).
+> The `info` triple is the approved neutral role, #333846 on #F4F5F7 (RB25-D14). `pnpm verify:tokens`
+> checks TS/CSS parity both ways, the exact CTO values, the retired theme's absence and every contrast pair.
+
 Design tokens shared by the console, the mobile app and the public website.
 
 **Real, since T14 Part B.** The placeholder ("no tokens are defined here")

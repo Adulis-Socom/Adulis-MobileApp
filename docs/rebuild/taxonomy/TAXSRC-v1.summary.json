@@ -1,0 +1,8448 @@
+{
+ "manifest_version": "TAXSRC-v1-summary",
+ "created": "2026-11-26",
+ "status": "SUBMITTED, UNRATIFIED. Source facts only; nothing here establishes required/searchable/filterable/variant-defining.",
+ "source_archive": {
+  "path": "G:/AdulisDevelopment/Inputs/Taxonomy/Adulis taxonomy.zip",
+  "sha256": "377aba802a39b0b37c4066cb37254fe01184c80bea787336f3607492147c47a9",
+  "expected_sha256": "377aba802a39b0b37c4066cb37254fe01184c80bea787336f3607492147c47a9",
+  "fingerprint_matches_expected": true,
+  "note": "file is named \"Adulis taxonomy.zip\" on disk, not \"... - Copy.zip\"; content hash is identical to the expected one"
+ },
+ "counts": {
+  "xlsx_entries": 77,
+  "valid_workbooks": 76,
+  "by_class": {
+   "MAJOR_CATEGORIES": 1,
+   "CMO_CATEGORY_LIST": 3,
+   "EXCEL_LOCK_FILE_NOT_A_WORKBOOK": 1,
+   "CSO_SUBCATEGORY_LIST": 6,
+   "LEAF_ATTRIBUTE_WORKBOOK": 66
+  },
+  "attribute_columns_in_leaf_workbooks": 1374,
+  "attribute_values_in_leaf_workbooks": 15705,
+  "categories": 26,
+  "subcategories_listed": 72,
+  "subcategories_with_attribute_workbook": 66,
+  "subcategories_without_attribute_workbook": 6,
+  "categories_without_any_subcategory_list": 20
+ },
+ "approved_major_categories": [
+  "Fashion",
+  "Cosmetics",
+  "Electronics"
+ ],
+ "major_to_categories": {
+  "Fashion": [
+   "Women\u2019s Clothing",
+   "Men\u2019s Clothing",
+   "Kids\u2019 Clothing",
+   "Shoes",
+   "Bags",
+   "Jewellery",
+   "Accessories",
+   "Shapewear",
+   "Traditional Clothing"
+  ],
+  "Cosmetics": [
+   "Makeup",
+   "Skincare",
+   "Hair",
+   "Haircare",
+   "Fragrance",
+   "Bath & Body",
+   "Personal Care"
+  ],
+  "Electronics": [
+   "Mobile Phones",
+   "Computers",
+   "Tablets",
+   "Phone Accessories",
+   "Computer Accessories",
+   "Audio",
+   "Cameras",
+   "TVs & Entertainment",
+   "Smart Devices",
+   "Chargers & Power"
+  ]
+ },
+ "categories_without_subcategory_list_or_attributes": [
+  "Accessories",
+  "Shapewear",
+  "Traditional Clothing",
+  "Makeup",
+  "Skincare",
+  "Hair",
+  "Haircare",
+  "Fragrance",
+  "Bath & Body",
+  "Personal Care",
+  "Mobile Phones",
+  "Computers",
+  "Tablets",
+  "Phone Accessories",
+  "Computer Accessories",
+  "Audio",
+  "Cameras",
+  "TVs & Entertainment",
+  "Smart Devices",
+  "Chargers & Power"
+ ],
+ "subcategory_tree_fashion": [
+  {
+   "category": "Bags",
+   "subcategory_list_workbook": "Categories/Fashion category/Bags Subcategories.xlsx",
+   "subcategories": [
+    {
+     "name": "Women's Bags",
+     "attribute_workbook": "Categories/Fashion category/Bags/Womens_Bags_Taxonomy.xlsx"
+    },
+    {
+     "name": "Men's Bags",
+     "attribute_workbook": "Categories/Fashion category/Bags/Mens_Bags_Taxonomy.xlsx"
+    },
+    {
+     "name": "Kids' Bags",
+     "attribute_workbook": "Categories/Fashion category/Bags/Kids_Bags_Taxonomy.xlsx"
+    },
+    {
+     "name": "Backpacks",
+     "attribute_workbook": "Categories/Fashion category/Bags/Backpacks_Taxonomy.xlsx"
+    },
+    {
+     "name": "Travel Bags & Luggage",
+     "attribute_workbook": "Categories/Fashion category/Bags/Travel_Bags_and_Luggage_Taxonomy.xlsx"
+    },
+    {
+     "name": "Business & Laptop Bags",
+     "attribute_workbook": "Categories/Fashion category/Bags/Business_and_Laptop_Bags_Taxonomy.xlsx"
+    },
+    {
+     "name": "Sports & Gym Bags",
+     "attribute_workbook": "Categories/Fashion category/Bags/Sports_and_Gym_Bags_Taxonomy.xlsx"
+    },
+    {
+     "name": "School Bags",
+     "attribute_workbook": "Categories/Fashion category/Bags/School_Bags_Taxonomy.xlsx"
+    },
+    {
+     "name": "Baby & Diaper Bags",
+     "attribute_workbook": "Categories/Fashion category/Bags/Baby_and_Diaper_Bags_Taxonomy.xlsx"
+    },
+    {
+     "name": "Shopping & Reusable Bags",
+     "attribute_workbook": "Categories/Fashion category/Bags/Shopping_and_Reusable_Bags_Taxonomy.xlsx"
+    },
+    {
+     "name": "Outdoor & Utility Bags",
+     "attribute_workbook": null
+    },
+    {
+     "name": "Camera & Equipment Bags",
+     "attribute_workbook": "Categories/Fashion category/Bags/Camera_and_Equipment_Bags_Taxonomy.xlsx"
+    },
+    {
+     "name": "Traditional & Cultural Bags",
+     "attribute_workbook": "Categories/Fashion category/Bags/Traditional_and_Cultural_Bags_Taxonomy.xlsx"
+    },
+    {
+     "name": "Wallets, Purses & Card Holders",
+     "attribute_workbook": "Categories/Fashion category/Bags/Wallets_Purses_and_Card_Holders_Taxonomy.xlsx"
+    }
+   ]
+  },
+  {
+   "category": "Jewellery",
+   "subcategory_list_workbook": "Categories/Fashion category/Jewellery_Subcategories.xlsx",
+   "subcategories": [
+    {
+     "name": "Necklaces & Pendants",
+     "attribute_workbook": "Categories/Fashion category/Jewellery/Necklaces_and_Pendants_Taxonomy.xlsx"
+    },
+    {
+     "name": "Earrings",
+     "attribute_workbook": "Categories/Fashion category/Jewellery/Earrings_Taxonomy.xlsx"
+    },
+    {
+     "name": "Rings",
+     "attribute_workbook": "Categories/Fashion category/Jewellery/Rings_Taxonomy.xlsx"
+    },
+    {
+     "name": "Bracelets",
+     "attribute_workbook": "Categories/Fashion category/Jewellery/Bracelets_Taxonomy.xlsx"
+    },
+    {
+     "name": "Anklets",
+     "attribute_workbook": "Categories/Fashion category/Jewellery/Anklets_Taxonomy.xlsx"
+    },
+    {
+     "name": "Brooches & Pins",
+     "attribute_workbook": "Categories/Fashion category/Jewellery/Brooches_and_Pins_Taxonomy.xlsx"
+    },
+    {
+     "name": "Charms & Beads",
+     "attribute_workbook": "Categories/Fashion category/Jewellery/Charms_and_Beads_Taxonomy.xlsx"
+    },
+    {
+     "name": "Body Jewellery",
+     "attribute_workbook": "Categories/Fashion category/Jewellery/Body_Jewellery_Taxonomy.xlsx"
+    },
+    {
+     "name": "Hair Jewellery",
+     "attribute_workbook": "Categories/Fashion category/Jewellery/Hair_Jewellery_Taxonomy.xlsx"
+    },
+    {
+     "name": "Jewellery Sets",
+     "attribute_workbook": "Categories/Fashion category/Jewellery/Jewellery_Sets_Taxonomy.xlsx"
+    },
+    {
+     "name": "Men's Jewellery",
+     "attribute_workbook": "Categories/Fashion category/Jewellery/Mens_Jewellery_Taxonomy.xlsx"
+    },
+    {
+     "name": "Kids' Jewellery",
+     "attribute_workbook": "Categories/Fashion category/Jewellery/Kids_Jewellery_Taxonomy.xlsx"
+    },
+    {
+     "name": "Bridal & Wedding Jewellery",
+     "attribute_workbook": "Categories/Fashion category/Jewellery/Bridal_and_Wedding_Jewellery_Taxonomy.xlsx"
+    },
+    {
+     "name": "Religious & Spiritual Jewellery",
+     "attribute_workbook": "Categories/Fashion category/Jewellery/Religious_and_Spiritual_Jewellery_Taxonomy.xlsx"
+    },
+    {
+     "name": "Traditional & Cultural Jewellery",
+     "attribute_workbook": "Categories/Fashion category/Jewellery/raditional_and_Cultural_Jewellery_Taxonomy.xlsx"
+    }
+   ]
+  },
+  {
+   "category": "Kids' Clothing",
+   "subcategory_list_workbook": "Categories/Fashion category/Kids_Clothing_Subcategories.xlsx",
+   "subcategories": [
+    {
+     "name": "Dresses",
+     "attribute_workbook": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Dresses_Taxonomy.xlsx"
+    },
+    {
+     "name": "Tops",
+     "attribute_workbook": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Tops_Taxonomy.xlsx"
+    },
+    {
+     "name": "Bottoms",
+     "attribute_workbook": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Bottoms_Taxonomy.xlsx"
+    },
+    {
+     "name": "Jumpsuits & Rompers",
+     "attribute_workbook": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Jumpsuits_and_Rompers_Taxonomy.xlsx"
+    },
+    {
+     "name": "Matching Sets",
+     "attribute_workbook": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Matching_Sets_Taxonomy.xlsx"
+    },
+    {
+     "name": "Suits & Formalwear",
+     "attribute_workbook": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Suits_and_Formalwear_Taxonomy.xlsx"
+    },
+    {
+     "name": "Jackets & Coats",
+     "attribute_workbook": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Jackets_and_Coats_Taxonomy.xlsx"
+    },
+    {
+     "name": "Activewear",
+     "attribute_workbook": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Activewear_Taxonomy.xlsx"
+    },
+    {
+     "name": "Loungewear & Sleepwear",
+     "attribute_workbook": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Loungewear_and_Sleepwear_Taxonomy.xlsx"
+    },
+    {
+     "name": "Underwear",
+     "attribute_workbook": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Underwear_Taxonomy.xlsx"
+    },
+    {
+     "name": "Swimwear",
+     "attribute_workbook": null
+    },
+    {
+     "name": "School Uniforms",
+     "attribute_workbook": null
+    },
+    {
+     "name": "Traditional Clothing",
+     "attribute_workbook": null
+    },
+    {
+     "name": "Baby Clothing",
+     "attribute_workbook": null
+    }
+   ]
+  },
+  {
+   "category": "Men's Clothing",
+   "subcategory_list_workbook": "Categories/Fashion category/Mens_Clothing_Subcategories.xlsx",
+   "subcategories": [
+    {
+     "name": "Tops",
+     "attribute_workbook": "Categories/Fashion category/Mens clothing/Mens_Tops_Taxonomy.xlsx"
+    },
+    {
+     "name": "Bottoms",
+     "attribute_workbook": "Categories/Fashion category/Mens clothing/Mens_Bottoms_Taxonomy (1).xlsx"
+    },
+    {
+     "name": "Suits & Blazers",
+     "attribute_workbook": "Categories/Fashion category/Mens clothing/Mens_Suits_and_Blazers_Taxonomy.xlsx"
+    },
+    {
+     "name": "Jackets & Coats",
+     "attribute_workbook": "Categories/Fashion category/Mens clothing/Mens_Jackets_and_Coats_Taxonomy.xlsx"
+    },
+    {
+     "name": "Activewear",
+     "attribute_workbook": "Categories/Fashion category/Mens clothing/Mens_Activewear_Taxonomy.xlsx"
+    },
+    {
+     "name": "Loungewear & Sleepwear",
+     "attribute_workbook": "Categories/Fashion category/Mens clothing/Mens_Loungewear_and_Sleepwear_Taxonomy.xlsx"
+    },
+    {
+     "name": "Underwear",
+     "attribute_workbook": "Categories/Fashion category/Mens clothing/Mens_Underwear_Taxonomy.xlsx"
+    },
+    {
+     "name": "Matching Sets",
+     "attribute_workbook": "Categories/Fashion category/Mens clothing/Mens_Matching_Sets_Taxonomy.xlsx"
+    },
+    {
+     "name": "Traditional Clothing",
+     "attribute_workbook": "Categories/Fashion category/Mens clothing/Mens_Traditional_Clothing_Taxonomy.xlsx"
+    }
+   ]
+  },
+  {
+   "category": "Shoes",
+   "subcategory_list_workbook": "Categories/Fashion category/Shoe_Subcategories (1).xlsx",
+   "subcategories": [
+    {
+     "name": "Women's Shoes",
+     "attribute_workbook": "Categories/Fashion category/shoe/Womens_Shoes_Taxonomy.xlsx"
+    },
+    {
+     "name": "Men's Shoes",
+     "attribute_workbook": "Categories/Fashion category/shoe/Mens_Shoes_Taxonomy.xlsx"
+    },
+    {
+     "name": "Kids' Shoes",
+     "attribute_workbook": "Categories/Fashion category/shoe/Kids_Shoes_Taxonomy.xlsx"
+    },
+    {
+     "name": "Baby & Toddler Shoes",
+     "attribute_workbook": "Categories/Fashion category/shoe/Baby_and_Toddler_Shoes_Taxonomy.xlsx"
+    },
+    {
+     "name": "Unisex Shoes",
+     "attribute_workbook": null
+    },
+    {
+     "name": "Sports & Athletic Shoes",
+     "attribute_workbook": "Categories/Fashion category/shoe/Sports_and_Athletic_Shoes_Taxonomy.xlsx"
+    },
+    {
+     "name": "Work & Safety Shoes",
+     "attribute_workbook": "Categories/Fashion category/shoe/Work_and_Safety_Shoes_Taxonomy.xlsx"
+    },
+    {
+     "name": "Traditional & Cultural Footwear",
+     "attribute_workbook": "Categories/Fashion category/shoe/Traditional_and_Cultural_Footwear_Taxonomy.xlsx"
+    }
+   ]
+  },
+  {
+   "category": "Women's Clothing",
+   "subcategory_list_workbook": "Categories/Fashion category/Womens_Clothing_Subcategories.xlsx",
+   "subcategories": [
+    {
+     "name": "Dresses",
+     "attribute_workbook": "Categories/Fashion category/womens clothing/Dress_Taxonomy.xlsx"
+    },
+    {
+     "name": "Tops",
+     "attribute_workbook": "Categories/Fashion category/womens clothing/Tops_Taxonomy.xlsx"
+    },
+    {
+     "name": "Bottoms",
+     "attribute_workbook": "Categories/Fashion category/womens clothing/Bottoms_Taxonomy.xlsx"
+    },
+    {
+     "name": "Jumpsuits & Rompers",
+     "attribute_workbook": "Categories/Fashion category/womens clothing/Jumpsuits_and_Rompers_Taxonomy (1).xlsx"
+    },
+    {
+     "name": "Matching Sets",
+     "attribute_workbook": "Categories/Fashion category/womens clothing/Matching_Sets_Taxonomy.xlsx"
+    },
+    {
+     "name": "Suits & Blazers",
+     "attribute_workbook": "Categories/Fashion category/womens clothing/Suits_and_Blazers_Taxonomy.xlsx"
+    },
+    {
+     "name": "Jackets & Coats",
+     "attribute_workbook": "Categories/Fashion category/womens clothing/Jackets_and_Coats_Taxonomy.xlsx"
+    },
+    {
+     "name": "Activewear",
+     "attribute_workbook": "Categories/Fashion category/womens clothing/Activewear_Taxonomy.xlsx"
+    },
+    {
+     "name": "Loungewear & Sleepwear",
+     "attribute_workbook": "Categories/Fashion category/womens clothing/Loungewear_and_Sleepwear_Taxonomy.xlsx"
+    },
+    {
+     "name": "Underwear & Lingerie",
+     "attribute_workbook": "Categories/Fashion category/womens clothing/Underwear_and_Lingerie_Taxonomy.xlsx"
+    },
+    {
+     "name": "Swimwear",
+     "attribute_workbook": "Categories/Fashion category/womens clothing/Swimwear_Taxonomy.xlsx"
+    },
+    {
+     "name": "Maternity Clothing",
+     "attribute_workbook": "Categories/Fashion category/womens clothing/Maternity_Clothing_Taxonomy.xlsx"
+    }
+   ]
+  }
+ ],
+ "subcategories_without_attribute_workbook": [
+  {
+   "category": "Bags",
+   "subcategory": "Outdoor & Utility Bags"
+  },
+  {
+   "category": "Kids' Clothing",
+   "subcategory": "Swimwear"
+  },
+  {
+   "category": "Kids' Clothing",
+   "subcategory": "School Uniforms"
+  },
+  {
+   "category": "Kids' Clothing",
+   "subcategory": "Traditional Clothing"
+  },
+  {
+   "category": "Kids' Clothing",
+   "subcategory": "Baby Clothing"
+  },
+  {
+   "category": "Shoes",
+   "subcategory": "Unisex Shoes"
+  }
+ ],
+ "note": "Repository copy of the source manifest WITHOUT the allowed values (15,705 value cells). The full manifest with every value, sheet and attribute, and the raw cell dump, are kept with the batch evidence outside the repository; each workbook below carries its SHA-256 so the full set can be matched to this summary. Submitted, unratified: nothing here establishes required, searchable, filterable or Variant-defining.",
+ "workbooks": [
+  {
+   "path": "Adulis_Major_Categories.xlsx",
+   "sha256": "60dc99fd8f3f7367413d780838eab43d1f45e999fabe70e286076af501e9dfa8",
+   "bytes": 13143,
+   "class": "MAJOR_CATEGORIES",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Major Categories",
+     "non_empty_rows": 51
+    },
+    {
+     "name": "Categories",
+     "non_empty_rows": 51
+    }
+   ]
+  },
+  {
+   "path": "Categories/Cosmetics_Categories.xlsx",
+   "sha256": "37df03e9670d681ebc9820b46f25769b9e07702d055175eecf31bf1f5f34d217",
+   "bytes": 10174,
+   "class": "CMO_CATEGORY_LIST",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Cosmetics Categories",
+     "non_empty_rows": 8
+    }
+   ]
+  },
+  {
+   "path": "Categories/Electronics_Categories.xlsx",
+   "sha256": "e829729acb8959d096de19250ea0baba771e9c389149b523713ade562a6e0235",
+   "bytes": 10234,
+   "class": "CMO_CATEGORY_LIST",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Electronics Categories",
+     "non_empty_rows": 11
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion_Categories.xlsx",
+   "sha256": "9d561ca39258c13b110bb5c8a17d0415a26c08431b81157ecc8649ad7fcdcd7c",
+   "bytes": 10211,
+   "class": "CMO_CATEGORY_LIST",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Fashion Categories",
+     "non_empty_rows": 10
+    }
+   ]
+  },
+  {
+   "path": "Categories/~$Fashion_Categories.xlsx",
+   "sha256": "bd266f303997561fc501fedef06c4de1f6edd789f4c1a2231f29a71478c72551",
+   "bytes": 165,
+   "class": "EXCEL_LOCK_FILE_NOT_A_WORKBOOK",
+   "valid": false,
+   "error": "BadZipFile('File is not a zip file')"
+  },
+  {
+   "path": "Categories/Fashion category/Bags Subcategories.xlsx",
+   "sha256": "752061ea6b50b6b23759ce6a0b1a7759aa0985560b8e5897e8abf7fae8a162b2",
+   "bytes": 10494,
+   "class": "CSO_SUBCATEGORY_LIST",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Bags Subcategories",
+     "non_empty_rows": 15
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery_Subcategories.xlsx",
+   "sha256": "1b9152cba490369282804c967c43845df5b27550c1e6ec3cfc40aaf980401d68",
+   "bytes": 10494,
+   "class": "CSO_SUBCATEGORY_LIST",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Jewellery Subcategories",
+     "non_empty_rows": 16
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Kids_Clothing_Subcategories.xlsx",
+   "sha256": "b9642b6fb94592b5a7b0f9d6d7a9cfc1a249dbb2b497e073e2f6936f7090daf4",
+   "bytes": 10445,
+   "class": "CSO_SUBCATEGORY_LIST",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Kids' Subcategories",
+     "non_empty_rows": 15
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Mens_Clothing_Subcategories.xlsx",
+   "sha256": "42660e6f2228aeb11f0be7ac2746fcb8f538e1393f2464a594d96e28bfe00098",
+   "bytes": 10363,
+   "class": "CSO_SUBCATEGORY_LIST",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Men's Clothing",
+     "non_empty_rows": 10
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Shoe_Subcategories (1).xlsx",
+   "sha256": "97138c49d2ba6aeb3372286a8959ac1fd3f3c9d273c7e62e349d6b67c0b5c740",
+   "bytes": 10344,
+   "class": "CSO_SUBCATEGORY_LIST",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Shoe Subcategories",
+     "non_empty_rows": 9
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Womens_Clothing_Subcategories.xlsx",
+   "sha256": "b402b135965fac253a574fbdf6e8862c57bf4eee3181b8e91b0f974d4897a364",
+   "bytes": 10332,
+   "class": "CSO_SUBCATEGORY_LIST",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Women Subcategories",
+     "non_empty_rows": 13
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Bags/Baby_and_Diaper_Bags_Taxonomy.xlsx",
+   "sha256": "06b609492f3a5636c329b070a15fe15668ea578a56c091580bc62b5f1945c0c8",
+   "bytes": 16075,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Baby & Diaper Bags",
+     "non_empty_rows": 39,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Baby & Diaper Bag Type",
+       "value_count": 38
+      },
+      {
+       "ordinal": 2,
+       "header": "Caregiver / Audience",
+       "value_count": 5
+      },
+      {
+       "ordinal": 3,
+       "header": "Child Stage",
+       "value_count": 6
+      },
+      {
+       "ordinal": 4,
+       "header": "Number of Children",
+       "value_count": 4
+      },
+      {
+       "ordinal": 5,
+       "header": "Use / Occasion",
+       "value_count": 10
+      },
+      {
+       "ordinal": 6,
+       "header": "Bag Size",
+       "value_count": 6
+      },
+      {
+       "ordinal": 7,
+       "header": "Capacity",
+       "value_count": 5
+      },
+      {
+       "ordinal": 8,
+       "header": "Exterior Material",
+       "value_count": 11
+      },
+      {
+       "ordinal": 9,
+       "header": "Lining",
+       "value_count": 8
+      },
+      {
+       "ordinal": 10,
+       "header": "Closure",
+       "value_count": 9
+      },
+      {
+       "ordinal": 11,
+       "header": "Carry Style",
+       "value_count": 7
+      },
+      {
+       "ordinal": 12,
+       "header": "Strap Type",
+       "value_count": 8
+      },
+      {
+       "ordinal": 13,
+       "header": "Stroller Attachment",
+       "value_count": 5
+      },
+      {
+       "ordinal": 14,
+       "header": "Compartments",
+       "value_count": 7
+      },
+      {
+       "ordinal": 15,
+       "header": "Bottle Storage",
+       "value_count": 7
+      },
+      {
+       "ordinal": 16,
+       "header": "Changing Mat",
+       "value_count": 5
+      },
+      {
+       "ordinal": 17,
+       "header": "Wipes Access",
+       "value_count": 5
+      },
+      {
+       "ordinal": 18,
+       "header": "Wet / Dry Storage",
+       "value_count": 7
+      },
+      {
+       "ordinal": 19,
+       "header": "Dimensions",
+       "value_count": 7
+      },
+      {
+       "ordinal": 20,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 21,
+       "header": "Pattern",
+       "value_count": 12
+      },
+      {
+       "ordinal": 22,
+       "header": "Special Feature",
+       "value_count": 16
+      },
+      {
+       "ordinal": 23,
+       "header": "Care",
+       "value_count": 11
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Bags/Backpacks_Taxonomy.xlsx",
+   "sha256": "83b6bb2f5ffff843411f8dc6fb0f83e1931ebcd4dc88e14626924a7b81abbebf",
+   "bytes": 16160,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Backpacks",
+     "non_empty_rows": 43,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Backpack Type",
+       "value_count": 42
+      },
+      {
+       "ordinal": 2,
+       "header": "Use / Activity",
+       "value_count": 19
+      },
+      {
+       "ordinal": 3,
+       "header": "Audience",
+       "value_count": 5
+      },
+      {
+       "ordinal": 4,
+       "header": "Age Group",
+       "value_count": 5
+      },
+      {
+       "ordinal": 5,
+       "header": "Capacity",
+       "value_count": 8
+      },
+      {
+       "ordinal": 6,
+       "header": "Bag Size",
+       "value_count": 7
+      },
+      {
+       "ordinal": 7,
+       "header": "Frame Type",
+       "value_count": 5
+      },
+      {
+       "ordinal": 8,
+       "header": "Material",
+       "value_count": 14
+      },
+      {
+       "ordinal": 9,
+       "header": "Lining",
+       "value_count": 7
+      },
+      {
+       "ordinal": 10,
+       "header": "Closure",
+       "value_count": 9
+      },
+      {
+       "ordinal": 11,
+       "header": "Strap System",
+       "value_count": 8
+      },
+      {
+       "ordinal": 12,
+       "header": "Back Panel",
+       "value_count": 6
+      },
+      {
+       "ordinal": 13,
+       "header": "Compartments",
+       "value_count": 8
+      },
+      {
+       "ordinal": 14,
+       "header": "Laptop Compatibility",
+       "value_count": 8
+      },
+      {
+       "ordinal": 15,
+       "header": "Hydration Compatibility",
+       "value_count": 5
+      },
+      {
+       "ordinal": 16,
+       "header": "Dimensions",
+       "value_count": 8
+      },
+      {
+       "ordinal": 17,
+       "header": "Pattern",
+       "value_count": 11
+      },
+      {
+       "ordinal": 18,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 19,
+       "header": "Weather Protection",
+       "value_count": 8
+      },
+      {
+       "ordinal": 20,
+       "header": "Security Feature",
+       "value_count": 8
+      },
+      {
+       "ordinal": 21,
+       "header": "Special Feature",
+       "value_count": 15
+      },
+      {
+       "ordinal": 22,
+       "header": "Care",
+       "value_count": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Bags/Business_and_Laptop_Bags_Taxonomy.xlsx",
+   "sha256": "f63eefe19fae42d834973d9c352c72ffdfaefd6255660a927bdfbb94b1a864d2",
+   "bytes": 15992,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Business & Laptop Bags",
+     "non_empty_rows": 38,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Business & Laptop Bag Type",
+       "value_count": 37
+      },
+      {
+       "ordinal": 2,
+       "header": "Use / Profession",
+       "value_count": 14
+      },
+      {
+       "ordinal": 3,
+       "header": "Audience",
+       "value_count": 3
+      },
+      {
+       "ordinal": 4,
+       "header": "Device Type",
+       "value_count": 9
+      },
+      {
+       "ordinal": 5,
+       "header": "Device Size",
+       "value_count": 11
+      },
+      {
+       "ordinal": 6,
+       "header": "Bag Size",
+       "value_count": 6
+      },
+      {
+       "ordinal": 7,
+       "header": "Structure",
+       "value_count": 6
+      },
+      {
+       "ordinal": 8,
+       "header": "Exterior Material",
+       "value_count": 13
+      },
+      {
+       "ordinal": 9,
+       "header": "Lining",
+       "value_count": 8
+      },
+      {
+       "ordinal": 10,
+       "header": "Closure",
+       "value_count": 10
+      },
+      {
+       "ordinal": 11,
+       "header": "Carry Style",
+       "value_count": 6
+      },
+      {
+       "ordinal": 12,
+       "header": "Strap Type",
+       "value_count": 7
+      },
+      {
+       "ordinal": 13,
+       "header": "Handle Type",
+       "value_count": 6
+      },
+      {
+       "ordinal": 14,
+       "header": "Compartments",
+       "value_count": 7
+      },
+      {
+       "ordinal": 15,
+       "header": "Organisation Features",
+       "value_count": 10
+      },
+      {
+       "ordinal": 16,
+       "header": "Device Protection",
+       "value_count": 8
+      },
+      {
+       "ordinal": 17,
+       "header": "Dimensions",
+       "value_count": 6
+      },
+      {
+       "ordinal": 18,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 19,
+       "header": "Pattern",
+       "value_count": 10
+      },
+      {
+       "ordinal": 20,
+       "header": "Security Feature",
+       "value_count": 8
+      },
+      {
+       "ordinal": 21,
+       "header": "Special Feature",
+       "value_count": 14
+      },
+      {
+       "ordinal": 22,
+       "header": "Care",
+       "value_count": 11
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Bags/Camera_and_Equipment_Bags_Taxonomy.xlsx",
+   "sha256": "aff59ef6bd2c57c4f81f4e3caddbe520fc7acdf7f0060d234965785640c2a322",
+   "bytes": 16805,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Camera & Equipment Bags",
+     "non_empty_rows": 47,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Camera & Equipment Bag Type",
+       "value_count": 46
+      },
+      {
+       "ordinal": 2,
+       "header": "Equipment Category",
+       "value_count": 18
+      },
+      {
+       "ordinal": 3,
+       "header": "Camera Capacity",
+       "value_count": 6
+      },
+      {
+       "ordinal": 4,
+       "header": "Lens Capacity",
+       "value_count": 7
+      },
+      {
+       "ordinal": 5,
+       "header": "Laptop Compatibility",
+       "value_count": 7
+      },
+      {
+       "ordinal": 6,
+       "header": "Bag Size",
+       "value_count": 7
+      },
+      {
+       "ordinal": 7,
+       "header": "Capacity",
+       "value_count": 7
+      },
+      {
+       "ordinal": 8,
+       "header": "Construction",
+       "value_count": 7
+      },
+      {
+       "ordinal": 9,
+       "header": "Exterior Material",
+       "value_count": 13
+      },
+      {
+       "ordinal": 10,
+       "header": "Lining",
+       "value_count": 8
+      },
+      {
+       "ordinal": 11,
+       "header": "Closure",
+       "value_count": 9
+      },
+      {
+       "ordinal": 12,
+       "header": "Carry Style",
+       "value_count": 8
+      },
+      {
+       "ordinal": 13,
+       "header": "Strap System",
+       "value_count": 9
+      },
+      {
+       "ordinal": 14,
+       "header": "Divider System",
+       "value_count": 7
+      },
+      {
+       "ordinal": 15,
+       "header": "Tripod Attachment",
+       "value_count": 6
+      },
+      {
+       "ordinal": 16,
+       "header": "Pockets",
+       "value_count": 10
+      },
+      {
+       "ordinal": 17,
+       "header": "Weather Protection",
+       "value_count": 8
+      },
+      {
+       "ordinal": 18,
+       "header": "Equipment Protection",
+       "value_count": 9
+      },
+      {
+       "ordinal": 19,
+       "header": "Dimensions",
+       "value_count": 7
+      },
+      {
+       "ordinal": 20,
+       "header": "Colour",
+       "value_count": 15
+      },
+      {
+       "ordinal": 21,
+       "header": "Security Feature",
+       "value_count": 9
+      },
+      {
+       "ordinal": 22,
+       "header": "Special Feature",
+       "value_count": 15
+      },
+      {
+       "ordinal": 23,
+       "header": "Care",
+       "value_count": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Bags/Kids_Bags_Taxonomy.xlsx",
+   "sha256": "904b888b8ce3872341cbbac9f6864ffee6330f650a69e61749f37c450f4fc0c6",
+   "bytes": 15350,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Kids' Bags",
+     "non_empty_rows": 37,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Kids' Bag Type",
+       "value_count": 36
+      },
+      {
+       "ordinal": 2,
+       "header": "Age Group",
+       "value_count": 5
+      },
+      {
+       "ordinal": 3,
+       "header": "Audience",
+       "value_count": 3
+      },
+      {
+       "ordinal": 4,
+       "header": "Use / Occasion",
+       "value_count": 14
+      },
+      {
+       "ordinal": 5,
+       "header": "Bag Size",
+       "value_count": 6
+      },
+      {
+       "ordinal": 6,
+       "header": "Shape",
+       "value_count": 9
+      },
+      {
+       "ordinal": 7,
+       "header": "Material",
+       "value_count": 12
+      },
+      {
+       "ordinal": 8,
+       "header": "Lining",
+       "value_count": 7
+      },
+      {
+       "ordinal": 9,
+       "header": "Closure",
+       "value_count": 9
+      },
+      {
+       "ordinal": 10,
+       "header": "Carry Style",
+       "value_count": 7
+      },
+      {
+       "ordinal": 11,
+       "header": "Strap Type",
+       "value_count": 7
+      },
+      {
+       "ordinal": 12,
+       "header": "Strap Adjustment",
+       "value_count": 5
+      },
+      {
+       "ordinal": 13,
+       "header": "Compartments",
+       "value_count": 7
+      },
+      {
+       "ordinal": 14,
+       "header": "Pockets",
+       "value_count": 8
+      },
+      {
+       "ordinal": 15,
+       "header": "Dimensions",
+       "value_count": 6
+      },
+      {
+       "ordinal": 16,
+       "header": "Pattern / Theme",
+       "value_count": 16
+      },
+      {
+       "ordinal": 17,
+       "header": "Colour",
+       "value_count": 16
+      },
+      {
+       "ordinal": 18,
+       "header": "Personalisation",
+       "value_count": 7
+      },
+      {
+       "ordinal": 19,
+       "header": "Safety / Special Feature",
+       "value_count": 14
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Bags/Mens_Bags_Taxonomy.xlsx",
+   "sha256": "46616fd74058f5ab697163e27897383b172842e940482324a673239d2690ac16",
+   "bytes": 15567,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Men's Bags",
+     "non_empty_rows": 37,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Men's Bag Type",
+       "value_count": 36
+      },
+      {
+       "ordinal": 2,
+       "header": "Use / Occasion",
+       "value_count": 14
+      },
+      {
+       "ordinal": 3,
+       "header": "Bag Size",
+       "value_count": 6
+      },
+      {
+       "ordinal": 4,
+       "header": "Shape",
+       "value_count": 10
+      },
+      {
+       "ordinal": 5,
+       "header": "Structure",
+       "value_count": 4
+      },
+      {
+       "ordinal": 6,
+       "header": "Material",
+       "value_count": 14
+      },
+      {
+       "ordinal": 7,
+       "header": "Lining",
+       "value_count": 7
+      },
+      {
+       "ordinal": 8,
+       "header": "Closure",
+       "value_count": 11
+      },
+      {
+       "ordinal": 9,
+       "header": "Carry Style",
+       "value_count": 7
+      },
+      {
+       "ordinal": 10,
+       "header": "Strap Type",
+       "value_count": 8
+      },
+      {
+       "ordinal": 11,
+       "header": "Strap Length",
+       "value_count": 6
+      },
+      {
+       "ordinal": 12,
+       "header": "Handle Type",
+       "value_count": 6
+      },
+      {
+       "ordinal": 13,
+       "header": "Compartments",
+       "value_count": 6
+      },
+      {
+       "ordinal": 14,
+       "header": "Pockets",
+       "value_count": 10
+      },
+      {
+       "ordinal": 15,
+       "header": "Laptop Compatibility",
+       "value_count": 8
+      },
+      {
+       "ordinal": 16,
+       "header": "Dimensions",
+       "value_count": 7
+      },
+      {
+       "ordinal": 17,
+       "header": "Pattern",
+       "value_count": 10
+      },
+      {
+       "ordinal": 18,
+       "header": "Colour",
+       "value_count": 16
+      },
+      {
+       "ordinal": 19,
+       "header": "Hardware Colour",
+       "value_count": 7
+      },
+      {
+       "ordinal": 20,
+       "header": "Special Feature",
+       "value_count": 15
+      },
+      {
+       "ordinal": 21,
+       "header": "Care",
+       "value_count": 11
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Bags/School_Bags_Taxonomy.xlsx",
+   "sha256": "f270a7a482f913f4f3a900986065cac9fcd3541051ae752996c17e41bc241901",
+   "bytes": 16397,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "School Bags",
+     "non_empty_rows": 43,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "School Bag Type",
+       "value_count": 42
+      },
+      {
+       "ordinal": 2,
+       "header": "Education Level",
+       "value_count": 8
+      },
+      {
+       "ordinal": 3,
+       "header": "Age Group",
+       "value_count": 5
+      },
+      {
+       "ordinal": 4,
+       "header": "Audience",
+       "value_count": 5
+      },
+      {
+       "ordinal": 5,
+       "header": "Capacity",
+       "value_count": 7
+      },
+      {
+       "ordinal": 6,
+       "header": "Bag Size",
+       "value_count": 5
+      },
+      {
+       "ordinal": 7,
+       "header": "Material",
+       "value_count": 11
+      },
+      {
+       "ordinal": 8,
+       "header": "Lining",
+       "value_count": 7
+      },
+      {
+       "ordinal": 9,
+       "header": "Closure",
+       "value_count": 9
+      },
+      {
+       "ordinal": 10,
+       "header": "Carry Style",
+       "value_count": 6
+      },
+      {
+       "ordinal": 11,
+       "header": "Strap System",
+       "value_count": 8
+      },
+      {
+       "ordinal": 12,
+       "header": "Back Panel",
+       "value_count": 6
+      },
+      {
+       "ordinal": 13,
+       "header": "Compartments",
+       "value_count": 7
+      },
+      {
+       "ordinal": 14,
+       "header": "Book Organisation",
+       "value_count": 7
+      },
+      {
+       "ordinal": 15,
+       "header": "Laptop Compatibility",
+       "value_count": 7
+      },
+      {
+       "ordinal": 16,
+       "header": "Pockets",
+       "value_count": 9
+      },
+      {
+       "ordinal": 17,
+       "header": "Bottle Holder",
+       "value_count": 6
+      },
+      {
+       "ordinal": 18,
+       "header": "Dimensions",
+       "value_count": 6
+      },
+      {
+       "ordinal": 19,
+       "header": "Pattern / Theme",
+       "value_count": 17
+      },
+      {
+       "ordinal": 20,
+       "header": "Colour",
+       "value_count": 16
+      },
+      {
+       "ordinal": 21,
+       "header": "Personalisation",
+       "value_count": 8
+      },
+      {
+       "ordinal": 22,
+       "header": "Safety / Special Feature",
+       "value_count": 16
+      },
+      {
+       "ordinal": 23,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Bags/Shopping_and_Reusable_Bags_Taxonomy.xlsx",
+   "sha256": "270b1e1a7da8af8541f6fa15bf1add536d72effb1f14d2652aad64de8e2a6dd3",
+   "bytes": 16207,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Shopping & Reusable Bags",
+     "non_empty_rows": 43,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Shopping & Reusable Bag Type",
+       "value_count": 42
+      },
+      {
+       "ordinal": 2,
+       "header": "Use / Shopping Type",
+       "value_count": 12
+      },
+      {
+       "ordinal": 3,
+       "header": "Audience",
+       "value_count": 6
+      },
+      {
+       "ordinal": 4,
+       "header": "Capacity",
+       "value_count": 7
+      },
+      {
+       "ordinal": 5,
+       "header": "Bag Size",
+       "value_count": 6
+      },
+      {
+       "ordinal": 6,
+       "header": "Shape",
+       "value_count": 10
+      },
+      {
+       "ordinal": 7,
+       "header": "Material",
+       "value_count": 15
+      },
+      {
+       "ordinal": 8,
+       "header": "Lining",
+       "value_count": 8
+      },
+      {
+       "ordinal": 9,
+       "header": "Closure",
+       "value_count": 9
+      },
+      {
+       "ordinal": 10,
+       "header": "Handle Type",
+       "value_count": 8
+      },
+      {
+       "ordinal": 11,
+       "header": "Strap Type",
+       "value_count": 7
+      },
+      {
+       "ordinal": 12,
+       "header": "Compartments",
+       "value_count": 7
+      },
+      {
+       "ordinal": 13,
+       "header": "Pockets",
+       "value_count": 8
+      },
+      {
+       "ordinal": 14,
+       "header": "Foldability",
+       "value_count": 6
+      },
+      {
+       "ordinal": 15,
+       "header": "Temperature Control",
+       "value_count": 6
+      },
+      {
+       "ordinal": 16,
+       "header": "Load Capacity",
+       "value_count": 5
+      },
+      {
+       "ordinal": 17,
+       "header": "Dimensions",
+       "value_count": 6
+      },
+      {
+       "ordinal": 18,
+       "header": "Colour",
+       "value_count": 16
+      },
+      {
+       "ordinal": 19,
+       "header": "Pattern",
+       "value_count": 11
+      },
+      {
+       "ordinal": 20,
+       "header": "Sustainability Feature",
+       "value_count": 11
+      },
+      {
+       "ordinal": 21,
+       "header": "Special Feature",
+       "value_count": 14
+      },
+      {
+       "ordinal": 22,
+       "header": "Care",
+       "value_count": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Bags/Sports_and_Gym_Bags_Taxonomy.xlsx",
+   "sha256": "e6037cc92172bcb327dc7e13601e67bea1ce2aa7057c56b5e0833f5faf94c5e9",
+   "bytes": 16514,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Sports & Gym Bags",
+     "non_empty_rows": 43,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Sports & Gym Bag Type",
+       "value_count": 42
+      },
+      {
+       "ordinal": 2,
+       "header": "Sport / Activity",
+       "value_count": 31
+      },
+      {
+       "ordinal": 3,
+       "header": "Audience",
+       "value_count": 6
+      },
+      {
+       "ordinal": 4,
+       "header": "Capacity",
+       "value_count": 8
+      },
+      {
+       "ordinal": 5,
+       "header": "Bag Size",
+       "value_count": 6
+      },
+      {
+       "ordinal": 6,
+       "header": "Shape",
+       "value_count": 9
+      },
+      {
+       "ordinal": 7,
+       "header": "Material",
+       "value_count": 11
+      },
+      {
+       "ordinal": 8,
+       "header": "Lining",
+       "value_count": 8
+      },
+      {
+       "ordinal": 9,
+       "header": "Closure",
+       "value_count": 8
+      },
+      {
+       "ordinal": 10,
+       "header": "Carry Style",
+       "value_count": 6
+      },
+      {
+       "ordinal": 11,
+       "header": "Strap Type",
+       "value_count": 8
+      },
+      {
+       "ordinal": 12,
+       "header": "Handle Type",
+       "value_count": 6
+      },
+      {
+       "ordinal": 13,
+       "header": "Compartments",
+       "value_count": 6
+      },
+      {
+       "ordinal": 14,
+       "header": "Shoe Compartment",
+       "value_count": 5
+      },
+      {
+       "ordinal": 15,
+       "header": "Wet / Dry Storage",
+       "value_count": 6
+      },
+      {
+       "ordinal": 16,
+       "header": "Equipment Compatibility",
+       "value_count": 16
+      },
+      {
+       "ordinal": 17,
+       "header": "Ventilation",
+       "value_count": 6
+      },
+      {
+       "ordinal": 18,
+       "header": "Dimensions",
+       "value_count": 6
+      },
+      {
+       "ordinal": 19,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 20,
+       "header": "Pattern",
+       "value_count": 10
+      },
+      {
+       "ordinal": 21,
+       "header": "Weather Protection",
+       "value_count": 7
+      },
+      {
+       "ordinal": 22,
+       "header": "Special Feature",
+       "value_count": 15
+      },
+      {
+       "ordinal": 23,
+       "header": "Care",
+       "value_count": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Bags/Traditional_and_Cultural_Bags_Taxonomy.xlsx",
+   "sha256": "0ce725f2e14fa56515dc68208656730060feac9f86c8082d380841675beeadf6",
+   "bytes": 17472,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Traditional & Cultural Bags",
+     "non_empty_rows": 46,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Traditional & Cultural Bag Type",
+       "value_count": 45
+      },
+      {
+       "ordinal": 2,
+       "header": "Country / Origin",
+       "value_count": 32
+      },
+      {
+       "ordinal": 3,
+       "header": "Cultural Region",
+       "value_count": 18
+      },
+      {
+       "ordinal": 4,
+       "header": "Community / Tradition",
+       "value_count": 18
+      },
+      {
+       "ordinal": 5,
+       "header": "Occasion",
+       "value_count": 11
+      },
+      {
+       "ordinal": 6,
+       "header": "Audience",
+       "value_count": 5
+      },
+      {
+       "ordinal": 7,
+       "header": "Bag Form",
+       "value_count": 11
+      },
+      {
+       "ordinal": 8,
+       "header": "Bag Size",
+       "value_count": 6
+      },
+      {
+       "ordinal": 9,
+       "header": "Primary Material",
+       "value_count": 18
+      },
+      {
+       "ordinal": 10,
+       "header": "Textile / Weaving Technique",
+       "value_count": 14
+      },
+      {
+       "ordinal": 11,
+       "header": "Construction",
+       "value_count": 9
+      },
+      {
+       "ordinal": 12,
+       "header": "Lining",
+       "value_count": 7
+      },
+      {
+       "ordinal": 13,
+       "header": "Closure",
+       "value_count": 10
+      },
+      {
+       "ordinal": 14,
+       "header": "Strap Type",
+       "value_count": 10
+      },
+      {
+       "ordinal": 15,
+       "header": "Handle Type",
+       "value_count": 8
+      },
+      {
+       "ordinal": 16,
+       "header": "Compartments",
+       "value_count": 6
+      },
+      {
+       "ordinal": 17,
+       "header": "Pattern / Motif",
+       "value_count": 11
+      },
+      {
+       "ordinal": 18,
+       "header": "Embellishment",
+       "value_count": 12
+      },
+      {
+       "ordinal": 19,
+       "header": "Production Method",
+       "value_count": 7
+      },
+      {
+       "ordinal": 20,
+       "header": "Dimensions",
+       "value_count": 6
+      },
+      {
+       "ordinal": 21,
+       "header": "Colour",
+       "value_count": 19
+      },
+      {
+       "ordinal": 22,
+       "header": "Provenance / Authenticity Info",
+       "value_count": 10
+      },
+      {
+       "ordinal": 23,
+       "header": "Care",
+       "value_count": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Bags/Travel_Bags_and_Luggage_Taxonomy.xlsx",
+   "sha256": "b467c756cee6975ba71294c4db1832cfd6324b07fe871686d82ab7d76d5cdd1e",
+   "bytes": 16224,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Travel Bags & Luggage",
+     "non_empty_rows": 43,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Travel Bag & Luggage Type",
+       "value_count": 42
+      },
+      {
+       "ordinal": 2,
+       "header": "Travel Purpose",
+       "value_count": 12
+      },
+      {
+       "ordinal": 3,
+       "header": "Audience",
+       "value_count": 6
+      },
+      {
+       "ordinal": 4,
+       "header": "Luggage Size",
+       "value_count": 7
+      },
+      {
+       "ordinal": 5,
+       "header": "Capacity",
+       "value_count": 8
+      },
+      {
+       "ordinal": 6,
+       "header": "Dimensions",
+       "value_count": 7
+      },
+      {
+       "ordinal": 7,
+       "header": "Exterior Material",
+       "value_count": 13
+      },
+      {
+       "ordinal": 8,
+       "header": "Construction",
+       "value_count": 6
+      },
+      {
+       "ordinal": 9,
+       "header": "Lining",
+       "value_count": 7
+      },
+      {
+       "ordinal": 10,
+       "header": "Closure",
+       "value_count": 8
+      },
+      {
+       "ordinal": 11,
+       "header": "Carry Method",
+       "value_count": 6
+      },
+      {
+       "ordinal": 12,
+       "header": "Handle Type",
+       "value_count": 6
+      },
+      {
+       "ordinal": 13,
+       "header": "Wheel System",
+       "value_count": 6
+      },
+      {
+       "ordinal": 14,
+       "header": "Telescopic Handle",
+       "value_count": 6
+      },
+      {
+       "ordinal": 15,
+       "header": "Compartments",
+       "value_count": 8
+      },
+      {
+       "ordinal": 16,
+       "header": "Expandability",
+       "value_count": 6
+      },
+      {
+       "ordinal": 17,
+       "header": "Lock / Security",
+       "value_count": 8
+      },
+      {
+       "ordinal": 18,
+       "header": "Empty Weight",
+       "value_count": 5
+      },
+      {
+       "ordinal": 19,
+       "header": "Colour",
+       "value_count": 20
+      },
+      {
+       "ordinal": 20,
+       "header": "Pattern",
+       "value_count": 11
+      },
+      {
+       "ordinal": 21,
+       "header": "Special Feature",
+       "value_count": 15
+      },
+      {
+       "ordinal": 22,
+       "header": "Care",
+       "value_count": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Bags/Wallets_Purses_and_Card_Holders_Taxonomy.xlsx",
+   "sha256": "cdc80887cfeea389a832e5f7c0cc1d8aab33c80bc655955dc18f2dd1f6a78fae",
+   "bytes": 16808,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Wallets Purses Card Holders",
+     "non_empty_rows": 49,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Wallet, Purse & Card Holder Type",
+       "value_count": 48
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 6
+      },
+      {
+       "ordinal": 3,
+       "header": "Use / Occasion",
+       "value_count": 10
+      },
+      {
+       "ordinal": 4,
+       "header": "Format",
+       "value_count": 9
+      },
+      {
+       "ordinal": 5,
+       "header": "Card Capacity",
+       "value_count": 7
+      },
+      {
+       "ordinal": 6,
+       "header": "Cash Storage",
+       "value_count": 7
+      },
+      {
+       "ordinal": 7,
+       "header": "Coin Storage",
+       "value_count": 6
+      },
+      {
+       "ordinal": 8,
+       "header": "Phone Compatibility",
+       "value_count": 7
+      },
+      {
+       "ordinal": 9,
+       "header": "Passport / Document Fit",
+       "value_count": 7
+      },
+      {
+       "ordinal": 10,
+       "header": "Material",
+       "value_count": 17
+      },
+      {
+       "ordinal": 11,
+       "header": "Lining",
+       "value_count": 7
+      },
+      {
+       "ordinal": 12,
+       "header": "Closure",
+       "value_count": 10
+      },
+      {
+       "ordinal": 13,
+       "header": "Fold Type",
+       "value_count": 6
+      },
+      {
+       "ordinal": 14,
+       "header": "Compartments",
+       "value_count": 8
+      },
+      {
+       "ordinal": 15,
+       "header": "Dimensions",
+       "value_count": 7
+      },
+      {
+       "ordinal": 16,
+       "header": "Colour",
+       "value_count": 20
+      },
+      {
+       "ordinal": 17,
+       "header": "Pattern",
+       "value_count": 11
+      },
+      {
+       "ordinal": 18,
+       "header": "Embellishment",
+       "value_count": 11
+      },
+      {
+       "ordinal": 19,
+       "header": "Hardware Colour",
+       "value_count": 8
+      },
+      {
+       "ordinal": 20,
+       "header": "Security Feature",
+       "value_count": 8
+      },
+      {
+       "ordinal": 21,
+       "header": "Personalisation",
+       "value_count": 8
+      },
+      {
+       "ordinal": 22,
+       "header": "Special Feature",
+       "value_count": 11
+      },
+      {
+       "ordinal": 23,
+       "header": "Care",
+       "value_count": 11
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Bags/Womens_Bags_Taxonomy.xlsx",
+   "sha256": "b3b899c9de98c3a115f1a97a037b97567be373dba8d7ebad2529507f153b70b0",
+   "bytes": 15363,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Women's Bags",
+     "non_empty_rows": 37,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Women's Bag Type",
+       "value_count": 36
+      },
+      {
+       "ordinal": 2,
+       "header": "Occasion",
+       "value_count": 12
+      },
+      {
+       "ordinal": 3,
+       "header": "Bag Size",
+       "value_count": 6
+      },
+      {
+       "ordinal": 4,
+       "header": "Shape",
+       "value_count": 11
+      },
+      {
+       "ordinal": 5,
+       "header": "Structure",
+       "value_count": 4
+      },
+      {
+       "ordinal": 6,
+       "header": "Material",
+       "value_count": 17
+      },
+      {
+       "ordinal": 7,
+       "header": "Lining",
+       "value_count": 7
+      },
+      {
+       "ordinal": 8,
+       "header": "Closure",
+       "value_count": 11
+      },
+      {
+       "ordinal": 9,
+       "header": "Strap Type",
+       "value_count": 8
+      },
+      {
+       "ordinal": 10,
+       "header": "Strap Length",
+       "value_count": 6
+      },
+      {
+       "ordinal": 11,
+       "header": "Handle Type",
+       "value_count": 8
+      },
+      {
+       "ordinal": 12,
+       "header": "Compartments",
+       "value_count": 5
+      },
+      {
+       "ordinal": 13,
+       "header": "Pockets",
+       "value_count": 8
+      },
+      {
+       "ordinal": 14,
+       "header": "Dimensions",
+       "value_count": 7
+      },
+      {
+       "ordinal": 15,
+       "header": "Pattern",
+       "value_count": 11
+      },
+      {
+       "ordinal": 16,
+       "header": "Embellishment",
+       "value_count": 13
+      },
+      {
+       "ordinal": 17,
+       "header": "Colour",
+       "value_count": 20
+      },
+      {
+       "ordinal": 18,
+       "header": "Hardware Colour",
+       "value_count": 8
+      },
+      {
+       "ordinal": 19,
+       "header": "Special Feature",
+       "value_count": 12
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery/Anklets_Taxonomy.xlsx",
+   "sha256": "91012b24ef85b5e36c00b3dde8f1446c62c20c85caf9bf3be0600e8dd618cf33",
+   "bytes": 18057,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Anklets",
+     "non_empty_rows": 55,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Anklet Type",
+       "value_count": 54
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 6
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 12
+      },
+      {
+       "ordinal": 4,
+       "header": "Anklet Style",
+       "value_count": 14
+      },
+      {
+       "ordinal": 5,
+       "header": "Ankle Length / Size",
+       "value_count": 9
+      },
+      {
+       "ordinal": 6,
+       "header": "Anklet Width",
+       "value_count": 6
+      },
+      {
+       "ordinal": 7,
+       "header": "Closure",
+       "value_count": 12
+      },
+      {
+       "ordinal": 8,
+       "header": "Adjustability",
+       "value_count": 8
+      },
+      {
+       "ordinal": 9,
+       "header": "Metal / Material",
+       "value_count": 20
+      },
+      {
+       "ordinal": 10,
+       "header": "Metal Purity",
+       "value_count": 11
+      },
+      {
+       "ordinal": 11,
+       "header": "Plating / Finish",
+       "value_count": 13
+      },
+      {
+       "ordinal": 12,
+       "header": "Gemstone Presence",
+       "value_count": 8
+      },
+      {
+       "ordinal": 13,
+       "header": "Stone Type",
+       "value_count": 18
+      },
+      {
+       "ordinal": 14,
+       "header": "Stone Colour",
+       "value_count": 14
+      },
+      {
+       "ordinal": 15,
+       "header": "Bead / Shell Type",
+       "value_count": 12
+      },
+      {
+       "ordinal": 16,
+       "header": "Charm / Motif",
+       "value_count": 19
+      },
+      {
+       "ordinal": 17,
+       "header": "Bell / Sound Feature",
+       "value_count": 6
+      },
+      {
+       "ordinal": 18,
+       "header": "Foot Connection",
+       "value_count": 5
+      },
+      {
+       "ordinal": 19,
+       "header": "Quantity / Set",
+       "value_count": 7
+      },
+      {
+       "ordinal": 20,
+       "header": "Personalisation",
+       "value_count": 9
+      },
+      {
+       "ordinal": 21,
+       "header": "Skin / Metal Safety",
+       "value_count": 8
+      },
+      {
+       "ordinal": 22,
+       "header": "Production Method",
+       "value_count": 11
+      },
+      {
+       "ordinal": 23,
+       "header": "Special Feature",
+       "value_count": 9
+      },
+      {
+       "ordinal": 24,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 25,
+       "header": "Care",
+       "value_count": 11
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery/Body_Jewellery_Taxonomy.xlsx",
+   "sha256": "ff270c4e8f3cb8872d64db3ff48983f1ce297a45e56ead34d83b3c144835c9c9",
+   "bytes": 19359,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Body Jewellery",
+     "non_empty_rows": 67,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Body Jewellery Type",
+       "value_count": 66
+      },
+      {
+       "ordinal": 2,
+       "header": "Body Area",
+       "value_count": 27
+      },
+      {
+       "ordinal": 3,
+       "header": "Jewellery Style",
+       "value_count": 16
+      },
+      {
+       "ordinal": 4,
+       "header": "Audience",
+       "value_count": 6
+      },
+      {
+       "ordinal": 5,
+       "header": "Piercing Requirement",
+       "value_count": 5
+      },
+      {
+       "ordinal": 6,
+       "header": "Gauge / Thickness",
+       "value_count": 15
+      },
+      {
+       "ordinal": 7,
+       "header": "Wearable Length",
+       "value_count": 18
+      },
+      {
+       "ordinal": 8,
+       "header": "Ring Diameter",
+       "value_count": 14
+      },
+      {
+       "ordinal": 9,
+       "header": "End / Ball Size",
+       "value_count": 11
+      },
+      {
+       "ordinal": 10,
+       "header": "Metal / Material",
+       "value_count": 20
+      },
+      {
+       "ordinal": 11,
+       "header": "Material Grade / Purity",
+       "value_count": 11
+      },
+      {
+       "ordinal": 12,
+       "header": "Plating / Coating",
+       "value_count": 11
+      },
+      {
+       "ordinal": 13,
+       "header": "Threading",
+       "value_count": 7
+      },
+      {
+       "ordinal": 14,
+       "header": "Closure",
+       "value_count": 12
+      },
+      {
+       "ordinal": 15,
+       "header": "End Style",
+       "value_count": 17
+      },
+      {
+       "ordinal": 16,
+       "header": "Gemstone Presence",
+       "value_count": 10
+      },
+      {
+       "ordinal": 17,
+       "header": "Stone Type",
+       "value_count": 15
+      },
+      {
+       "ordinal": 18,
+       "header": "Stone Colour",
+       "value_count": 13
+      },
+      {
+       "ordinal": 19,
+       "header": "Stone Setting",
+       "value_count": 7
+      },
+      {
+       "ordinal": 20,
+       "header": "Quantity / Set",
+       "value_count": 7
+      },
+      {
+       "ordinal": 21,
+       "header": "Sterility Status",
+       "value_count": 4
+      },
+      {
+       "ordinal": 22,
+       "header": "Skin / Metal Safety",
+       "value_count": 8
+      },
+      {
+       "ordinal": 23,
+       "header": "Production Method",
+       "value_count": 10
+      },
+      {
+       "ordinal": 24,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 25,
+       "header": "Special Feature",
+       "value_count": 10
+      },
+      {
+       "ordinal": 26,
+       "header": "Care / Seller Information",
+       "value_count": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery/Bracelets_Taxonomy.xlsx",
+   "sha256": "2234e020ead43593b2dde4a3518a288d63b05cd46eb0302ab1c1a76fe62d372a",
+   "bytes": 18302,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Bracelets",
+     "non_empty_rows": 61,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Bracelet Type",
+       "value_count": 60
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 6
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 12
+      },
+      {
+       "ordinal": 4,
+       "header": "Bracelet Style",
+       "value_count": 14
+      },
+      {
+       "ordinal": 5,
+       "header": "Bracelet Length / Size",
+       "value_count": 9
+      },
+      {
+       "ordinal": 6,
+       "header": "Bracelet Width",
+       "value_count": 6
+      },
+      {
+       "ordinal": 7,
+       "header": "Closure",
+       "value_count": 14
+      },
+      {
+       "ordinal": 8,
+       "header": "Adjustability",
+       "value_count": 8
+      },
+      {
+       "ordinal": 9,
+       "header": "Metal / Material",
+       "value_count": 21
+      },
+      {
+       "ordinal": 10,
+       "header": "Metal Purity",
+       "value_count": 11
+      },
+      {
+       "ordinal": 11,
+       "header": "Plating / Finish",
+       "value_count": 13
+      },
+      {
+       "ordinal": 12,
+       "header": "Gemstone Presence",
+       "value_count": 8
+      },
+      {
+       "ordinal": 13,
+       "header": "Stone Type",
+       "value_count": 18
+      },
+      {
+       "ordinal": 14,
+       "header": "Stone Colour",
+       "value_count": 14
+      },
+      {
+       "ordinal": 15,
+       "header": "Stone Setting",
+       "value_count": 10
+      },
+      {
+       "ordinal": 16,
+       "header": "Bead Type",
+       "value_count": 12
+      },
+      {
+       "ordinal": 17,
+       "header": "Charm / Motif",
+       "value_count": 17
+      },
+      {
+       "ordinal": 18,
+       "header": "Quantity / Set",
+       "value_count": 8
+      },
+      {
+       "ordinal": 19,
+       "header": "Personalisation",
+       "value_count": 12
+      },
+      {
+       "ordinal": 20,
+       "header": "Skin / Metal Safety",
+       "value_count": 8
+      },
+      {
+       "ordinal": 21,
+       "header": "Production Method",
+       "value_count": 11
+      },
+      {
+       "ordinal": 22,
+       "header": "Special Feature",
+       "value_count": 10
+      },
+      {
+       "ordinal": 23,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 24,
+       "header": "Care",
+       "value_count": 11
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery/Bridal_and_Wedding_Jewellery_Taxonomy.xlsx",
+   "sha256": "40551780a6d8e7fc85f4a3a3ff0b8ec6c917de8402599bcb0e8c9fbb22511a76",
+   "bytes": 19770,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Bridal & Wedding",
+     "non_empty_rows": 66,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Bridal & Wedding Jewellery Type",
+       "value_count": 65
+      },
+      {
+       "ordinal": 2,
+       "header": "Jewellery Category",
+       "value_count": 13
+      },
+      {
+       "ordinal": 3,
+       "header": "Wedding Role",
+       "value_count": 10
+      },
+      {
+       "ordinal": 4,
+       "header": "Wedding Event",
+       "value_count": 11
+      },
+      {
+       "ordinal": 5,
+       "header": "Style",
+       "value_count": 14
+      },
+      {
+       "ordinal": 6,
+       "header": "Set Components",
+       "value_count": 9
+      },
+      {
+       "ordinal": 7,
+       "header": "Number of Pieces",
+       "value_count": 11
+      },
+      {
+       "ordinal": 8,
+       "header": "Metal / Material",
+       "value_count": 19
+      },
+      {
+       "ordinal": 9,
+       "header": "Metal Purity",
+       "value_count": 11
+      },
+      {
+       "ordinal": 10,
+       "header": "Plating / Finish",
+       "value_count": 13
+      },
+      {
+       "ordinal": 11,
+       "header": "Gemstone Presence",
+       "value_count": 9
+      },
+      {
+       "ordinal": 12,
+       "header": "Primary Stone",
+       "value_count": 15
+      },
+      {
+       "ordinal": 13,
+       "header": "Secondary Stone",
+       "value_count": 10
+      },
+      {
+       "ordinal": 14,
+       "header": "Stone Colour",
+       "value_count": 13
+      },
+      {
+       "ordinal": 15,
+       "header": "Stone Shape",
+       "value_count": 13
+      },
+      {
+       "ordinal": 16,
+       "header": "Stone Setting",
+       "value_count": 12
+      },
+      {
+       "ordinal": 17,
+       "header": "Pearl Type",
+       "value_count": 8
+      },
+      {
+       "ordinal": 18,
+       "header": "Colour",
+       "value_count": 16
+      },
+      {
+       "ordinal": 19,
+       "header": "Length / Dimensions",
+       "value_count": 10
+      },
+      {
+       "ordinal": 20,
+       "header": "Ring Size System",
+       "value_count": 8
+      },
+      {
+       "ordinal": 21,
+       "header": "Closure / Fastening",
+       "value_count": 16
+      },
+      {
+       "ordinal": 22,
+       "header": "Motif / Theme",
+       "value_count": 18
+      },
+      {
+       "ordinal": 23,
+       "header": "Personalisation",
+       "value_count": 12
+      },
+      {
+       "ordinal": 24,
+       "header": "Production Method",
+       "value_count": 11
+      },
+      {
+       "ordinal": 25,
+       "header": "Safety / Sensitivity",
+       "value_count": 8
+      },
+      {
+       "ordinal": 26,
+       "header": "Packaging",
+       "value_count": 9
+      },
+      {
+       "ordinal": 27,
+       "header": "Care",
+       "value_count": 11
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery/Brooches_and_Pins_Taxonomy.xlsx",
+   "sha256": "33763888c3b21cc9176288ff792335b8a0e96e5147d3a78490b2626741b27242",
+   "bytes": 18238,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Brooches & Pins",
+     "non_empty_rows": 61,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Brooch & Pin Type",
+       "value_count": 60
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 5
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 13
+      },
+      {
+       "ordinal": 4,
+       "header": "Brooch / Pin Style",
+       "value_count": 12
+      },
+      {
+       "ordinal": 5,
+       "header": "Attachment / Back",
+       "value_count": 12
+      },
+      {
+       "ordinal": 6,
+       "header": "Orientation",
+       "value_count": 8
+      },
+      {
+       "ordinal": 7,
+       "header": "Dimensions",
+       "value_count": 6
+      },
+      {
+       "ordinal": 8,
+       "header": "Weight",
+       "value_count": 5
+      },
+      {
+       "ordinal": 9,
+       "header": "Metal / Material",
+       "value_count": 20
+      },
+      {
+       "ordinal": 10,
+       "header": "Metal Purity",
+       "value_count": 11
+      },
+      {
+       "ordinal": 11,
+       "header": "Plating / Finish",
+       "value_count": 13
+      },
+      {
+       "ordinal": 12,
+       "header": "Gemstone Presence",
+       "value_count": 9
+      },
+      {
+       "ordinal": 13,
+       "header": "Stone Type",
+       "value_count": 18
+      },
+      {
+       "ordinal": 14,
+       "header": "Stone Colour",
+       "value_count": 14
+      },
+      {
+       "ordinal": 15,
+       "header": "Stone Setting",
+       "value_count": 9
+      },
+      {
+       "ordinal": 16,
+       "header": "Shape / Motif",
+       "value_count": 24
+      },
+      {
+       "ordinal": 17,
+       "header": "Enamel Type",
+       "value_count": 8
+      },
+      {
+       "ordinal": 18,
+       "header": "Quantity / Set",
+       "value_count": 7
+      },
+      {
+       "ordinal": 19,
+       "header": "Personalisation",
+       "value_count": 11
+      },
+      {
+       "ordinal": 20,
+       "header": "Skin / Metal Safety",
+       "value_count": 7
+      },
+      {
+       "ordinal": 21,
+       "header": "Production Method",
+       "value_count": 12
+      },
+      {
+       "ordinal": 22,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 23,
+       "header": "Special Feature",
+       "value_count": 11
+      },
+      {
+       "ordinal": 24,
+       "header": "Care",
+       "value_count": 11
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery/Charms_and_Beads_Taxonomy.xlsx",
+   "sha256": "21d026a5151789e24ced40e03bea46a7c5b89c8487421b9f9d2ea84a91bee13d",
+   "bytes": 19267,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Charms & Beads",
+     "non_empty_rows": 71,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Charm & Bead Type",
+       "value_count": 70
+      },
+      {
+       "ordinal": 2,
+       "header": "Product Class",
+       "value_count": 5
+      },
+      {
+       "ordinal": 3,
+       "header": "Use",
+       "value_count": 10
+      },
+      {
+       "ordinal": 4,
+       "header": "Audience",
+       "value_count": 6
+      },
+      {
+       "ordinal": 5,
+       "header": "Theme",
+       "value_count": 18
+      },
+      {
+       "ordinal": 6,
+       "header": "Shape",
+       "value_count": 21
+      },
+      {
+       "ordinal": 7,
+       "header": "Overall Dimensions",
+       "value_count": 6
+      },
+      {
+       "ordinal": 8,
+       "header": "Hole Size",
+       "value_count": 8
+      },
+      {
+       "ordinal": 9,
+       "header": "Bead Diameter",
+       "value_count": 14
+      },
+      {
+       "ordinal": 10,
+       "header": "Quantity / Pack",
+       "value_count": 9
+      },
+      {
+       "ordinal": 11,
+       "header": "Metal / Material",
+       "value_count": 26
+      },
+      {
+       "ordinal": 12,
+       "header": "Metal Purity",
+       "value_count": 11
+      },
+      {
+       "ordinal": 13,
+       "header": "Plating",
+       "value_count": 9
+      },
+      {
+       "ordinal": 14,
+       "header": "Gemstone Presence",
+       "value_count": 9
+      },
+      {
+       "ordinal": 15,
+       "header": "Stone Type",
+       "value_count": 19
+      },
+      {
+       "ordinal": 16,
+       "header": "Stone Colour",
+       "value_count": 14
+      },
+      {
+       "ordinal": 17,
+       "header": "Surface Finish",
+       "value_count": 14
+      },
+      {
+       "ordinal": 18,
+       "header": "Attachment Type",
+       "value_count": 11
+      },
+      {
+       "ordinal": 19,
+       "header": "Compatibility",
+       "value_count": 10
+      },
+      {
+       "ordinal": 20,
+       "header": "Letter / Number Option",
+       "value_count": 8
+      },
+      {
+       "ordinal": 21,
+       "header": "Personalisation",
+       "value_count": 11
+      },
+      {
+       "ordinal": 22,
+       "header": "Safety / Compliance",
+       "value_count": 9
+      },
+      {
+       "ordinal": 23,
+       "header": "Production Method",
+       "value_count": 13
+      },
+      {
+       "ordinal": 24,
+       "header": "Colour",
+       "value_count": 18
+      },
+      {
+       "ordinal": 25,
+       "header": "Care",
+       "value_count": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery/Earrings_Taxonomy.xlsx",
+   "sha256": "e049e441d82c9e1a77d4bc24d1dcf8eaa16d152fbc895c5f39dbeb127dc58f15",
+   "bytes": 18074,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Earrings",
+     "non_empty_rows": 55,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Earring Type",
+       "value_count": 54
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 5
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 11
+      },
+      {
+       "ordinal": 4,
+       "header": "Earring Style",
+       "value_count": 15
+      },
+      {
+       "ordinal": 5,
+       "header": "Fastening / Back",
+       "value_count": 13
+      },
+      {
+       "ordinal": 6,
+       "header": "Drop Length",
+       "value_count": 6
+      },
+      {
+       "ordinal": 7,
+       "header": "Earring Dimensions",
+       "value_count": 6
+      },
+      {
+       "ordinal": 8,
+       "header": "Weight per Earring",
+       "value_count": 5
+      },
+      {
+       "ordinal": 9,
+       "header": "Metal / Material",
+       "value_count": 19
+      },
+      {
+       "ordinal": 10,
+       "header": "Metal Purity",
+       "value_count": 11
+      },
+      {
+       "ordinal": 11,
+       "header": "Plating / Finish",
+       "value_count": 13
+      },
+      {
+       "ordinal": 12,
+       "header": "Gemstone Presence",
+       "value_count": 8
+      },
+      {
+       "ordinal": 13,
+       "header": "Stone Type",
+       "value_count": 18
+      },
+      {
+       "ordinal": 14,
+       "header": "Stone Colour",
+       "value_count": 14
+      },
+      {
+       "ordinal": 15,
+       "header": "Stone Setting",
+       "value_count": 10
+      },
+      {
+       "ordinal": 16,
+       "header": "Shape / Motif",
+       "value_count": 19
+      },
+      {
+       "ordinal": 17,
+       "header": "Quantity",
+       "value_count": 6
+      },
+      {
+       "ordinal": 18,
+       "header": "Piercing Location",
+       "value_count": 13
+      },
+      {
+       "ordinal": 19,
+       "header": "Post / Gauge Size",
+       "value_count": 8
+      },
+      {
+       "ordinal": 20,
+       "header": "Skin / Metal Safety",
+       "value_count": 8
+      },
+      {
+       "ordinal": 21,
+       "header": "Colour",
+       "value_count": 15
+      },
+      {
+       "ordinal": 22,
+       "header": "Personalisation",
+       "value_count": 9
+      },
+      {
+       "ordinal": 23,
+       "header": "Production Method",
+       "value_count": 10
+      },
+      {
+       "ordinal": 24,
+       "header": "Special Feature",
+       "value_count": 9
+      },
+      {
+       "ordinal": 25,
+       "header": "Care",
+       "value_count": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery/Hair_Jewellery_Taxonomy.xlsx",
+   "sha256": "574915075c7b4f0e4e271180eac688519b319ba81e01c3a277182e652054b06d",
+   "bytes": 18663,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Hair Jewellery",
+     "non_empty_rows": 61,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Hair Jewellery Type",
+       "value_count": 60
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 6
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 14
+      },
+      {
+       "ordinal": 4,
+       "header": "Hair Type / Texture",
+       "value_count": 11
+      },
+      {
+       "ordinal": 5,
+       "header": "Hairstyle Compatibility",
+       "value_count": 12
+      },
+      {
+       "ordinal": 6,
+       "header": "Placement",
+       "value_count": 11
+      },
+      {
+       "ordinal": 7,
+       "header": "Accessory Style",
+       "value_count": 15
+      },
+      {
+       "ordinal": 8,
+       "header": "Dimensions",
+       "value_count": 6
+      },
+      {
+       "ordinal": 9,
+       "header": "Fastening / Attachment",
+       "value_count": 16
+      },
+      {
+       "ordinal": 10,
+       "header": "Metal / Material",
+       "value_count": 20
+      },
+      {
+       "ordinal": 11,
+       "header": "Metal Purity",
+       "value_count": 10
+      },
+      {
+       "ordinal": 12,
+       "header": "Plating / Finish",
+       "value_count": 13
+      },
+      {
+       "ordinal": 13,
+       "header": "Gemstone Presence",
+       "value_count": 9
+      },
+      {
+       "ordinal": 14,
+       "header": "Stone Type",
+       "value_count": 15
+      },
+      {
+       "ordinal": 15,
+       "header": "Stone Colour",
+       "value_count": 13
+      },
+      {
+       "ordinal": 16,
+       "header": "Embellishment",
+       "value_count": 14
+      },
+      {
+       "ordinal": 17,
+       "header": "Shape / Motif",
+       "value_count": 20
+      },
+      {
+       "ordinal": 18,
+       "header": "Quantity / Set",
+       "value_count": 9
+      },
+      {
+       "ordinal": 19,
+       "header": "Flexibility",
+       "value_count": 6
+      },
+      {
+       "ordinal": 20,
+       "header": "Weight",
+       "value_count": 5
+      },
+      {
+       "ordinal": 21,
+       "header": "Personalisation",
+       "value_count": 9
+      },
+      {
+       "ordinal": 22,
+       "header": "Hair / Skin Safety",
+       "value_count": 9
+      },
+      {
+       "ordinal": 23,
+       "header": "Production Method",
+       "value_count": 12
+      },
+      {
+       "ordinal": 24,
+       "header": "Colour",
+       "value_count": 18
+      },
+      {
+       "ordinal": 25,
+       "header": "Care",
+       "value_count": 11
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery/Jewellery_Sets_Taxonomy.xlsx",
+   "sha256": "b332db685ddb65a942ad8f4b24a0feefc46b8ab75ef6869151b898bec483c4af",
+   "bytes": 19060,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Jewellery Sets",
+     "non_empty_rows": 57,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Jewellery Set Type",
+       "value_count": 56
+      },
+      {
+       "ordinal": 2,
+       "header": "Set Components",
+       "value_count": 15
+      },
+      {
+       "ordinal": 3,
+       "header": "Number of Pieces",
+       "value_count": 11
+      },
+      {
+       "ordinal": 4,
+       "header": "Audience",
+       "value_count": 10
+      },
+      {
+       "ordinal": 5,
+       "header": "Age Group",
+       "value_count": 6
+      },
+      {
+       "ordinal": 6,
+       "header": "Occasion",
+       "value_count": 17
+      },
+      {
+       "ordinal": 7,
+       "header": "Style",
+       "value_count": 15
+      },
+      {
+       "ordinal": 8,
+       "header": "Matching Level",
+       "value_count": 6
+      },
+      {
+       "ordinal": 9,
+       "header": "Metal / Material",
+       "value_count": 22
+      },
+      {
+       "ordinal": 10,
+       "header": "Metal Purity",
+       "value_count": 11
+      },
+      {
+       "ordinal": 11,
+       "header": "Plating / Finish",
+       "value_count": 13
+      },
+      {
+       "ordinal": 12,
+       "header": "Gemstone Presence",
+       "value_count": 9
+      },
+      {
+       "ordinal": 13,
+       "header": "Primary Stone",
+       "value_count": 15
+      },
+      {
+       "ordinal": 14,
+       "header": "Stone Colour",
+       "value_count": 13
+      },
+      {
+       "ordinal": 15,
+       "header": "Stone Shape",
+       "value_count": 11
+      },
+      {
+       "ordinal": 16,
+       "header": "Embellishment",
+       "value_count": 13
+      },
+      {
+       "ordinal": 17,
+       "header": "Motif / Theme",
+       "value_count": 18
+      },
+      {
+       "ordinal": 18,
+       "header": "Necklace Length",
+       "value_count": 8
+      },
+      {
+       "ordinal": 19,
+       "header": "Bracelet Length",
+       "value_count": 7
+      },
+      {
+       "ordinal": 20,
+       "header": "Ring Size System",
+       "value_count": 8
+      },
+      {
+       "ordinal": 21,
+       "header": "Closure",
+       "value_count": 14
+      },
+      {
+       "ordinal": 22,
+       "header": "Colour",
+       "value_count": 18
+      },
+      {
+       "ordinal": 23,
+       "header": "Personalisation",
+       "value_count": 10
+      },
+      {
+       "ordinal": 24,
+       "header": "Production Method",
+       "value_count": 11
+      },
+      {
+       "ordinal": 25,
+       "header": "Safety / Sensitivity",
+       "value_count": 8
+      },
+      {
+       "ordinal": 26,
+       "header": "Packaging",
+       "value_count": 8
+      },
+      {
+       "ordinal": 27,
+       "header": "Care",
+       "value_count": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery/Kids_Jewellery_Taxonomy.xlsx",
+   "sha256": "40211249a4118ad1edb8d9f702d2a657663dd7ce41afdf752fb6267d43086bdc",
+   "bytes": 18332,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Kids\u2019 Jewellery",
+     "non_empty_rows": 61,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Kids\u2019 Jewellery Type",
+       "value_count": 60
+      },
+      {
+       "ordinal": 2,
+       "header": "Jewellery Category",
+       "value_count": 9
+      },
+      {
+       "ordinal": 3,
+       "header": "Age Group",
+       "value_count": 6
+      },
+      {
+       "ordinal": 4,
+       "header": "Audience",
+       "value_count": 6
+      },
+      {
+       "ordinal": 5,
+       "header": "Occasion",
+       "value_count": 12
+      },
+      {
+       "ordinal": 6,
+       "header": "Style",
+       "value_count": 14
+      },
+      {
+       "ordinal": 7,
+       "header": "Metal / Material",
+       "value_count": 22
+      },
+      {
+       "ordinal": 8,
+       "header": "Metal Purity",
+       "value_count": 8
+      },
+      {
+       "ordinal": 9,
+       "header": "Plating / Finish",
+       "value_count": 11
+      },
+      {
+       "ordinal": 10,
+       "header": "Gemstone Presence",
+       "value_count": 9
+      },
+      {
+       "ordinal": 11,
+       "header": "Stone / Bead Type",
+       "value_count": 14
+      },
+      {
+       "ordinal": 12,
+       "header": "Colour",
+       "value_count": 19
+      },
+      {
+       "ordinal": 13,
+       "header": "Shape / Motif",
+       "value_count": 22
+      },
+      {
+       "ordinal": 14,
+       "header": "Length",
+       "value_count": 8
+      },
+      {
+       "ordinal": 15,
+       "header": "Size / Fit",
+       "value_count": 8
+      },
+      {
+       "ordinal": 16,
+       "header": "Ring Size System",
+       "value_count": 8
+      },
+      {
+       "ordinal": 17,
+       "header": "Closure / Fastening",
+       "value_count": 15
+      },
+      {
+       "ordinal": 18,
+       "header": "Personalisation",
+       "value_count": 10
+      },
+      {
+       "ordinal": 19,
+       "header": "Quantity / Set",
+       "value_count": 8
+      },
+      {
+       "ordinal": 20,
+       "header": "Weight",
+       "value_count": 4
+      },
+      {
+       "ordinal": 21,
+       "header": "Safety / Sensitivity",
+       "value_count": 14
+      },
+      {
+       "ordinal": 22,
+       "header": "Production Method",
+       "value_count": 10
+      },
+      {
+       "ordinal": 23,
+       "header": "Packaging",
+       "value_count": 7
+      },
+      {
+       "ordinal": 24,
+       "header": "Care",
+       "value_count": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery/Mens_Jewellery_Taxonomy.xlsx",
+   "sha256": "2a81955022647a2c941d52d4a84ae98c4336957d1a14b52e3439258bfc512822",
+   "bytes": 18568,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Men\u2019s Jewellery",
+     "non_empty_rows": 61,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Men\u2019s Jewellery Type",
+       "value_count": 60
+      },
+      {
+       "ordinal": 2,
+       "header": "Jewellery Category",
+       "value_count": 12
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 14
+      },
+      {
+       "ordinal": 4,
+       "header": "Style",
+       "value_count": 15
+      },
+      {
+       "ordinal": 5,
+       "header": "Metal / Material",
+       "value_count": 22
+      },
+      {
+       "ordinal": 6,
+       "header": "Metal Purity",
+       "value_count": 11
+      },
+      {
+       "ordinal": 7,
+       "header": "Plating / Finish",
+       "value_count": 14
+      },
+      {
+       "ordinal": 8,
+       "header": "Gemstone Presence",
+       "value_count": 9
+      },
+      {
+       "ordinal": 9,
+       "header": "Stone Type",
+       "value_count": 17
+      },
+      {
+       "ordinal": 10,
+       "header": "Stone Colour",
+       "value_count": 14
+      },
+      {
+       "ordinal": 11,
+       "header": "Shape / Motif",
+       "value_count": 20
+      },
+      {
+       "ordinal": 12,
+       "header": "Chain Style",
+       "value_count": 14
+      },
+      {
+       "ordinal": 13,
+       "header": "Length",
+       "value_count": 10
+      },
+      {
+       "ordinal": 14,
+       "header": "Width / Thickness",
+       "value_count": 6
+      },
+      {
+       "ordinal": 15,
+       "header": "Ring Size System",
+       "value_count": 8
+      },
+      {
+       "ordinal": 16,
+       "header": "Earring Style",
+       "value_count": 11
+      },
+      {
+       "ordinal": 17,
+       "header": "Closure / Fastening",
+       "value_count": 15
+      },
+      {
+       "ordinal": 18,
+       "header": "Personalisation",
+       "value_count": 11
+      },
+      {
+       "ordinal": 19,
+       "header": "Size / Fit",
+       "value_count": 10
+      },
+      {
+       "ordinal": 20,
+       "header": "Weight",
+       "value_count": 6
+      },
+      {
+       "ordinal": 21,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 22,
+       "header": "Production Method",
+       "value_count": 11
+      },
+      {
+       "ordinal": 23,
+       "header": "Safety / Sensitivity",
+       "value_count": 8
+      },
+      {
+       "ordinal": 24,
+       "header": "Packaging",
+       "value_count": 8
+      },
+      {
+       "ordinal": 25,
+       "header": "Care",
+       "value_count": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery/Necklaces_and_Pendants_Taxonomy.xlsx",
+   "sha256": "199aa5ee318807bf59b3bfa72bd11eb6d722149cb8dec922b7823c7ec3c87547",
+   "bytes": 17573,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Necklaces & Pendants",
+     "non_empty_rows": 51,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Necklace & Pendant Type",
+       "value_count": 50
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 5
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 12
+      },
+      {
+       "ordinal": 4,
+       "header": "Necklace Length",
+       "value_count": 8
+      },
+      {
+       "ordinal": 5,
+       "header": "Chain Style",
+       "value_count": 16
+      },
+      {
+       "ordinal": 6,
+       "header": "Pendant Style",
+       "value_count": 9
+      },
+      {
+       "ordinal": 7,
+       "header": "Pendant Shape / Motif",
+       "value_count": 21
+      },
+      {
+       "ordinal": 8,
+       "header": "Metal / Material",
+       "value_count": 20
+      },
+      {
+       "ordinal": 9,
+       "header": "Metal Purity",
+       "value_count": 11
+      },
+      {
+       "ordinal": 10,
+       "header": "Plating / Finish",
+       "value_count": 13
+      },
+      {
+       "ordinal": 11,
+       "header": "Gemstone Presence",
+       "value_count": 8
+      },
+      {
+       "ordinal": 12,
+       "header": "Stone Type",
+       "value_count": 18
+      },
+      {
+       "ordinal": 13,
+       "header": "Stone Colour",
+       "value_count": 14
+      },
+      {
+       "ordinal": 14,
+       "header": "Stone Setting",
+       "value_count": 10
+      },
+      {
+       "ordinal": 15,
+       "header": "Closure",
+       "value_count": 11
+      },
+      {
+       "ordinal": 16,
+       "header": "Chain Thickness",
+       "value_count": 6
+      },
+      {
+       "ordinal": 17,
+       "header": "Pendant Dimensions",
+       "value_count": 6
+      },
+      {
+       "ordinal": 18,
+       "header": "Adjustability",
+       "value_count": 6
+      },
+      {
+       "ordinal": 19,
+       "header": "Personalisation",
+       "value_count": 11
+      },
+      {
+       "ordinal": 20,
+       "header": "Colour",
+       "value_count": 15
+      },
+      {
+       "ordinal": 21,
+       "header": "Skin / Metal Safety",
+       "value_count": 7
+      },
+      {
+       "ordinal": 22,
+       "header": "Production Method",
+       "value_count": 10
+      },
+      {
+       "ordinal": 23,
+       "header": "Special Feature",
+       "value_count": 10
+      },
+      {
+       "ordinal": 24,
+       "header": "Care",
+       "value_count": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery/Religious_and_Spiritual_Jewellery_Taxonomy.xlsx",
+   "sha256": "2945f434d5b4fb86578440af09a11422a3ac29402f37c0e6941cc8bce173140a",
+   "bytes": 19852,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Religious & Spiritual",
+     "non_empty_rows": 71,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Religious & Spiritual Jewellery Type",
+       "value_count": 70
+      },
+      {
+       "ordinal": 2,
+       "header": "Jewellery Category",
+       "value_count": 9
+      },
+      {
+       "ordinal": 3,
+       "header": "Tradition / Theme",
+       "value_count": 16
+      },
+      {
+       "ordinal": 4,
+       "header": "Symbol / Icon",
+       "value_count": 29
+      },
+      {
+       "ordinal": 5,
+       "header": "Sacred Text / Inscription",
+       "value_count": 15
+      },
+      {
+       "ordinal": 6,
+       "header": "Language / Script",
+       "value_count": 12
+      },
+      {
+       "ordinal": 7,
+       "header": "Audience",
+       "value_count": 8
+      },
+      {
+       "ordinal": 8,
+       "header": "Occasion / Use",
+       "value_count": 14
+      },
+      {
+       "ordinal": 9,
+       "header": "Metal / Material",
+       "value_count": 23
+      },
+      {
+       "ordinal": 10,
+       "header": "Metal Purity",
+       "value_count": 11
+      },
+      {
+       "ordinal": 11,
+       "header": "Plating / Finish",
+       "value_count": 13
+      },
+      {
+       "ordinal": 12,
+       "header": "Gemstone / Bead Presence",
+       "value_count": 11
+      },
+      {
+       "ordinal": 13,
+       "header": "Stone / Bead Type",
+       "value_count": 16
+      },
+      {
+       "ordinal": 14,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 15,
+       "header": "Length / Dimensions",
+       "value_count": 11
+      },
+      {
+       "ordinal": 16,
+       "header": "Prayer-Bead Count",
+       "value_count": 11
+      },
+      {
+       "ordinal": 17,
+       "header": "Chain / Cord Style",
+       "value_count": 12
+      },
+      {
+       "ordinal": 18,
+       "header": "Closure / Fastening",
+       "value_count": 14
+      },
+      {
+       "ordinal": 19,
+       "header": "Personalisation",
+       "value_count": 12
+      },
+      {
+       "ordinal": 20,
+       "header": "Blessing / Sacred-Status Claim",
+       "value_count": 8
+      },
+      {
+       "ordinal": 21,
+       "header": "Origin / Tradition Claim",
+       "value_count": 8
+      },
+      {
+       "ordinal": 22,
+       "header": "Production Method",
+       "value_count": 12
+      },
+      {
+       "ordinal": 23,
+       "header": "Safety / Sensitivity",
+       "value_count": 8
+      },
+      {
+       "ordinal": 24,
+       "header": "Packaging",
+       "value_count": 8
+      },
+      {
+       "ordinal": 25,
+       "header": "Care",
+       "value_count": 11
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery/Rings_Taxonomy.xlsx",
+   "sha256": "ab07f2558cd711754466a34b026db060bd4076240645385691c0e27c722a5e23",
+   "bytes": 18623,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Rings",
+     "non_empty_rows": 61,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Ring Type",
+       "value_count": 60
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 5
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 13
+      },
+      {
+       "ordinal": 4,
+       "header": "Ring Style",
+       "value_count": 12
+      },
+      {
+       "ordinal": 5,
+       "header": "Ring Purpose",
+       "value_count": 10
+      },
+      {
+       "ordinal": 6,
+       "header": "Band Profile",
+       "value_count": 12
+      },
+      {
+       "ordinal": 7,
+       "header": "Size System",
+       "value_count": 5
+      },
+      {
+       "ordinal": 8,
+       "header": "Ring Size",
+       "value_count": 32
+      },
+      {
+       "ordinal": 9,
+       "header": "Band Width",
+       "value_count": 6
+      },
+      {
+       "ordinal": 10,
+       "header": "Metal / Material",
+       "value_count": 19
+      },
+      {
+       "ordinal": 11,
+       "header": "Metal Purity",
+       "value_count": 12
+      },
+      {
+       "ordinal": 12,
+       "header": "Plating / Finish",
+       "value_count": 13
+      },
+      {
+       "ordinal": 13,
+       "header": "Gemstone Presence",
+       "value_count": 8
+      },
+      {
+       "ordinal": 14,
+       "header": "Stone Type",
+       "value_count": 18
+      },
+      {
+       "ordinal": 15,
+       "header": "Stone Colour",
+       "value_count": 14
+      },
+      {
+       "ordinal": 16,
+       "header": "Stone Cut / Shape",
+       "value_count": 15
+      },
+      {
+       "ordinal": 17,
+       "header": "Stone Setting",
+       "value_count": 12
+      },
+      {
+       "ordinal": 18,
+       "header": "Total Stone Weight",
+       "value_count": 8
+      },
+      {
+       "ordinal": 19,
+       "header": "Stone Count",
+       "value_count": 9
+      },
+      {
+       "ordinal": 20,
+       "header": "Shape / Motif",
+       "value_count": 18
+      },
+      {
+       "ordinal": 21,
+       "header": "Personalisation",
+       "value_count": 11
+      },
+      {
+       "ordinal": 22,
+       "header": "Skin / Metal Safety",
+       "value_count": 8
+      },
+      {
+       "ordinal": 23,
+       "header": "Production Method",
+       "value_count": 10
+      },
+      {
+       "ordinal": 24,
+       "header": "Special Feature",
+       "value_count": 11
+      },
+      {
+       "ordinal": 25,
+       "header": "Care",
+       "value_count": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Jewellery/raditional_and_Cultural_Jewellery_Taxonomy.xlsx",
+   "sha256": "11d8355691047df9adf6b1115cd3f84260bd08f4beed75e54955a0343c84b6f2",
+   "bytes": 21366,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Traditional & Cultural",
+     "non_empty_rows": 81,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Traditional & Cultural Jewellery Type",
+       "value_count": 80
+      },
+      {
+       "ordinal": 2,
+       "header": "Jewellery Category",
+       "value_count": 13
+      },
+      {
+       "ordinal": 3,
+       "header": "Country / Region",
+       "value_count": 16
+      },
+      {
+       "ordinal": 4,
+       "header": "Culture / Community",
+       "value_count": 20
+      },
+      {
+       "ordinal": 5,
+       "header": "Cultural Use",
+       "value_count": 14
+      },
+      {
+       "ordinal": 6,
+       "header": "Audience",
+       "value_count": 10
+      },
+      {
+       "ordinal": 7,
+       "header": "Style",
+       "value_count": 14
+      },
+      {
+       "ordinal": 8,
+       "header": "Metal / Material",
+       "value_count": 24
+      },
+      {
+       "ordinal": 9,
+       "header": "Metal Purity",
+       "value_count": 10
+      },
+      {
+       "ordinal": 10,
+       "header": "Plating / Finish",
+       "value_count": 12
+      },
+      {
+       "ordinal": 11,
+       "header": "Technique",
+       "value_count": 19
+      },
+      {
+       "ordinal": 12,
+       "header": "Gemstone / Bead Presence",
+       "value_count": 14
+      },
+      {
+       "ordinal": 13,
+       "header": "Stone / Bead Type",
+       "value_count": 16
+      },
+      {
+       "ordinal": 14,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 15,
+       "header": "Pattern / Motif",
+       "value_count": 19
+      },
+      {
+       "ordinal": 16,
+       "header": "Length / Dimensions",
+       "value_count": 12
+      },
+      {
+       "ordinal": 17,
+       "header": "Weight",
+       "value_count": 5
+      },
+      {
+       "ordinal": 18,
+       "header": "Closure / Fastening",
+       "value_count": 14
+      },
+      {
+       "ordinal": 19,
+       "header": "Set Components",
+       "value_count": 8
+      },
+      {
+       "ordinal": 20,
+       "header": "Personalisation",
+       "value_count": 11
+      },
+      {
+       "ordinal": 21,
+       "header": "Production Method",
+       "value_count": 10
+      },
+      {
+       "ordinal": 22,
+       "header": "Maker / Artisan Type",
+       "value_count": 8
+      },
+      {
+       "ordinal": 23,
+       "header": "Origin Claim",
+       "value_count": 8
+      },
+      {
+       "ordinal": 24,
+       "header": "Authenticity / Evidence",
+       "value_count": 10
+      },
+      {
+       "ordinal": 25,
+       "header": "Safety / Sensitivity",
+       "value_count": 9
+      },
+      {
+       "ordinal": 26,
+       "header": "Packaging",
+       "value_count": 8
+      },
+      {
+       "ordinal": 27,
+       "header": "Care",
+       "value_count": 11
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Activewear_Taxonomy.xlsx",
+   "sha256": "9a781f035a9be2c4c966bd1d29ed80d27e3e210b02344b058e72de0e084261e8",
+   "bytes": 14942,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Kids' Activewear",
+     "non_empty_rows": 39,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Kids' Activewear Type",
+       "value_count": 38
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 3
+      },
+      {
+       "ordinal": 3,
+       "header": "Age Group",
+       "value_count": 5
+      },
+      {
+       "ordinal": 4,
+       "header": "Sport / Activity",
+       "value_count": 13
+      },
+      {
+       "ordinal": 5,
+       "header": "Garment Length",
+       "value_count": 8
+      },
+      {
+       "ordinal": 6,
+       "header": "Fit",
+       "value_count": 6
+      },
+      {
+       "ordinal": 7,
+       "header": "Sleeve",
+       "value_count": 6
+      },
+      {
+       "ordinal": 8,
+       "header": "Neckline",
+       "value_count": 7
+      },
+      {
+       "ordinal": 9,
+       "header": "Waist Rise",
+       "value_count": 4
+      },
+      {
+       "ordinal": 10,
+       "header": "Waistband",
+       "value_count": 6
+      },
+      {
+       "ordinal": 11,
+       "header": "Material",
+       "value_count": 11
+      },
+      {
+       "ordinal": 12,
+       "header": "Stretch Level",
+       "value_count": 5
+      },
+      {
+       "ordinal": 13,
+       "header": "Performance Feature",
+       "value_count": 9
+      },
+      {
+       "ordinal": 14,
+       "header": "Support Level",
+       "value_count": 5
+      },
+      {
+       "ordinal": 15,
+       "header": "Pocket Type",
+       "value_count": 6
+      },
+      {
+       "ordinal": 16,
+       "header": "Closure",
+       "value_count": 8
+      },
+      {
+       "ordinal": 17,
+       "header": "Pattern",
+       "value_count": 9
+      },
+      {
+       "ordinal": 18,
+       "header": "Size",
+       "value_count": 19
+      },
+      {
+       "ordinal": 19,
+       "header": "Colour",
+       "value_count": 16
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Bottoms_Taxonomy.xlsx",
+   "sha256": "a5a770561f57a8150002b2a0df65dd27bf162874dbfd8b259b493dbf73b43106",
+   "bytes": 14276,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Kids' Bottoms",
+     "non_empty_rows": 34,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Kids' Bottom Type",
+       "value_count": 33
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 3
+      },
+      {
+       "ordinal": 3,
+       "header": "Age Group",
+       "value_count": 6
+      },
+      {
+       "ordinal": 4,
+       "header": "Length",
+       "value_count": 7
+      },
+      {
+       "ordinal": 5,
+       "header": "Occasion",
+       "value_count": 9
+      },
+      {
+       "ordinal": 6,
+       "header": "Fit",
+       "value_count": 7
+      },
+      {
+       "ordinal": 7,
+       "header": "Rise",
+       "value_count": 4
+      },
+      {
+       "ordinal": 8,
+       "header": "Leg Style",
+       "value_count": 8
+      },
+      {
+       "ordinal": 9,
+       "header": "Waistband",
+       "value_count": 8
+      },
+      {
+       "ordinal": 10,
+       "header": "Material",
+       "value_count": 12
+      },
+      {
+       "ordinal": 11,
+       "header": "Pattern",
+       "value_count": 12
+      },
+      {
+       "ordinal": 12,
+       "header": "Closure",
+       "value_count": 8
+      },
+      {
+       "ordinal": 13,
+       "header": "Pocket",
+       "value_count": 7
+      },
+      {
+       "ordinal": 14,
+       "header": "Size",
+       "value_count": 21
+      },
+      {
+       "ordinal": 15,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 16,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 17,
+       "header": "Season",
+       "value_count": 5
+      },
+      {
+       "ordinal": 18,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Dresses_Taxonomy.xlsx",
+   "sha256": "3b1ec8378d38828377467dab6db307d6b0c87055f6039ff0ad4ff0b56a587c9a",
+   "bytes": 14015,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Kids' Dresses",
+     "non_empty_rows": 26,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Kids' Dress Type",
+       "value_count": 25
+      },
+      {
+       "ordinal": 2,
+       "header": "Age Group",
+       "value_count": 6
+      },
+      {
+       "ordinal": 3,
+       "header": "Length",
+       "value_count": 6
+      },
+      {
+       "ordinal": 4,
+       "header": "Occasion",
+       "value_count": 10
+      },
+      {
+       "ordinal": 5,
+       "header": "Fit",
+       "value_count": 6
+      },
+      {
+       "ordinal": 6,
+       "header": "Sleeve",
+       "value_count": 9
+      },
+      {
+       "ordinal": 7,
+       "header": "Neckline",
+       "value_count": 9
+      },
+      {
+       "ordinal": 8,
+       "header": "Material",
+       "value_count": 13
+      },
+      {
+       "ordinal": 9,
+       "header": "Pattern",
+       "value_count": 11
+      },
+      {
+       "ordinal": 10,
+       "header": "Closure",
+       "value_count": 9
+      },
+      {
+       "ordinal": 11,
+       "header": "Waist Style",
+       "value_count": 7
+      },
+      {
+       "ordinal": 12,
+       "header": "Size",
+       "value_count": 21
+      },
+      {
+       "ordinal": 13,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 14,
+       "header": "Stretch",
+       "value_count": 4
+      },
+      {
+       "ordinal": 15,
+       "header": "Embellishment",
+       "value_count": 11
+      },
+      {
+       "ordinal": 16,
+       "header": "Lining",
+       "value_count": 5
+      },
+      {
+       "ordinal": 17,
+       "header": "Season",
+       "value_count": 5
+      },
+      {
+       "ordinal": 18,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Jackets_and_Coats_Taxonomy.xlsx",
+   "sha256": "7417b0b6230583752e497580a07d34371ce5b642a9b55583de80d9da5e65cf6f",
+   "bytes": 14484,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Kids' Jackets & Coats",
+     "non_empty_rows": 33,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Kids' Jacket / Coat Type",
+       "value_count": 32
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 3
+      },
+      {
+       "ordinal": 3,
+       "header": "Age Group",
+       "value_count": 6
+      },
+      {
+       "ordinal": 4,
+       "header": "Outerwear Length",
+       "value_count": 6
+      },
+      {
+       "ordinal": 5,
+       "header": "Occasion",
+       "value_count": 9
+      },
+      {
+       "ordinal": 6,
+       "header": "Fit",
+       "value_count": 5
+      },
+      {
+       "ordinal": 7,
+       "header": "Warmth Level",
+       "value_count": 4
+      },
+      {
+       "ordinal": 8,
+       "header": "Weather Protection",
+       "value_count": 6
+      },
+      {
+       "ordinal": 9,
+       "header": "Hood",
+       "value_count": 5
+      },
+      {
+       "ordinal": 10,
+       "header": "Collar Style",
+       "value_count": 6
+      },
+      {
+       "ordinal": 11,
+       "header": "Sleeve",
+       "value_count": 5
+      },
+      {
+       "ordinal": 12,
+       "header": "Material",
+       "value_count": 13
+      },
+      {
+       "ordinal": 13,
+       "header": "Lining",
+       "value_count": 7
+      },
+      {
+       "ordinal": 14,
+       "header": "Insulation",
+       "value_count": 5
+      },
+      {
+       "ordinal": 15,
+       "header": "Pattern",
+       "value_count": 9
+      },
+      {
+       "ordinal": 16,
+       "header": "Closure",
+       "value_count": 7
+      },
+      {
+       "ordinal": 17,
+       "header": "Pocket Type",
+       "value_count": 7
+      },
+      {
+       "ordinal": 18,
+       "header": "Size",
+       "value_count": 21
+      },
+      {
+       "ordinal": 19,
+       "header": "Colour",
+       "value_count": 16
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Jumpsuits_and_Rompers_Taxonomy.xlsx",
+   "sha256": "8930633db4a657803ed45ed986b31cc0165163f3337f9b7647dc835dcf7e3fb5",
+   "bytes": 14364,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Kids' Jumpsuits & Rompers",
+     "non_empty_rows": 30,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Kids' Jumpsuit / Romper Type",
+       "value_count": 29
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 3
+      },
+      {
+       "ordinal": 3,
+       "header": "Age Group",
+       "value_count": 6
+      },
+      {
+       "ordinal": 4,
+       "header": "Length",
+       "value_count": 6
+      },
+      {
+       "ordinal": 5,
+       "header": "Occasion",
+       "value_count": 11
+      },
+      {
+       "ordinal": 6,
+       "header": "Fit",
+       "value_count": 6
+      },
+      {
+       "ordinal": 7,
+       "header": "Sleeve",
+       "value_count": 8
+      },
+      {
+       "ordinal": 8,
+       "header": "Neckline / Collar",
+       "value_count": 9
+      },
+      {
+       "ordinal": 9,
+       "header": "Leg Style",
+       "value_count": 8
+      },
+      {
+       "ordinal": 10,
+       "header": "Material",
+       "value_count": 12
+      },
+      {
+       "ordinal": 11,
+       "header": "Pattern",
+       "value_count": 12
+      },
+      {
+       "ordinal": 12,
+       "header": "Closure",
+       "value_count": 9
+      },
+      {
+       "ordinal": 13,
+       "header": "Waist Style",
+       "value_count": 6
+      },
+      {
+       "ordinal": 14,
+       "header": "Pocket",
+       "value_count": 7
+      },
+      {
+       "ordinal": 15,
+       "header": "Size",
+       "value_count": 21
+      },
+      {
+       "ordinal": 16,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 17,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 18,
+       "header": "Season",
+       "value_count": 5
+      },
+      {
+       "ordinal": 19,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Loungewear_and_Sleepwear_Taxonomy.xlsx",
+   "sha256": "bc7309fb0be882ab068df7821e08a8732b74b5171d6eff561e50bd61ade46a96",
+   "bytes": 14799,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Kids' Lounge & Sleep",
+     "non_empty_rows": 39,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Kids' Loungewear / Sleepwear Type",
+       "value_count": 38
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 3
+      },
+      {
+       "ordinal": 3,
+       "header": "Age Group",
+       "value_count": 6
+      },
+      {
+       "ordinal": 4,
+       "header": "Piece Count",
+       "value_count": 4
+      },
+      {
+       "ordinal": 5,
+       "header": "Pieces Included",
+       "value_count": 8
+      },
+      {
+       "ordinal": 6,
+       "header": "Garment Length",
+       "value_count": 8
+      },
+      {
+       "ordinal": 7,
+       "header": "Fit",
+       "value_count": 5
+      },
+      {
+       "ordinal": 8,
+       "header": "Sleeve",
+       "value_count": 5
+      },
+      {
+       "ordinal": 9,
+       "header": "Neckline",
+       "value_count": 6
+      },
+      {
+       "ordinal": 10,
+       "header": "Leg Style",
+       "value_count": 6
+      },
+      {
+       "ordinal": 11,
+       "header": "Material",
+       "value_count": 12
+      },
+      {
+       "ordinal": 12,
+       "header": "Fabric Weight",
+       "value_count": 4
+      },
+      {
+       "ordinal": 13,
+       "header": "Season",
+       "value_count": 5
+      },
+      {
+       "ordinal": 14,
+       "header": "Warmth Level",
+       "value_count": 4
+      },
+      {
+       "ordinal": 15,
+       "header": "Closure",
+       "value_count": 7
+      },
+      {
+       "ordinal": 16,
+       "header": "Waistband",
+       "value_count": 4
+      },
+      {
+       "ordinal": 17,
+       "header": "Pattern",
+       "value_count": 10
+      },
+      {
+       "ordinal": 18,
+       "header": "Size",
+       "value_count": 21
+      },
+      {
+       "ordinal": 19,
+       "header": "Colour",
+       "value_count": 16
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Matching_Sets_Taxonomy.xlsx",
+   "sha256": "395d6e4c0b7be8cbf19b50625372e5bf51328e9e375e85ce1da96379074e78c2",
+   "bytes": 14499,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Kids' Matching Sets",
+     "non_empty_rows": 29,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Kids' Matching Set Type",
+       "value_count": 28
+      },
+      {
+       "ordinal": 2,
+       "header": "Pieces Included",
+       "value_count": 11
+      },
+      {
+       "ordinal": 3,
+       "header": "Piece Count",
+       "value_count": 2
+      },
+      {
+       "ordinal": 4,
+       "header": "Audience",
+       "value_count": 3
+      },
+      {
+       "ordinal": 5,
+       "header": "Age Group",
+       "value_count": 6
+      },
+      {
+       "ordinal": 6,
+       "header": "Top Style",
+       "value_count": 10
+      },
+      {
+       "ordinal": 7,
+       "header": "Bottom Style",
+       "value_count": 8
+      },
+      {
+       "ordinal": 8,
+       "header": "Occasion",
+       "value_count": 11
+      },
+      {
+       "ordinal": 9,
+       "header": "Fit",
+       "value_count": 6
+      },
+      {
+       "ordinal": 10,
+       "header": "Sleeve",
+       "value_count": 8
+      },
+      {
+       "ordinal": 11,
+       "header": "Neckline / Collar",
+       "value_count": 9
+      },
+      {
+       "ordinal": 12,
+       "header": "Material",
+       "value_count": 12
+      },
+      {
+       "ordinal": 13,
+       "header": "Pattern",
+       "value_count": 12
+      },
+      {
+       "ordinal": 14,
+       "header": "Closure",
+       "value_count": 8
+      },
+      {
+       "ordinal": 15,
+       "header": "Waistband",
+       "value_count": 6
+      },
+      {
+       "ordinal": 16,
+       "header": "Size",
+       "value_count": 21
+      },
+      {
+       "ordinal": 17,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 18,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 19,
+       "header": "Season",
+       "value_count": 5
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Suits_and_Formalwear_Taxonomy.xlsx",
+   "sha256": "9198ee5093fa9908df6c7055d333798fe596f6eaeb530ee4baa17d3b44cf78cc",
+   "bytes": 14268,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Kids' Suits & Formalwear",
+     "non_empty_rows": 30,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Kids' Suit / Formalwear Type",
+       "value_count": 29
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 3
+      },
+      {
+       "ordinal": 3,
+       "header": "Age Group",
+       "value_count": 6
+      },
+      {
+       "ordinal": 4,
+       "header": "Piece Count",
+       "value_count": 4
+      },
+      {
+       "ordinal": 5,
+       "header": "Pieces Included",
+       "value_count": 9
+      },
+      {
+       "ordinal": 6,
+       "header": "Occasion",
+       "value_count": 10
+      },
+      {
+       "ordinal": 7,
+       "header": "Fit",
+       "value_count": 6
+      },
+      {
+       "ordinal": 8,
+       "header": "Jacket Style",
+       "value_count": 7
+      },
+      {
+       "ordinal": 9,
+       "header": "Lapel Style",
+       "value_count": 5
+      },
+      {
+       "ordinal": 10,
+       "header": "Trouser Style",
+       "value_count": 7
+      },
+      {
+       "ordinal": 11,
+       "header": "Shirt Style",
+       "value_count": 6
+      },
+      {
+       "ordinal": 12,
+       "header": "Vest Included",
+       "value_count": 3
+      },
+      {
+       "ordinal": 13,
+       "header": "Material",
+       "value_count": 11
+      },
+      {
+       "ordinal": 14,
+       "header": "Pattern",
+       "value_count": 9
+      },
+      {
+       "ordinal": 15,
+       "header": "Closure",
+       "value_count": 7
+      },
+      {
+       "ordinal": 16,
+       "header": "Size",
+       "value_count": 21
+      },
+      {
+       "ordinal": 17,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 18,
+       "header": "Accessories Included",
+       "value_count": 8
+      },
+      {
+       "ordinal": 19,
+       "header": "Season",
+       "value_count": 5
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Tops_Taxonomy.xlsx",
+   "sha256": "d5cb43ad57f618ed3bd69e656b8e70209702785904658ce6e6407e225e9995da",
+   "bytes": 14134,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Kids' Tops",
+     "non_empty_rows": 29,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Kids' Top Type",
+       "value_count": 28
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 3
+      },
+      {
+       "ordinal": 3,
+       "header": "Age Group",
+       "value_count": 6
+      },
+      {
+       "ordinal": 4,
+       "header": "Length",
+       "value_count": 5
+      },
+      {
+       "ordinal": 5,
+       "header": "Occasion",
+       "value_count": 9
+      },
+      {
+       "ordinal": 6,
+       "header": "Fit",
+       "value_count": 6
+      },
+      {
+       "ordinal": 7,
+       "header": "Sleeve",
+       "value_count": 9
+      },
+      {
+       "ordinal": 8,
+       "header": "Neckline / Collar",
+       "value_count": 11
+      },
+      {
+       "ordinal": 9,
+       "header": "Material",
+       "value_count": 13
+      },
+      {
+       "ordinal": 10,
+       "header": "Pattern",
+       "value_count": 12
+      },
+      {
+       "ordinal": 11,
+       "header": "Closure",
+       "value_count": 8
+      },
+      {
+       "ordinal": 12,
+       "header": "Hem Style",
+       "value_count": 6
+      },
+      {
+       "ordinal": 13,
+       "header": "Size",
+       "value_count": 21
+      },
+      {
+       "ordinal": 14,
+       "header": "Colour",
+       "value_count": 15
+      },
+      {
+       "ordinal": 15,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 16,
+       "header": "Embellishment",
+       "value_count": 11
+      },
+      {
+       "ordinal": 17,
+       "header": "Season",
+       "value_count": 5
+      },
+      {
+       "ordinal": 18,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Kids\u2019 Clothing/Kids_Underwear_Taxonomy.xlsx",
+   "sha256": "d8227a32e7438704fd7821fd67bdfa605ea16be6ad75f047370b9746ca2e147a",
+   "bytes": 14212,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Kids' Underwear",
+     "non_empty_rows": 30,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Kids' Underwear Type",
+       "value_count": 29
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 3
+      },
+      {
+       "ordinal": 3,
+       "header": "Age Group",
+       "value_count": 5
+      },
+      {
+       "ordinal": 4,
+       "header": "Style",
+       "value_count": 10
+      },
+      {
+       "ordinal": 5,
+       "header": "Coverage",
+       "value_count": 5
+      },
+      {
+       "ordinal": 6,
+       "header": "Rise",
+       "value_count": 4
+      },
+      {
+       "ordinal": 7,
+       "header": "Waistband",
+       "value_count": 6
+      },
+      {
+       "ordinal": 8,
+       "header": "Leg Opening",
+       "value_count": 7
+      },
+      {
+       "ordinal": 9,
+       "header": "Material",
+       "value_count": 10
+      },
+      {
+       "ordinal": 10,
+       "header": "Stretch Level",
+       "value_count": 5
+      },
+      {
+       "ordinal": 11,
+       "header": "Breathability",
+       "value_count": 4
+      },
+      {
+       "ordinal": 12,
+       "header": "Seam Type",
+       "value_count": 4
+      },
+      {
+       "ordinal": 13,
+       "header": "Label Type",
+       "value_count": 4
+      },
+      {
+       "ordinal": 14,
+       "header": "Closure",
+       "value_count": 4
+      },
+      {
+       "ordinal": 15,
+       "header": "Special Feature",
+       "value_count": 6
+      },
+      {
+       "ordinal": 16,
+       "header": "Pack Quantity",
+       "value_count": 8
+      },
+      {
+       "ordinal": 17,
+       "header": "Pattern",
+       "value_count": 9
+      },
+      {
+       "ordinal": 18,
+       "header": "Size",
+       "value_count": 19
+      },
+      {
+       "ordinal": 19,
+       "header": "Colour",
+       "value_count": 15
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Mens clothing/Mens_Activewear_Taxonomy.xlsx",
+   "sha256": "0b780a5e78bfbda6ce92fe81ca545ad7e05ae4184e7a007c4bdb7f0820342e44",
+   "bytes": 14235,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Men's Activewear Options",
+     "non_empty_rows": 31,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Men\u2019s Activewear Type",
+       "value_count": 30
+      },
+      {
+       "ordinal": 2,
+       "header": "Activity",
+       "value_count": 13
+      },
+      {
+       "ordinal": 3,
+       "header": "Length",
+       "value_count": 9
+      },
+      {
+       "ordinal": 4,
+       "header": "Fit",
+       "value_count": 8
+      },
+      {
+       "ordinal": 5,
+       "header": "Sleeve",
+       "value_count": 6
+      },
+      {
+       "ordinal": 6,
+       "header": "Neckline",
+       "value_count": 8
+      },
+      {
+       "ordinal": 7,
+       "header": "Rise / Waist",
+       "value_count": 7
+      },
+      {
+       "ordinal": 8,
+       "header": "Material",
+       "value_count": 12
+      },
+      {
+       "ordinal": 9,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 10,
+       "header": "Compression",
+       "value_count": 5
+      },
+      {
+       "ordinal": 11,
+       "header": "Moisture Control",
+       "value_count": 5
+      },
+      {
+       "ordinal": 12,
+       "header": "Breathability",
+       "value_count": 5
+      },
+      {
+       "ordinal": 13,
+       "header": "Support",
+       "value_count": 6
+      },
+      {
+       "ordinal": 14,
+       "header": "Pocket",
+       "value_count": 7
+      },
+      {
+       "ordinal": 15,
+       "header": "Reflective Detail",
+       "value_count": 5
+      },
+      {
+       "ordinal": 16,
+       "header": "Pattern",
+       "value_count": 9
+      },
+      {
+       "ordinal": 17,
+       "header": "Size",
+       "value_count": 10
+      },
+      {
+       "ordinal": 18,
+       "header": "Colour",
+       "value_count": 16
+      },
+      {
+       "ordinal": 19,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Mens clothing/Mens_Bottoms_Taxonomy (1).xlsx",
+   "sha256": "1da98de22188c79d698af9e0f6e691d5fd61cb424173b948e9cda13c7ef65724",
+   "bytes": 13819,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Men's Bottoms Options",
+     "non_empty_rows": 31,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Men\u2019s Bottom Type",
+       "value_count": 30
+      },
+      {
+       "ordinal": 2,
+       "header": "Length",
+       "value_count": 8
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 12
+      },
+      {
+       "ordinal": 4,
+       "header": "Fit",
+       "value_count": 10
+      },
+      {
+       "ordinal": 5,
+       "header": "Rise",
+       "value_count": 5
+      },
+      {
+       "ordinal": 6,
+       "header": "Leg Style",
+       "value_count": 10
+      },
+      {
+       "ordinal": 7,
+       "header": "Waistband",
+       "value_count": 7
+      },
+      {
+       "ordinal": 8,
+       "header": "Material",
+       "value_count": 14
+      },
+      {
+       "ordinal": 9,
+       "header": "Pattern",
+       "value_count": 10
+      },
+      {
+       "ordinal": 10,
+       "header": "Closure",
+       "value_count": 8
+      },
+      {
+       "ordinal": 11,
+       "header": "Pocket",
+       "value_count": 8
+      },
+      {
+       "ordinal": 12,
+       "header": "Size",
+       "value_count": 19
+      },
+      {
+       "ordinal": 13,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 14,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 15,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Mens clothing/Mens_Jackets_and_Coats_Taxonomy.xlsx",
+   "sha256": "f260f51bc3a7f241ffa942e202feafbdba0d74b389e47ad471a6711e9f32d09b",
+   "bytes": 14525,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Men's Jackets & Coats",
+     "non_empty_rows": 36,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Jacket / Coat Type",
+       "value_count": 35
+      },
+      {
+       "ordinal": 2,
+       "header": "Length",
+       "value_count": 7
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 10
+      },
+      {
+       "ordinal": 4,
+       "header": "Fit",
+       "value_count": 6
+      },
+      {
+       "ordinal": 5,
+       "header": "Insulation",
+       "value_count": 9
+      },
+      {
+       "ordinal": 6,
+       "header": "Weather Protection",
+       "value_count": 8
+      },
+      {
+       "ordinal": 7,
+       "header": "Hood",
+       "value_count": 6
+      },
+      {
+       "ordinal": 8,
+       "header": "Collar",
+       "value_count": 11
+      },
+      {
+       "ordinal": 9,
+       "header": "Closure",
+       "value_count": 10
+      },
+      {
+       "ordinal": 10,
+       "header": "Cuff",
+       "value_count": 7
+      },
+      {
+       "ordinal": 11,
+       "header": "Material",
+       "value_count": 16
+      },
+      {
+       "ordinal": 12,
+       "header": "Lining",
+       "value_count": 9
+      },
+      {
+       "ordinal": 13,
+       "header": "Pattern",
+       "value_count": 10
+      },
+      {
+       "ordinal": 14,
+       "header": "Pocket",
+       "value_count": 9
+      },
+      {
+       "ordinal": 15,
+       "header": "Size",
+       "value_count": 10
+      },
+      {
+       "ordinal": 16,
+       "header": "Colour",
+       "value_count": 18
+      },
+      {
+       "ordinal": 17,
+       "header": "Season",
+       "value_count": 5
+      },
+      {
+       "ordinal": 18,
+       "header": "Care",
+       "value_count": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Mens clothing/Mens_Loungewear_and_Sleepwear_Taxonomy.xlsx",
+   "sha256": "70d96674e900e610cb409782a149b10f1e7168c07387f068a3b94639559ea147",
+   "bytes": 13998,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Men's Lounge & Sleep",
+     "non_empty_rows": 33,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Loungewear / Sleepwear Type",
+       "value_count": 32
+      },
+      {
+       "ordinal": 2,
+       "header": "Use",
+       "value_count": 6
+      },
+      {
+       "ordinal": 3,
+       "header": "Length",
+       "value_count": 8
+      },
+      {
+       "ordinal": 4,
+       "header": "Fit",
+       "value_count": 6
+      },
+      {
+       "ordinal": 5,
+       "header": "Sleeve",
+       "value_count": 6
+      },
+      {
+       "ordinal": 6,
+       "header": "Neckline / Collar",
+       "value_count": 9
+      },
+      {
+       "ordinal": 7,
+       "header": "Waistband",
+       "value_count": 6
+      },
+      {
+       "ordinal": 8,
+       "header": "Closure",
+       "value_count": 7
+      },
+      {
+       "ordinal": 9,
+       "header": "Material",
+       "value_count": 15
+      },
+      {
+       "ordinal": 10,
+       "header": "Fabric Weight",
+       "value_count": 4
+      },
+      {
+       "ordinal": 11,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 12,
+       "header": "Pattern",
+       "value_count": 10
+      },
+      {
+       "ordinal": 13,
+       "header": "Pocket",
+       "value_count": 6
+      },
+      {
+       "ordinal": 14,
+       "header": "Size",
+       "value_count": 11
+      },
+      {
+       "ordinal": 15,
+       "header": "Colour",
+       "value_count": 16
+      },
+      {
+       "ordinal": 16,
+       "header": "Season",
+       "value_count": 5
+      },
+      {
+       "ordinal": 17,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Mens clothing/Mens_Matching_Sets_Taxonomy.xlsx",
+   "sha256": "a96d5427ba72741cb1a82f0a4f010d2849bcb499295c8790927a1bd53a15ffa8",
+   "bytes": 14105,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Men's Matching Sets",
+     "non_empty_rows": 25,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Men's Matching Set Type",
+       "value_count": 24
+      },
+      {
+       "ordinal": 2,
+       "header": "Pieces Included",
+       "value_count": 9
+      },
+      {
+       "ordinal": 3,
+       "header": "Piece Count",
+       "value_count": 2
+      },
+      {
+       "ordinal": 4,
+       "header": "Top Style",
+       "value_count": 12
+      },
+      {
+       "ordinal": 5,
+       "header": "Bottom Style",
+       "value_count": 7
+      },
+      {
+       "ordinal": 6,
+       "header": "Occasion",
+       "value_count": 11
+      },
+      {
+       "ordinal": 7,
+       "header": "Fit",
+       "value_count": 6
+      },
+      {
+       "ordinal": 8,
+       "header": "Sleeve",
+       "value_count": 6
+      },
+      {
+       "ordinal": 9,
+       "header": "Top Length",
+       "value_count": 4
+      },
+      {
+       "ordinal": 10,
+       "header": "Bottom Length",
+       "value_count": 5
+      },
+      {
+       "ordinal": 11,
+       "header": "Neckline / Collar",
+       "value_count": 8
+      },
+      {
+       "ordinal": 12,
+       "header": "Material",
+       "value_count": 14
+      },
+      {
+       "ordinal": 13,
+       "header": "Pattern",
+       "value_count": 10
+      },
+      {
+       "ordinal": 14,
+       "header": "Closure",
+       "value_count": 7
+      },
+      {
+       "ordinal": 15,
+       "header": "Waistband",
+       "value_count": 6
+      },
+      {
+       "ordinal": 16,
+       "header": "Size",
+       "value_count": 10
+      },
+      {
+       "ordinal": 17,
+       "header": "Colour",
+       "value_count": 16
+      },
+      {
+       "ordinal": 18,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 19,
+       "header": "Season",
+       "value_count": 5
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Mens clothing/Mens_Suits_and_Blazers_Taxonomy.xlsx",
+   "sha256": "5cb7d474f3e7bc3da27ea2c33c4dcae565c06f210f9fc7e1f274a5b94b7c668e",
+   "bytes": 14138,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Men's Suits & Blazers",
+     "non_empty_rows": 31,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Suit / Blazer Type",
+       "value_count": 30
+      },
+      {
+       "ordinal": 2,
+       "header": "Set Pieces",
+       "value_count": 5
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 12
+      },
+      {
+       "ordinal": 4,
+       "header": "Fit",
+       "value_count": 8
+      },
+      {
+       "ordinal": 5,
+       "header": "Jacket Length",
+       "value_count": 5
+      },
+      {
+       "ordinal": 6,
+       "header": "Lapel Style",
+       "value_count": 5
+      },
+      {
+       "ordinal": 7,
+       "header": "Closure",
+       "value_count": 8
+      },
+      {
+       "ordinal": 8,
+       "header": "Vent",
+       "value_count": 4
+      },
+      {
+       "ordinal": 9,
+       "header": "Shoulder Style",
+       "value_count": 5
+      },
+      {
+       "ordinal": 10,
+       "header": "Material",
+       "value_count": 13
+      },
+      {
+       "ordinal": 11,
+       "header": "Pattern",
+       "value_count": 10
+      },
+      {
+       "ordinal": 12,
+       "header": "Lining",
+       "value_count": 4
+      },
+      {
+       "ordinal": 13,
+       "header": "Pocket Style",
+       "value_count": 6
+      },
+      {
+       "ordinal": 14,
+       "header": "Trouser Style",
+       "value_count": 9
+      },
+      {
+       "ordinal": 15,
+       "header": "Size",
+       "value_count": 19
+      },
+      {
+       "ordinal": 16,
+       "header": "Colour",
+       "value_count": 19
+      },
+      {
+       "ordinal": 17,
+       "header": "Season",
+       "value_count": 5
+      },
+      {
+       "ordinal": 18,
+       "header": "Care",
+       "value_count": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Mens clothing/Mens_Tops_Taxonomy.xlsx",
+   "sha256": "0ca70b1d70e9602c7104f1c6b45c191835faf3237250608604b6d6ea13b43f5f",
+   "bytes": 13726,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Men's Tops Options",
+     "non_empty_rows": 28,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Men\u2019s Top Type",
+       "value_count": 27
+      },
+      {
+       "ordinal": 2,
+       "header": "Length",
+       "value_count": 5
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 10
+      },
+      {
+       "ordinal": 4,
+       "header": "Fit",
+       "value_count": 8
+      },
+      {
+       "ordinal": 5,
+       "header": "Sleeve",
+       "value_count": 8
+      },
+      {
+       "ordinal": 6,
+       "header": "Neckline / Collar",
+       "value_count": 13
+      },
+      {
+       "ordinal": 7,
+       "header": "Material",
+       "value_count": 16
+      },
+      {
+       "ordinal": 8,
+       "header": "Pattern",
+       "value_count": 11
+      },
+      {
+       "ordinal": 9,
+       "header": "Closure",
+       "value_count": 9
+      },
+      {
+       "ordinal": 10,
+       "header": "Pocket",
+       "value_count": 6
+      },
+      {
+       "ordinal": 11,
+       "header": "Cuff",
+       "value_count": 6
+      },
+      {
+       "ordinal": 12,
+       "header": "Size",
+       "value_count": 11
+      },
+      {
+       "ordinal": 13,
+       "header": "Colour",
+       "value_count": 16
+      },
+      {
+       "ordinal": 14,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 15,
+       "header": "Transparency",
+       "value_count": 3
+      },
+      {
+       "ordinal": 16,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Mens clothing/Mens_Traditional_Clothing_Taxonomy.xlsx",
+   "sha256": "5fb4cd2bd222e2a779249d55afa7e37547ac6696774684be7f9539edc72f09bd",
+   "bytes": 14417,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Men's Traditional",
+     "non_empty_rows": 27,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Men's Traditional Clothing Type",
+       "value_count": 26
+      },
+      {
+       "ordinal": 2,
+       "header": "Region / Culture",
+       "value_count": 9
+      },
+      {
+       "ordinal": 3,
+       "header": "Garment Format",
+       "value_count": 8
+      },
+      {
+       "ordinal": 4,
+       "header": "Occasion",
+       "value_count": 9
+      },
+      {
+       "ordinal": 5,
+       "header": "Fit",
+       "value_count": 6
+      },
+      {
+       "ordinal": 6,
+       "header": "Length",
+       "value_count": 7
+      },
+      {
+       "ordinal": 7,
+       "header": "Sleeve",
+       "value_count": 6
+      },
+      {
+       "ordinal": 8,
+       "header": "Neckline / Collar",
+       "value_count": 9
+      },
+      {
+       "ordinal": 9,
+       "header": "Material",
+       "value_count": 12
+      },
+      {
+       "ordinal": 10,
+       "header": "Weave / Fabric Style",
+       "value_count": 7
+      },
+      {
+       "ordinal": 11,
+       "header": "Decoration",
+       "value_count": 9
+      },
+      {
+       "ordinal": 12,
+       "header": "Decoration Placement",
+       "value_count": 8
+      },
+      {
+       "ordinal": 13,
+       "header": "Pattern",
+       "value_count": 9
+      },
+      {
+       "ordinal": 14,
+       "header": "Closure",
+       "value_count": 8
+      },
+      {
+       "ordinal": 15,
+       "header": "Size",
+       "value_count": 12
+      },
+      {
+       "ordinal": 16,
+       "header": "Colour",
+       "value_count": 15
+      },
+      {
+       "ordinal": 17,
+       "header": "Set Pieces",
+       "value_count": 6
+      },
+      {
+       "ordinal": 18,
+       "header": "Headwear Included",
+       "value_count": 5
+      },
+      {
+       "ordinal": 19,
+       "header": "Production Method",
+       "value_count": 6
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/Mens clothing/Mens_Underwear_Taxonomy.xlsx",
+   "sha256": "b130603b049e3f2e549885d14bc303c8565c55187a77efa8b16db0ff6e6ad2d4",
+   "bytes": 13628,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Men's Underwear",
+     "non_empty_rows": 31,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Men's Underwear Type",
+       "value_count": 30
+      },
+      {
+       "ordinal": 2,
+       "header": "Coverage",
+       "value_count": 6
+      },
+      {
+       "ordinal": 3,
+       "header": "Rise",
+       "value_count": 4
+      },
+      {
+       "ordinal": 4,
+       "header": "Leg Length",
+       "value_count": 7
+      },
+      {
+       "ordinal": 5,
+       "header": "Fit",
+       "value_count": 6
+      },
+      {
+       "ordinal": 6,
+       "header": "Waistband",
+       "value_count": 7
+      },
+      {
+       "ordinal": 7,
+       "header": "Fly",
+       "value_count": 5
+      },
+      {
+       "ordinal": 8,
+       "header": "Support",
+       "value_count": 5
+      },
+      {
+       "ordinal": 9,
+       "header": "Pouch Style",
+       "value_count": 6
+      },
+      {
+       "ordinal": 10,
+       "header": "Material",
+       "value_count": 13
+      },
+      {
+       "ordinal": 11,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 12,
+       "header": "Pattern",
+       "value_count": 9
+      },
+      {
+       "ordinal": 13,
+       "header": "Size",
+       "value_count": 10
+      },
+      {
+       "ordinal": 14,
+       "header": "Colour",
+       "value_count": 15
+      },
+      {
+       "ordinal": 15,
+       "header": "Pack Quantity",
+       "value_count": 7
+      },
+      {
+       "ordinal": 16,
+       "header": "Care",
+       "value_count": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/shoe/Baby_and_Toddler_Shoes_Taxonomy.xlsx",
+   "sha256": "d9bab9cae307d0b8ec578bcf7a83b92333d7c199866e4c75b49dcbea594b9826",
+   "bytes": 15059,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Baby & Toddler Shoes",
+     "non_empty_rows": 36,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Baby / Toddler Shoe Type",
+       "value_count": 35
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 3
+      },
+      {
+       "ordinal": 3,
+       "header": "Age Group",
+       "value_count": 10
+      },
+      {
+       "ordinal": 4,
+       "header": "Walking Stage",
+       "value_count": 5
+      },
+      {
+       "ordinal": 5,
+       "header": "Occasion",
+       "value_count": 10
+      },
+      {
+       "ordinal": 6,
+       "header": "Toe Shape",
+       "value_count": 6
+      },
+      {
+       "ordinal": 7,
+       "header": "Shoe Height",
+       "value_count": 5
+      },
+      {
+       "ordinal": 8,
+       "header": "Closure",
+       "value_count": 8
+      },
+      {
+       "ordinal": 9,
+       "header": "Upper Material",
+       "value_count": 11
+      },
+      {
+       "ordinal": 10,
+       "header": "Lining Material",
+       "value_count": 8
+      },
+      {
+       "ordinal": 11,
+       "header": "Outsole Material",
+       "value_count": 8
+      },
+      {
+       "ordinal": 12,
+       "header": "Sole Flexibility",
+       "value_count": 4
+      },
+      {
+       "ordinal": 13,
+       "header": "Size System",
+       "value_count": 5
+      },
+      {
+       "ordinal": 14,
+       "header": "Shoe Size",
+       "value_count": 35
+      },
+      {
+       "ordinal": 15,
+       "header": "Width",
+       "value_count": 4
+      },
+      {
+       "ordinal": 16,
+       "header": "Fit",
+       "value_count": 5
+      },
+      {
+       "ordinal": 17,
+       "header": "Colour",
+       "value_count": 16
+      },
+      {
+       "ordinal": 18,
+       "header": "Pattern",
+       "value_count": 9
+      },
+      {
+       "ordinal": 19,
+       "header": "Special Feature",
+       "value_count": 12
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/shoe/Kids_Shoes_Taxonomy.xlsx",
+   "sha256": "1c5d807b589024586f3443edd6f096b898b15aabc52d54afc27b787977f2ddee",
+   "bytes": 15283,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Kids' Shoes",
+     "non_empty_rows": 45,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Kids' Shoe Type",
+       "value_count": 44
+      },
+      {
+       "ordinal": 2,
+       "header": "Audience",
+       "value_count": 3
+      },
+      {
+       "ordinal": 3,
+       "header": "Age Group",
+       "value_count": 4
+      },
+      {
+       "ordinal": 4,
+       "header": "Occasion",
+       "value_count": 11
+      },
+      {
+       "ordinal": 5,
+       "header": "Toe Shape",
+       "value_count": 7
+      },
+      {
+       "ordinal": 6,
+       "header": "Shoe Height",
+       "value_count": 6
+      },
+      {
+       "ordinal": 7,
+       "header": "Closure",
+       "value_count": 8
+      },
+      {
+       "ordinal": 8,
+       "header": "Upper Material",
+       "value_count": 10
+      },
+      {
+       "ordinal": 9,
+       "header": "Lining Material",
+       "value_count": 8
+      },
+      {
+       "ordinal": 10,
+       "header": "Outsole Material",
+       "value_count": 7
+      },
+      {
+       "ordinal": 11,
+       "header": "Insole / Cushioning",
+       "value_count": 6
+      },
+      {
+       "ordinal": 12,
+       "header": "Size System",
+       "value_count": 4
+      },
+      {
+       "ordinal": 13,
+       "header": "Shoe Size",
+       "value_count": 19
+      },
+      {
+       "ordinal": 14,
+       "header": "Width",
+       "value_count": 4
+      },
+      {
+       "ordinal": 15,
+       "header": "Fit",
+       "value_count": 5
+      },
+      {
+       "ordinal": 16,
+       "header": "Colour",
+       "value_count": 17
+      },
+      {
+       "ordinal": 17,
+       "header": "Pattern",
+       "value_count": 9
+      },
+      {
+       "ordinal": 18,
+       "header": "Weather Protection",
+       "value_count": 6
+      },
+      {
+       "ordinal": 19,
+       "header": "Special Feature",
+       "value_count": 10
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/shoe/Mens_Shoes_Taxonomy.xlsx",
+   "sha256": "9106a64bbf319e834088bb0f5de8ea3971ee0f77b40ae9f63a42a8b5a539d7ac",
+   "bytes": 15416,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Men's Shoes",
+     "non_empty_rows": 46,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Men's Shoe Type",
+       "value_count": 45
+      },
+      {
+       "ordinal": 2,
+       "header": "Occasion",
+       "value_count": 11
+      },
+      {
+       "ordinal": 3,
+       "header": "Toe Shape",
+       "value_count": 8
+      },
+      {
+       "ordinal": 4,
+       "header": "Shoe Height",
+       "value_count": 6
+      },
+      {
+       "ordinal": 5,
+       "header": "Heel Height",
+       "value_count": 3
+      },
+      {
+       "ordinal": 6,
+       "header": "Closure",
+       "value_count": 8
+      },
+      {
+       "ordinal": 7,
+       "header": "Upper Material",
+       "value_count": 10
+      },
+      {
+       "ordinal": 8,
+       "header": "Lining Material",
+       "value_count": 7
+      },
+      {
+       "ordinal": 9,
+       "header": "Outsole Material",
+       "value_count": 7
+      },
+      {
+       "ordinal": 10,
+       "header": "Insole / Cushioning",
+       "value_count": 6
+      },
+      {
+       "ordinal": 11,
+       "header": "Size System",
+       "value_count": 4
+      },
+      {
+       "ordinal": 12,
+       "header": "Shoe Size",
+       "value_count": 26
+      },
+      {
+       "ordinal": 13,
+       "header": "Width",
+       "value_count": 4
+      },
+      {
+       "ordinal": 14,
+       "header": "Fit",
+       "value_count": 4
+      },
+      {
+       "ordinal": 15,
+       "header": "Colour",
+       "value_count": 16
+      },
+      {
+       "ordinal": 16,
+       "header": "Pattern",
+       "value_count": 9
+      },
+      {
+       "ordinal": 17,
+       "header": "Special Feature",
+       "value_count": 9
+      },
+      {
+       "ordinal": 18,
+       "header": "Safety Toe",
+       "value_count": 5
+      },
+      {
+       "ordinal": 19,
+       "header": "Weather Protection",
+       "value_count": 6
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/shoe/Sports_and_Athletic_Shoes_Taxonomy.xlsx",
+   "sha256": "f2cdac882c89ae966944ac9053689deadd8d8b9245334b3ea41d9d5694c09f8f",
+   "bytes": 15665,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Sports & Athletic Shoes",
+     "non_empty_rows": 41,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Sports & Athletic Shoe Type",
+       "value_count": 35
+      },
+      {
+       "ordinal": 2,
+       "header": "Sport / Activity",
+       "value_count": 27
+      },
+      {
+       "ordinal": 3,
+       "header": "Audience",
+       "value_count": 5
+      },
+      {
+       "ordinal": 4,
+       "header": "Surface / Terrain",
+       "value_count": 15
+      },
+      {
+       "ordinal": 5,
+       "header": "Shoe Height",
+       "value_count": 4
+      },
+      {
+       "ordinal": 6,
+       "header": "Closure",
+       "value_count": 8
+      },
+      {
+       "ordinal": 7,
+       "header": "Upper Material",
+       "value_count": 10
+      },
+      {
+       "ordinal": 8,
+       "header": "Lining Material",
+       "value_count": 7
+      },
+      {
+       "ordinal": 9,
+       "header": "Outsole Material",
+       "value_count": 9
+      },
+      {
+       "ordinal": 10,
+       "header": "Cushioning Level",
+       "value_count": 5
+      },
+      {
+       "ordinal": 11,
+       "header": "Support Type",
+       "value_count": 6
+      },
+      {
+       "ordinal": 12,
+       "header": "Arch Support",
+       "value_count": 5
+      },
+      {
+       "ordinal": 13,
+       "header": "Heel-to-Toe Drop",
+       "value_count": 6
+      },
+      {
+       "ordinal": 14,
+       "header": "Size System",
+       "value_count": 4
+      },
+      {
+       "ordinal": 15,
+       "header": "Shoe Size",
+       "value_count": 40
+      },
+      {
+       "ordinal": 16,
+       "header": "Width",
+       "value_count": 4
+      },
+      {
+       "ordinal": 17,
+       "header": "Fit",
+       "value_count": 5
+      },
+      {
+       "ordinal": 18,
+       "header": "Colour",
+       "value_count": 16
+      },
+      {
+       "ordinal": 19,
+       "header": "Special Feature",
+       "value_count": 17
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/shoe/Traditional_and_Cultural_Footwear_Taxonomy.xlsx",
+   "sha256": "903f4ea62daff8ed9f05c3b1bb886194b42d7cb43d6ecbd2073cb3779a8783ff",
+   "bytes": 16036,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Traditional Footwear",
+     "non_empty_rows": 37,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Traditional & Cultural Footwear Type",
+       "value_count": 36
+      },
+      {
+       "ordinal": 2,
+       "header": "Country / Origin",
+       "value_count": 29
+      },
+      {
+       "ordinal": 3,
+       "header": "Cultural Region",
+       "value_count": 16
+      },
+      {
+       "ordinal": 4,
+       "header": "Audience",
+       "value_count": 5
+      },
+      {
+       "ordinal": 5,
+       "header": "Occasion",
+       "value_count": 11
+      },
+      {
+       "ordinal": 6,
+       "header": "Footwear Form",
+       "value_count": 7
+      },
+      {
+       "ordinal": 7,
+       "header": "Toe Style",
+       "value_count": 7
+      },
+      {
+       "ordinal": 8,
+       "header": "Footwear Height",
+       "value_count": 5
+      },
+      {
+       "ordinal": 9,
+       "header": "Closure",
+       "value_count": 8
+      },
+      {
+       "ordinal": 10,
+       "header": "Upper Material",
+       "value_count": 12
+      },
+      {
+       "ordinal": 11,
+       "header": "Lining Material",
+       "value_count": 8
+      },
+      {
+       "ordinal": 12,
+       "header": "Outsole Material",
+       "value_count": 8
+      },
+      {
+       "ordinal": 13,
+       "header": "Heel Type",
+       "value_count": 6
+      },
+      {
+       "ordinal": 14,
+       "header": "Embellishment",
+       "value_count": 12
+      },
+      {
+       "ordinal": 15,
+       "header": "Pattern / Motif",
+       "value_count": 9
+      },
+      {
+       "ordinal": 16,
+       "header": "Production Method",
+       "value_count": 6
+      },
+      {
+       "ordinal": 17,
+       "header": "Size System",
+       "value_count": 6
+      },
+      {
+       "ordinal": 18,
+       "header": "Shoe Size",
+       "value_count": 24
+      },
+      {
+       "ordinal": 19,
+       "header": "Width",
+       "value_count": 5
+      },
+      {
+       "ordinal": 20,
+       "header": "Fit",
+       "value_count": 5
+      },
+      {
+       "ordinal": 21,
+       "header": "Colour",
+       "value_count": 19
+      },
+      {
+       "ordinal": 22,
+       "header": "Care",
+       "value_count": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/shoe/Womens_Shoes_Taxonomy.xlsx",
+   "sha256": "441983f330b2f999c6f9f5d04108aa65d7d0023553dd96636b4cb2501d19fc74",
+   "bytes": 15270,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Women's Shoes",
+     "non_empty_rows": 43,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Women's Shoe Type",
+       "value_count": 42
+      },
+      {
+       "ordinal": 2,
+       "header": "Occasion",
+       "value_count": 11
+      },
+      {
+       "ordinal": 3,
+       "header": "Toe Shape",
+       "value_count": 7
+      },
+      {
+       "ordinal": 4,
+       "header": "Heel Type",
+       "value_count": 9
+      },
+      {
+       "ordinal": 5,
+       "header": "Heel Height",
+       "value_count": 5
+      },
+      {
+       "ordinal": 6,
+       "header": "Platform Height",
+       "value_count": 4
+      },
+      {
+       "ordinal": 7,
+       "header": "Shaft Height",
+       "value_count": 5
+      },
+      {
+       "ordinal": 8,
+       "header": "Closure",
+       "value_count": 8
+      },
+      {
+       "ordinal": 9,
+       "header": "Upper Material",
+       "value_count": 11
+      },
+      {
+       "ordinal": 10,
+       "header": "Lining Material",
+       "value_count": 7
+      },
+      {
+       "ordinal": 11,
+       "header": "Outsole Material",
+       "value_count": 7
+      },
+      {
+       "ordinal": 12,
+       "header": "Insole / Cushioning",
+       "value_count": 6
+      },
+      {
+       "ordinal": 13,
+       "header": "Size System",
+       "value_count": 4
+      },
+      {
+       "ordinal": 14,
+       "header": "Shoe Size",
+       "value_count": 22
+      },
+      {
+       "ordinal": 15,
+       "header": "Width",
+       "value_count": 4
+      },
+      {
+       "ordinal": 16,
+       "header": "Fit",
+       "value_count": 4
+      },
+      {
+       "ordinal": 17,
+       "header": "Colour",
+       "value_count": 19
+      },
+      {
+       "ordinal": 18,
+       "header": "Pattern",
+       "value_count": 9
+      },
+      {
+       "ordinal": 19,
+       "header": "Special Feature",
+       "value_count": 10
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/shoe/Work_and_Safety_Shoes_Taxonomy.xlsx",
+   "sha256": "671d40a689351aa4ab0aff3457ad8b4002244e58d1644e8e79471911bdc3b275",
+   "bytes": 15737,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Work & Safety Shoes",
+     "non_empty_rows": 37,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Work & Safety Shoe Type",
+       "value_count": 36
+      },
+      {
+       "ordinal": 2,
+       "header": "Industry / Use",
+       "value_count": 21
+      },
+      {
+       "ordinal": 3,
+       "header": "Audience",
+       "value_count": 3
+      },
+      {
+       "ordinal": 4,
+       "header": "Footwear Height",
+       "value_count": 6
+      },
+      {
+       "ordinal": 5,
+       "header": "Toe Protection",
+       "value_count": 7
+      },
+      {
+       "ordinal": 6,
+       "header": "Metatarsal Protection",
+       "value_count": 3
+      },
+      {
+       "ordinal": 7,
+       "header": "Safety Certification",
+       "value_count": 7
+      },
+      {
+       "ordinal": 8,
+       "header": "Electrical Protection",
+       "value_count": 6
+      },
+      {
+       "ordinal": 9,
+       "header": "Puncture Resistance",
+       "value_count": 4
+      },
+      {
+       "ordinal": 10,
+       "header": "Slip Resistance",
+       "value_count": 6
+      },
+      {
+       "ordinal": 11,
+       "header": "Weather Protection",
+       "value_count": 6
+      },
+      {
+       "ordinal": 12,
+       "header": "Closure",
+       "value_count": 9
+      },
+      {
+       "ordinal": 13,
+       "header": "Upper Material",
+       "value_count": 11
+      },
+      {
+       "ordinal": 14,
+       "header": "Lining Material",
+       "value_count": 9
+      },
+      {
+       "ordinal": 15,
+       "header": "Outsole Material",
+       "value_count": 9
+      },
+      {
+       "ordinal": 16,
+       "header": "Insulation",
+       "value_count": 6
+      },
+      {
+       "ordinal": 17,
+       "header": "Size System",
+       "value_count": 4
+      },
+      {
+       "ordinal": 18,
+       "header": "Shoe Size",
+       "value_count": 36
+      },
+      {
+       "ordinal": 19,
+       "header": "Width",
+       "value_count": 4
+      },
+      {
+       "ordinal": 20,
+       "header": "Fit",
+       "value_count": 5
+      },
+      {
+       "ordinal": 21,
+       "header": "Colour",
+       "value_count": 14
+      },
+      {
+       "ordinal": 22,
+       "header": "Care",
+       "value_count": 11
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/womens clothing/Activewear_Taxonomy.xlsx",
+   "sha256": "ad6f08141522fc4073c8c0da2c85c95ac99f0aa3566bd955e23039e9ea91b3f0",
+   "bytes": 17652,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Activewear Options",
+     "non_empty_rows": 31,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Activewear Type",
+       "value_count": 30
+      },
+      {
+       "ordinal": 2,
+       "header": "Activity",
+       "value_count": 17
+      },
+      {
+       "ordinal": 3,
+       "header": "Fit",
+       "value_count": 7
+      },
+      {
+       "ordinal": 4,
+       "header": "Length",
+       "value_count": 11
+      },
+      {
+       "ordinal": 5,
+       "header": "Sleeve",
+       "value_count": 10
+      },
+      {
+       "ordinal": 6,
+       "header": "Neckline",
+       "value_count": 11
+      },
+      {
+       "ordinal": 7,
+       "header": "Rise",
+       "value_count": 6
+      },
+      {
+       "ordinal": 8,
+       "header": "Support Level",
+       "value_count": 6
+      },
+      {
+       "ordinal": 9,
+       "header": "Compression",
+       "value_count": 5
+      },
+      {
+       "ordinal": 10,
+       "header": "Material",
+       "value_count": 15
+      },
+      {
+       "ordinal": 11,
+       "header": "Fabric Technology",
+       "value_count": 16
+      },
+      {
+       "ordinal": 12,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 13,
+       "header": "Closure",
+       "value_count": 11
+      },
+      {
+       "ordinal": 14,
+       "header": "Waistband",
+       "value_count": 8
+      },
+      {
+       "ordinal": 15,
+       "header": "Pocket Style",
+       "value_count": 8
+      },
+      {
+       "ordinal": 16,
+       "header": "Padding",
+       "value_count": 7
+      },
+      {
+       "ordinal": 17,
+       "header": "Pattern",
+       "value_count": 12
+      },
+      {
+       "ordinal": 18,
+       "header": "Size",
+       "value_count": 12
+      },
+      {
+       "ordinal": 19,
+       "header": "Colour",
+       "value_count": 19
+      },
+      {
+       "ordinal": 20,
+       "header": "Transparency",
+       "value_count": 6
+      },
+      {
+       "ordinal": 21,
+       "header": "Care",
+       "value_count": 14
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/womens clothing/Bottoms_Taxonomy.xlsx",
+   "sha256": "182aa9debde0da1e6f05d5514c586f42f7300b4b8331b87a7312cf9edd825235",
+   "bytes": 15630,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Bottoms Attribute Options",
+     "non_empty_rows": 28,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Bottom Type",
+       "value_count": 27
+      },
+      {
+       "ordinal": 2,
+       "header": "Length",
+       "value_count": 11
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 12
+      },
+      {
+       "ordinal": 4,
+       "header": "Fit",
+       "value_count": 8
+      },
+      {
+       "ordinal": 5,
+       "header": "Rise",
+       "value_count": 5
+      },
+      {
+       "ordinal": 6,
+       "header": "Leg Style",
+       "value_count": 12
+      },
+      {
+       "ordinal": 7,
+       "header": "Waistband",
+       "value_count": 9
+      },
+      {
+       "ordinal": 8,
+       "header": "Material",
+       "value_count": 19
+      },
+      {
+       "ordinal": 9,
+       "header": "Pattern",
+       "value_count": 16
+      },
+      {
+       "ordinal": 10,
+       "header": "Closure",
+       "value_count": 12
+      },
+      {
+       "ordinal": 11,
+       "header": "Size",
+       "value_count": 12
+      },
+      {
+       "ordinal": 12,
+       "header": "Colour",
+       "value_count": 21
+      },
+      {
+       "ordinal": 13,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 14,
+       "header": "Transparency",
+       "value_count": 5
+      },
+      {
+       "ordinal": 15,
+       "header": "Care",
+       "value_count": 14
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/womens clothing/Dress_Taxonomy.xlsx",
+   "sha256": "9b5f7b1a1fa131bf5448690b77a1976b1ad7cfe76c20a7f4599549db3faf2fb4",
+   "bytes": 14779,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Dress Attribute Options",
+     "non_empty_rows": 20,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Dress Style",
+       "value_count": 15
+      },
+      {
+       "ordinal": 2,
+       "header": "Length",
+       "value_count": 11
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 14
+      },
+      {
+       "ordinal": 4,
+       "header": "Fit",
+       "value_count": 8
+      },
+      {
+       "ordinal": 5,
+       "header": "Sleeve",
+       "value_count": 16
+      },
+      {
+       "ordinal": 6,
+       "header": "Neckline",
+       "value_count": 17
+      },
+      {
+       "ordinal": 7,
+       "header": "Material",
+       "value_count": 19
+      },
+      {
+       "ordinal": 8,
+       "header": "Pattern",
+       "value_count": 14
+      },
+      {
+       "ordinal": 9,
+       "header": "Closure",
+       "value_count": 14
+      },
+      {
+       "ordinal": 10,
+       "header": "Size",
+       "value_count": 12
+      },
+      {
+       "ordinal": 11,
+       "header": "Colour",
+       "value_count": 19
+      },
+      {
+       "ordinal": 12,
+       "header": "Transparency",
+       "value_count": 5
+      },
+      {
+       "ordinal": 13,
+       "header": "Care",
+       "value_count": 14
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/womens clothing/Jackets_and_Coats_Taxonomy.xlsx",
+   "sha256": "9aa042851bb3dac9467ce08bd946cf02d66ed98673896763583de265259e2573",
+   "bytes": 16521,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Jackets & Coats Options",
+     "non_empty_rows": 32,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Jacket / Coat Type",
+       "value_count": 31
+      },
+      {
+       "ordinal": 2,
+       "header": "Length",
+       "value_count": 9
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 12
+      },
+      {
+       "ordinal": 4,
+       "header": "Fit",
+       "value_count": 8
+      },
+      {
+       "ordinal": 5,
+       "header": "Sleeve",
+       "value_count": 9
+      },
+      {
+       "ordinal": 6,
+       "header": "Collar",
+       "value_count": 12
+      },
+      {
+       "ordinal": 7,
+       "header": "Hood",
+       "value_count": 7
+      },
+      {
+       "ordinal": 8,
+       "header": "Warmth / Insulation",
+       "value_count": 10
+      },
+      {
+       "ordinal": 9,
+       "header": "Outer Material",
+       "value_count": 19
+      },
+      {
+       "ordinal": 10,
+       "header": "Lining",
+       "value_count": 8
+      },
+      {
+       "ordinal": 11,
+       "header": "Closure",
+       "value_count": 11
+      },
+      {
+       "ordinal": 12,
+       "header": "Pocket Style",
+       "value_count": 10
+      },
+      {
+       "ordinal": 13,
+       "header": "Weather Protection",
+       "value_count": 8
+      },
+      {
+       "ordinal": 14,
+       "header": "Pattern",
+       "value_count": 12
+      },
+      {
+       "ordinal": 15,
+       "header": "Size",
+       "value_count": 12
+      },
+      {
+       "ordinal": 16,
+       "header": "Colour",
+       "value_count": 22
+      },
+      {
+       "ordinal": 17,
+       "header": "Care",
+       "value_count": 15
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/womens clothing/Jumpsuits_and_Rompers_Taxonomy (1).xlsx",
+   "sha256": "607d5ac403d16646517483aa52db0491998ac28a11e6887ec762b4bd9a42d089",
+   "bytes": 15763,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Jumpsuits & Rompers Options",
+     "non_empty_rows": 23,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Type",
+       "value_count": 22
+      },
+      {
+       "ordinal": 2,
+       "header": "Length",
+       "value_count": 10
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 13
+      },
+      {
+       "ordinal": 4,
+       "header": "Fit",
+       "value_count": 8
+      },
+      {
+       "ordinal": 5,
+       "header": "Sleeve",
+       "value_count": 15
+      },
+      {
+       "ordinal": 6,
+       "header": "Neckline",
+       "value_count": 16
+      },
+      {
+       "ordinal": 7,
+       "header": "Leg Style",
+       "value_count": 11
+      },
+      {
+       "ordinal": 8,
+       "header": "Waist Style",
+       "value_count": 10
+      },
+      {
+       "ordinal": 9,
+       "header": "Material",
+       "value_count": 18
+      },
+      {
+       "ordinal": 10,
+       "header": "Pattern",
+       "value_count": 14
+      },
+      {
+       "ordinal": 11,
+       "header": "Closure",
+       "value_count": 13
+      },
+      {
+       "ordinal": 12,
+       "header": "Size",
+       "value_count": 12
+      },
+      {
+       "ordinal": 13,
+       "header": "Colour",
+       "value_count": 19
+      },
+      {
+       "ordinal": 14,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 15,
+       "header": "Transparency",
+       "value_count": 5
+      },
+      {
+       "ordinal": 16,
+       "header": "Care",
+       "value_count": 14
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/womens clothing/Loungewear_and_Sleepwear_Taxonomy.xlsx",
+   "sha256": "fc7a37cc5e657b947da082135210196f6a5fd569ba2b034ab065c945c8db4189",
+   "bytes": 17895,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Loungewear & Sleepwear",
+     "non_empty_rows": 33,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Loungewear / Sleepwear Type",
+       "value_count": 32
+      },
+      {
+       "ordinal": 2,
+       "header": "Category",
+       "value_count": 5
+      },
+      {
+       "ordinal": 3,
+       "header": "Number of Pieces",
+       "value_count": 4
+      },
+      {
+       "ordinal": 4,
+       "header": "Pieces Included",
+       "value_count": 12
+      },
+      {
+       "ordinal": 5,
+       "header": "Use",
+       "value_count": 11
+      },
+      {
+       "ordinal": 6,
+       "header": "Fit",
+       "value_count": 7
+      },
+      {
+       "ordinal": 7,
+       "header": "Length",
+       "value_count": 10
+      },
+      {
+       "ordinal": 8,
+       "header": "Sleeve",
+       "value_count": 10
+      },
+      {
+       "ordinal": 9,
+       "header": "Neckline",
+       "value_count": 12
+      },
+      {
+       "ordinal": 10,
+       "header": "Material",
+       "value_count": 19
+      },
+      {
+       "ordinal": 11,
+       "header": "Fabric Feel",
+       "value_count": 12
+      },
+      {
+       "ordinal": 12,
+       "header": "Closure",
+       "value_count": 10
+      },
+      {
+       "ordinal": 13,
+       "header": "Waistband",
+       "value_count": 7
+      },
+      {
+       "ordinal": 14,
+       "header": "Pocket Style",
+       "value_count": 7
+      },
+      {
+       "ordinal": 15,
+       "header": "Pattern",
+       "value_count": 15
+      },
+      {
+       "ordinal": 16,
+       "header": "Size",
+       "value_count": 12
+      },
+      {
+       "ordinal": 17,
+       "header": "Colour",
+       "value_count": 18
+      },
+      {
+       "ordinal": 18,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 19,
+       "header": "Transparency",
+       "value_count": 5
+      },
+      {
+       "ordinal": 20,
+       "header": "Season / Warmth",
+       "value_count": 6
+      },
+      {
+       "ordinal": 21,
+       "header": "Care",
+       "value_count": 15
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/womens clothing/Matching_Sets_Taxonomy.xlsx",
+   "sha256": "d59536f70c00a10f15c9e6220ca9f446478da1d300edbc9e65a5d1c243b0967c",
+   "bytes": 16791,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Matching Sets Options",
+     "non_empty_rows": 23,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Matching Set Type",
+       "value_count": 22
+      },
+      {
+       "ordinal": 2,
+       "header": "Number of Pieces",
+       "value_count": 4
+      },
+      {
+       "ordinal": 3,
+       "header": "Pieces Included",
+       "value_count": 16
+      },
+      {
+       "ordinal": 4,
+       "header": "Occasion",
+       "value_count": 14
+      },
+      {
+       "ordinal": 5,
+       "header": "Fit",
+       "value_count": 8
+      },
+      {
+       "ordinal": 6,
+       "header": "Top Style",
+       "value_count": 21
+      },
+      {
+       "ordinal": 7,
+       "header": "Bottom Style",
+       "value_count": 18
+      },
+      {
+       "ordinal": 8,
+       "header": "Sleeve",
+       "value_count": 13
+      },
+      {
+       "ordinal": 9,
+       "header": "Neckline",
+       "value_count": 16
+      },
+      {
+       "ordinal": 10,
+       "header": "Bottom Length",
+       "value_count": 10
+      },
+      {
+       "ordinal": 11,
+       "header": "Rise",
+       "value_count": 5
+      },
+      {
+       "ordinal": 12,
+       "header": "Material",
+       "value_count": 18
+      },
+      {
+       "ordinal": 13,
+       "header": "Pattern",
+       "value_count": 15
+      },
+      {
+       "ordinal": 14,
+       "header": "Closure",
+       "value_count": 13
+      },
+      {
+       "ordinal": 15,
+       "header": "Size",
+       "value_count": 13
+      },
+      {
+       "ordinal": 16,
+       "header": "Colour",
+       "value_count": 19
+      },
+      {
+       "ordinal": 17,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 18,
+       "header": "Transparency",
+       "value_count": 5
+      },
+      {
+       "ordinal": 19,
+       "header": "Care",
+       "value_count": 15
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/womens clothing/Maternity_Clothing_Taxonomy.xlsx",
+   "sha256": "7f1e0f0ee520d876da373c4b4267777e0ff89e60b62ad701f68510f82d65ba06",
+   "bytes": 14263,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Maternity Clothing Options",
+     "non_empty_rows": 31,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Maternity Clothing Type",
+       "value_count": 30
+      },
+      {
+       "ordinal": 2,
+       "header": "Pregnancy Stage",
+       "value_count": 6
+      },
+      {
+       "ordinal": 3,
+       "header": "Length",
+       "value_count": 7
+      },
+      {
+       "ordinal": 4,
+       "header": "Occasion",
+       "value_count": 8
+      },
+      {
+       "ordinal": 5,
+       "header": "Fit",
+       "value_count": 6
+      },
+      {
+       "ordinal": 6,
+       "header": "Sleeve",
+       "value_count": 7
+      },
+      {
+       "ordinal": 7,
+       "header": "Neckline",
+       "value_count": 8
+      },
+      {
+       "ordinal": 8,
+       "header": "Waist / Rise",
+       "value_count": 8
+      },
+      {
+       "ordinal": 9,
+       "header": "Bump Accommodation",
+       "value_count": 9
+      },
+      {
+       "ordinal": 10,
+       "header": "Nursing Access",
+       "value_count": 8
+      },
+      {
+       "ordinal": 11,
+       "header": "Support Level",
+       "value_count": 4
+      },
+      {
+       "ordinal": 12,
+       "header": "Material",
+       "value_count": 13
+      },
+      {
+       "ordinal": 13,
+       "header": "Pattern",
+       "value_count": 9
+      },
+      {
+       "ordinal": 14,
+       "header": "Closure",
+       "value_count": 9
+      },
+      {
+       "ordinal": 15,
+       "header": "Size",
+       "value_count": 11
+      },
+      {
+       "ordinal": 16,
+       "header": "Colour",
+       "value_count": 14
+      },
+      {
+       "ordinal": 17,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 18,
+       "header": "Transparency",
+       "value_count": 3
+      },
+      {
+       "ordinal": 19,
+       "header": "Care",
+       "value_count": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/womens clothing/Suits_and_Blazers_Taxonomy.xlsx",
+   "sha256": "3d4f94d3831cf13d68a43808adfe2a5383dd2c7c28312f74524d0249e1407d0b",
+   "bytes": 16380,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Suits & Blazers Options",
+     "non_empty_rows": 26,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Suit / Blazer Type",
+       "value_count": 25
+      },
+      {
+       "ordinal": 2,
+       "header": "Number of Pieces",
+       "value_count": 4
+      },
+      {
+       "ordinal": 3,
+       "header": "Pieces Included",
+       "value_count": 9
+      },
+      {
+       "ordinal": 4,
+       "header": "Occasion",
+       "value_count": 15
+      },
+      {
+       "ordinal": 5,
+       "header": "Fit",
+       "value_count": 8
+      },
+      {
+       "ordinal": 6,
+       "header": "Blazer Length",
+       "value_count": 7
+      },
+      {
+       "ordinal": 7,
+       "header": "Lapel / Collar",
+       "value_count": 9
+      },
+      {
+       "ordinal": 8,
+       "header": "Sleeve",
+       "value_count": 10
+      },
+      {
+       "ordinal": 9,
+       "header": "Shoulder Structure",
+       "value_count": 7
+      },
+      {
+       "ordinal": 10,
+       "header": "Closure",
+       "value_count": 11
+      },
+      {
+       "ordinal": 11,
+       "header": "Bottom Type",
+       "value_count": 14
+      },
+      {
+       "ordinal": 12,
+       "header": "Material",
+       "value_count": 15
+      },
+      {
+       "ordinal": 13,
+       "header": "Pattern",
+       "value_count": 12
+      },
+      {
+       "ordinal": 14,
+       "header": "Size",
+       "value_count": 13
+      },
+      {
+       "ordinal": 15,
+       "header": "Colour",
+       "value_count": 21
+      },
+      {
+       "ordinal": 16,
+       "header": "Stretch",
+       "value_count": 4
+      },
+      {
+       "ordinal": 17,
+       "header": "Lining",
+       "value_count": 4
+      },
+      {
+       "ordinal": 18,
+       "header": "Care",
+       "value_count": 14
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/womens clothing/Swimwear_Taxonomy.xlsx",
+   "sha256": "72bced1725da439311de54a89646b2c5df3a563dbfe77c3985d718c823bfb1da",
+   "bytes": 17978,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Swimwear Options",
+     "non_empty_rows": 35,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Swimwear Type",
+       "value_count": 34
+      },
+      {
+       "ordinal": 2,
+       "header": "Category",
+       "value_count": 8
+      },
+      {
+       "ordinal": 3,
+       "header": "Number of Pieces",
+       "value_count": 5
+      },
+      {
+       "ordinal": 4,
+       "header": "Coverage",
+       "value_count": 9
+      },
+      {
+       "ordinal": 5,
+       "header": "Leg Cut",
+       "value_count": 8
+      },
+      {
+       "ordinal": 6,
+       "header": "Neckline",
+       "value_count": 12
+      },
+      {
+       "ordinal": 7,
+       "header": "Strap Style",
+       "value_count": 12
+      },
+      {
+       "ordinal": 8,
+       "header": "Support Level",
+       "value_count": 6
+      },
+      {
+       "ordinal": 9,
+       "header": "Padding",
+       "value_count": 7
+      },
+      {
+       "ordinal": 10,
+       "header": "Underwire",
+       "value_count": 5
+      },
+      {
+       "ordinal": 11,
+       "header": "Closure",
+       "value_count": 11
+      },
+      {
+       "ordinal": 12,
+       "header": "Material",
+       "value_count": 11
+      },
+      {
+       "ordinal": 13,
+       "header": "Fabric Feature",
+       "value_count": 12
+      },
+      {
+       "ordinal": 14,
+       "header": "Pattern",
+       "value_count": 14
+      },
+      {
+       "ordinal": 15,
+       "header": "Clothing Size",
+       "value_count": 12
+      },
+      {
+       "ordinal": 16,
+       "header": "Cup Size",
+       "value_count": 13
+      },
+      {
+       "ordinal": 17,
+       "header": "Band Size",
+       "value_count": 13
+      },
+      {
+       "ordinal": 18,
+       "header": "Colour",
+       "value_count": 19
+      },
+      {
+       "ordinal": 19,
+       "header": "Stretch",
+       "value_count": 4
+      },
+      {
+       "ordinal": 20,
+       "header": "Transparency",
+       "value_count": 6
+      },
+      {
+       "ordinal": 21,
+       "header": "Care",
+       "value_count": 14
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/womens clothing/Tops_Taxonomy.xlsx",
+   "sha256": "d7957f4b138511156c0be006c2346bb347a25364c21efb930150d8ff9d5fde44",
+   "bytes": 14878,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Tops Attribute Options",
+     "non_empty_rows": 23,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Top Style",
+       "value_count": 22
+      },
+      {
+       "ordinal": 2,
+       "header": "Length",
+       "value_count": 8
+      },
+      {
+       "ordinal": 3,
+       "header": "Occasion",
+       "value_count": 12
+      },
+      {
+       "ordinal": 4,
+       "header": "Fit",
+       "value_count": 9
+      },
+      {
+       "ordinal": 5,
+       "header": "Sleeve",
+       "value_count": 16
+      },
+      {
+       "ordinal": 6,
+       "header": "Neckline",
+       "value_count": 18
+      },
+      {
+       "ordinal": 7,
+       "header": "Material",
+       "value_count": 21
+      },
+      {
+       "ordinal": 8,
+       "header": "Pattern",
+       "value_count": 16
+      },
+      {
+       "ordinal": 9,
+       "header": "Closure",
+       "value_count": 15
+      },
+      {
+       "ordinal": 10,
+       "header": "Size",
+       "value_count": 12
+      },
+      {
+       "ordinal": 11,
+       "header": "Colour",
+       "value_count": 19
+      },
+      {
+       "ordinal": 12,
+       "header": "Transparency",
+       "value_count": 5
+      },
+      {
+       "ordinal": 13,
+       "header": "Care",
+       "value_count": 14
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "path": "Categories/Fashion category/womens clothing/Underwear_and_Lingerie_Taxonomy.xlsx",
+   "sha256": "8bb495f0abb65a86e615ca8c68c3dec19dfc41430115ca884b9a9c6f3cebf5c1",
+   "bytes": 17653,
+   "class": "LEAF_ATTRIBUTE_WORKBOOK",
+   "valid": true,
+   "sheets": [
+    {
+     "name": "Underwear & Lingerie",
+     "non_empty_rows": 37,
+     "attributes": [
+      {
+       "ordinal": 1,
+       "header": "Underwear / Lingerie Type",
+       "value_count": 36
+      },
+      {
+       "ordinal": 2,
+       "header": "Category",
+       "value_count": 7
+      },
+      {
+       "ordinal": 3,
+       "header": "Coverage",
+       "value_count": 11
+      },
+      {
+       "ordinal": 4,
+       "header": "Rise",
+       "value_count": 5
+      },
+      {
+       "ordinal": 5,
+       "header": "Support Level",
+       "value_count": 6
+      },
+      {
+       "ordinal": 6,
+       "header": "Padding",
+       "value_count": 9
+      },
+      {
+       "ordinal": 7,
+       "header": "Underwire",
+       "value_count": 5
+      },
+      {
+       "ordinal": 8,
+       "header": "Strap Style",
+       "value_count": 11
+      },
+      {
+       "ordinal": 9,
+       "header": "Closure",
+       "value_count": 10
+      },
+      {
+       "ordinal": 10,
+       "header": "Material",
+       "value_count": 16
+      },
+      {
+       "ordinal": 11,
+       "header": "Fabric Feature",
+       "value_count": 12
+      },
+      {
+       "ordinal": 12,
+       "header": "Pattern",
+       "value_count": 12
+      },
+      {
+       "ordinal": 13,
+       "header": "Clothing Size",
+       "value_count": 12
+      },
+      {
+       "ordinal": 14,
+       "header": "Cup Size",
+       "value_count": 13
+      },
+      {
+       "ordinal": 15,
+       "header": "Band Size",
+       "value_count": 13
+      },
+      {
+       "ordinal": 16,
+       "header": "Colour",
+       "value_count": 19
+      },
+      {
+       "ordinal": 17,
+       "header": "Stretch",
+       "value_count": 5
+      },
+      {
+       "ordinal": 18,
+       "header": "Transparency",
+       "value_count": 5
+      },
+      {
+       "ordinal": 19,
+       "header": "Pack Count",
+       "value_count": 8
+      },
+      {
+       "ordinal": 20,
+       "header": "Care",
+       "value_count": 14
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
