@@ -130,12 +130,74 @@ describe('sign-in persistence (M01-R01 / M01-R02)', () => {
     const held = store.hold('write');
     const pending = signIn(runtime, phone('owner'));
     await flush();
-    await runtime.session.signOut(); // still a guest: this cancels the sign-in in flight
+    const signingOut = runtime.session.signOut(); // still a guest: this cancels the sign-in in flight
     held.release();
     expect(await pending).toEqual({ kind: 'STALE' });
+    // M02-R01: the result arrives only after the write finished and was rolled back, and says what that achieved.
+    expect(await signingOut).toMatchObject({ local: 'CLEARED', credentialCleared: true, durable: true, server: 'NOT_ATTEMPTED' });
     await runtime.session.idle();
     expect(runtime.session.state().kind).toBe('GUEST');
     expect(store.peek()).toBeNull();
+  });
+
+  describe('M02-R01: sign-out during pending credential persistence when the roll-back also fails', () => {
+    /** A guest signs in; the credential write is held; the person signs out; then storage is broken as given before the write lands. */
+    async function signOutDuringWrite(breakStorage: (store: ReturnType<typeof createControlledStore>) => void) {
+      const world = createFixtureTransport();
+      const store = createControlledStore();
+      const { runtime } = await makeRuntime(world.transport, { credentials: store });
+      await runtime.start();
+      const held = store.hold('write');
+      const pending = signIn(runtime, phone('owner'));
+      await flush();
+      let reported = false;
+      const signingOut = runtime.session.signOut().then((result) => {
+        reported = true;
+        return result;
+      });
+      await flush();
+      expect(reported).toBe(false); // nothing is claimed while the write is still outstanding
+      breakStorage(store);
+      held.release();
+      expect(await pending).toEqual({ kind: 'STALE' });
+      return { world, store, runtime, result: await signingOut };
+    }
+
+    it('delete and flag both fail: NOT durable, not cleared, and the credential really is still on disk', async () => {
+      const { store, runtime, result } = await signOutDuringWrite((s) => {
+        s.fail.delete = true;
+        s.fail.writeFlag = true;
+      });
+      expect(result).toMatchObject({ local: 'FAILED', credentialCleared: false, durable: false, server: 'NOT_ATTEMPTED' });
+      expect(store.peek()).not.toBeNull(); // the report matches the completed storage operations
+      expect(runtime.session.state().kind).toBe('GUEST');
+      expect(runtime.session.hasPendingCredentialDeletion()).toBe(true);
+      // The notice's retry finishes the job once storage works again.
+      store.fail.delete = false;
+      store.fail.writeFlag = false;
+      expect(await runtime.session.retryPendingDeletion()).toBe('CLEARED');
+      expect(store.peek()).toBeNull();
+    });
+
+    it('the flag is raised but the delete fails: FLAGGED, durable, and a restart refuses the stranded credential', async () => {
+      const { world, store, result } = await signOutDuringWrite((s) => {
+        s.fail.delete = true;
+      });
+      expect(result).toMatchObject({ local: 'FLAGGED', credentialCleared: false, durable: true });
+      expect(store.peek()).not.toBeNull();
+      expect(store.peekFlag()).toBe(true);
+      store.fail.delete = false;
+      const next = await makeRuntime(world.transport, { credentials: store });
+      expect((await next.runtime.session.restore()).kind).toBe('GUEST');
+    });
+
+    it('the delete works but the flag cannot be raised: CLEARED, and nothing is left on disk', async () => {
+      const { store, result } = await signOutDuringWrite((s) => {
+        s.fail.writeFlag = true;
+      });
+      expect(result).toMatchObject({ local: 'CLEARED', credentialCleared: true, durable: true });
+      expect(store.peek()).toBeNull();
+    });
   });
 
   it('session expiry while a new sign-in is being written: the new sign-in never commits and nothing restorable is left', async () => {
