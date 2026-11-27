@@ -894,6 +894,9 @@ export const amConsole: { readonly [K in keyof typeof enConsole]: AmEntry } = {
   'field_error.MESSAGE_PRODUCT_POST_INVALID': PENDING,
   'field_error.MESSAGE_CONTEXT_CONFLICT': PENDING,
 
+  // ---- SC-FE-08 Inbox (review polish) ----
+  'inbox.scene_chosen': PENDING,
+
   // ---- SC-FE-09 Trust and Reviews ----
   'trust.lead': PENDING,
   'trust.standing_title': PENDING,
@@ -926,8 +929,7 @@ export const amConsole: { readonly [K in keyof typeof enConsole]: AmEntry } = {
   'reviews.list_product': PENDING,
   'reviews.list_service': PENDING,
 
-  // ---- SC-FE-08 Inbox (review polish) ----
-  'inbox.scene_chosen': PENDING,
+
 
   // ---- SC-FE-09 Trust and Reviews (review polish) ----
   'reviews.at_rating': PENDING,

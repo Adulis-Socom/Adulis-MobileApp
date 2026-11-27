@@ -914,6 +914,9 @@ export const enConsole = {
   'field_error.MESSAGE_PRODUCT_POST_INVALID': 'This Product cannot be used right now.',
   'field_error.MESSAGE_CONTEXT_CONFLICT': 'Choose the Scene again before sending.',
 
+  // ---- SC-FE-08 Inbox (review polish) (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
+  'inbox.scene_chosen': 'Chosen Scene: {scene}',
+
   // ---- SC-FE-09 Trust and Reviews (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
   'trust.lead': 'Your Trust level, and the reviews Buyers have written about your Products and your service.',
   'trust.standing_title': 'Trust level',
@@ -946,8 +949,7 @@ export const enConsole = {
   'reviews.list_product': 'Product review list',
   'reviews.list_service': 'Service review list',
 
-  // ---- SC-FE-08 Inbox (review polish) (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
-  'inbox.scene_chosen': 'Chosen Scene: {scene}',
+
 
   // ---- SC-FE-09 Trust and Reviews (review polish) (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
   'reviews.at_rating': 'Reviews: {count}',
