@@ -83,6 +83,16 @@ describe('PagedList states', () => {
     expect(screen.getAllByText('Something went wrong on our side. Please try again.').length).toBeGreaterThan(0);
   });
 
+  it('a failed refresh over items on screen keeps them and says offline at the foot, with Try again (archived list-refresh)', async () => {
+    const refetch = jest.fn();
+    await render(list(query({ status: 'error', error: new TransportError('NETWORK'), data: { pages: [{ items: [scene(1), scene(2)] }] }, refetch })));
+    expect(screen.getByText('Caption 1')).toBeTruthy();
+    expect(screen.getByText('Caption 2')).toBeTruthy();
+    expect(screen.getAllByText(/offline/i).length).toBeGreaterThan(0);
+    await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
   it('offers Load more that always works, one request at a time', async () => {
     const fetchNextPage = jest.fn();
     await render(list(query({ data: { pages: [{ items: [scene(1)] }] }, hasNextPage: true, fetchNextPage })));

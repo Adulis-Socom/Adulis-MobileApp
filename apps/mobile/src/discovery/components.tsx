@@ -6,7 +6,7 @@ import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native
 
 import type { MediaRef, ProductTile, SceneCardUnit, SceneTag } from '../contracts/gap-mob-discovery';
 import { t } from '../i18n/messages';
-import { Body, Button, StateView } from '../ui/components';
+import { Body, Button, Notice, StateView } from '../ui/components';
 import { useMediaResolver } from '../ui/media';
 import { theme } from '../ui/theme';
 import { availabilityText, priceOf } from './format';
@@ -93,7 +93,11 @@ export function PagedList<T>({
   readonly header?: ReactNode;
 }) {
   if (query.status === 'pending') return <StateView kind="loading" />;
-  if (query.status === 'error') {
+  const hasItems = (query.data?.pages ?? []).some((page) => page.items.length > 0);
+  // A failed refresh or next page over items already on screen keeps them and says so at the foot (recovered from the
+  // archived list-refresh / load-more-offline regressions): only a failure with nothing to show replaces the list.
+  const footerProblem = query.status === 'error' && hasItems ? problemKind(query.error) : null;
+  if (query.status === 'error' && !hasItems) {
     const kind = problemKind(query.error);
     if (kind === 'session') return <StateView kind="loading" />; // an old session's failure is not shown to the new one
     return <StateView kind={kind === 'offline' ? 'offline' : kind === 'gone' ? 'not-found' : 'error'} onRetry={() => void query.refetch()} />;
@@ -109,7 +113,12 @@ export function PagedList<T>({
       ListHeaderComponent={header ? <View>{header}</View> : undefined}
       ListEmptyComponent={<StateView kind="empty" message={empty ?? t('mobile.state.empty')} />}
       ListFooterComponent={
-        query.hasNextPage ? (
+        footerProblem !== null && footerProblem !== 'session' ? (
+          <View style={styles.row}>
+            <Notice tone="warn" text={t(footerProblem === 'offline' ? 'mobile.state.offline' : 'error.request.internal')} />
+            <Button kind="secondary" label={t('mobile.state.retry')} onPress={() => void query.refetch()} />
+          </View>
+        ) : query.hasNextPage ? (
           <View style={styles.row}>
             <Button kind="secondary" label={t('mobile.list.load_more')} busy={query.isFetchingNextPage} onPress={() => void query.fetchNextPage()} />
           </View>
