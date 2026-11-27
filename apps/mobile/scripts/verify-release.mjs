@@ -15,6 +15,7 @@
  * script red); that is a CI-only mutation and never part of a candidate.
  */
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -138,6 +139,24 @@ try {
   const planted = scan(plantedDir);
   if (planted.length >= 2) ok(`negative control: the scan reports a marker planted in a copy of the release output (${planted.length} findings)`);
   else bad('negative control: the scan did NOT report a marker planted in a copy of the release output');
+
+  // 5. Demonstration pictures (L2-MOBILE-02, M01-R04): matched by CONTENT, because an export renames every asset by its hash.
+  //    The release export must hold none of them; the development export must hold all of them (positive control); a copy of
+  //    one planted into the release output must be found (negative control).
+  const fixtureAssets = filesOf(path.join(root, 'src', 'fixtures', 'assets'));
+  if (fixtureAssets.length === 0) bad('asset scan: src/fixtures/assets holds no picture, so the asset checks would prove nothing');
+  const digest = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
+  const assetHashes = new Map(fixtureAssets.map((file) => [digest(file), path.basename(file)]));
+  const assetsIn = (dir) => new Set(filesOf(dir).map(digest).filter((hash) => assetHashes.has(hash)).map((hash) => assetHashes.get(hash)));
+  const releaseAssets = assetsIn(releaseDir);
+  if (releaseAssets.size > 0) bad(`asset scan: the release export CONTAINS demonstration pictures: ${[...releaseAssets].join(', ')}`);
+  else ok(`asset scan: the release export contains none of the ${assetHashes.size} demonstration pictures`);
+  const controlAssets = assetsIn(controlDir);
+  if (controlAssets.size === assetHashes.size) ok(`asset positive control: the development export contains all ${assetHashes.size} demonstration pictures`);
+  else bad(`asset positive control: the development export holds ${controlAssets.size} of ${assetHashes.size} pictures, so a clean release asset scan cannot be trusted`);
+  cpSync(fixtureAssets[0], path.join(plantedDir, 'planted-asset.bin'));
+  if (assetsIn(plantedDir).size >= 1) ok('asset negative control: a demonstration picture planted in a copy of the release output is found');
+  else bad('asset negative control: a planted demonstration picture was NOT found');
 } finally {
   for (const dir of [releaseDir, controlDir, plantedDir]) rmSync(dir, { recursive: true, force: true });
 }

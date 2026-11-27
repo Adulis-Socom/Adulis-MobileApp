@@ -2,20 +2,25 @@
 // no discount, no stock number. Availability is words. The photo area is a neutral placeholder until the media seam has an
 // origin (GAP-L2-02): a fixture opens no network and a live origin is not invented.
 import type { ReactNode } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { MediaRef, ProductTile, SceneCardUnit, SceneTag } from '../contracts/gap-mob-discovery';
 import { t } from '../i18n/messages';
 import { Body, Button, StateView } from '../ui/components';
+import { useMediaResolver } from '../ui/media';
 import { theme } from '../ui/theme';
 import { availabilityText, priceOf } from './format';
 import { problemKind } from './hooks';
 
-/** The one media seam. Returns null while no media origin is configured; never a guessed URL. */
-export const mediaSource = (_media: MediaRef): string | null => null;
-
+/**
+ * One picture through the media seam (ui/media.ts). A resolved picture is drawn whole (contain, so nothing the Seller composed is
+ * cropped) with its description; an unresolved one is the neutral placeholder. Never a guessed URL.
+ */
 export function MediaImage({ media, height, label }: { readonly media: MediaRef; readonly height: number; readonly label?: boolean }) {
-  // shortcut: placeholder only, until the media seam has a configured origin (then an image component reads mediaSource).
+  const source = useMediaResolver()(media.ref);
+  if (source !== null) {
+    return <Image source={source} resizeMode="contain" accessible accessibilityRole="image" accessibilityLabel={media.alt} style={[styles.media, { height, width: '100%' }]} />;
+  }
   return (
     <View accessible accessibilityRole="image" accessibilityLabel={media.alt} style={[styles.media, { height }]}>
       {label ? <Text style={styles.mediaText}>{t('mobile.media.unavailable')}</Text> : null}

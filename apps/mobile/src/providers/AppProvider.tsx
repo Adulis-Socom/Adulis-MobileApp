@@ -16,6 +16,7 @@ import type { ImageCacheControl } from '../session/private-state';
 import { secureCredentialStore } from '../session/secure-credential-store';
 import { selectTransport } from '../transport/select';
 import type { FixtureUi } from '../transport/port';
+import { liveMedia, MediaContext, type MediaResolver } from '../ui/media';
 import type { BootstrapResult } from './bootstrap';
 import { createRuntime, type EnterModeResult, type Runtime } from './runtime';
 
@@ -34,8 +35,12 @@ export interface AppValue {
   readonly activeMode: Mode;
   readonly modeEnded: GatedMode | null;
   readonly fixtureUi: FixtureUi | null;
-  /** True after a sign-out whose credential delete failed (the app is signed out and fails closed on restart). */
-  readonly signOutIncomplete: boolean;
+  /**
+   * After a sign-out: NOT_CLEARED when the saved sign-in is still on the device but a restart or the server will refuse it;
+   * NOT_DURABLE when nothing could be established (no delete, no flag, no server revoke): a restart could restore it.
+   */
+  readonly signOutState: 'NONE' | 'NOT_CLEARED' | 'NOT_DURABLE';
+  retrySignOutCleanup(): void;
   retry(): void;
   checkAgain(): void;
   enterMode(mode: Mode): EnterModeResult;
@@ -58,9 +63,9 @@ export function useApp(): AppValue {
 
 export function AppProvider({ children }: { readonly children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
-  const [boot, setBoot] = useState<{ readonly runtime: Runtime; readonly fixtureUi: FixtureUi | null } | null>(null);
+  const [boot, setBoot] = useState<{ readonly runtime: Runtime; readonly fixtureUi: FixtureUi | null; readonly media: MediaResolver } | null>(null);
   const [gate, dispatch] = useReducer(reduceGate, initialGate);
-  const [signOutIncomplete, setSignOutIncomplete] = useState(false);
+  const [signOutState, setSignOutState] = useState<AppValue['signOutState']>('NONE');
   const gateRef = useRef(gate);
   gateRef.current = gate;
   const runtime = boot?.runtime ?? null;
@@ -94,7 +99,7 @@ export function AppProvider({ children }: { readonly children: ReactNode }) {
         ...(fixture ? { deviceId: fixture.deviceId } : {}),
       });
       if (!alive) return;
-      setBoot({ runtime: created, fixtureUi: selection.fixtureUi });
+      setBoot({ runtime: created, fixtureUi: selection.fixtureUi, media: fixture ? fixture.media : liveMedia });
       let result = await created.start();
       if (result.kind === 'STALE') result = await created.refresh();
       if (!alive) return;
@@ -143,7 +148,11 @@ export function AppProvider({ children }: { readonly children: ReactNode }) {
       activeMode,
       modeEnded,
       fixtureUi: boot?.fixtureUi ?? null,
-      signOutIncomplete,
+      signOutState,
+      retrySignOutCleanup: () => {
+        const retry = runtime?.session.retryPendingDeletion();
+        if (retry) void retry.then((local) => setSignOutState(local === 'CLEARED' ? 'NONE' : local === 'FLAGGED' ? 'NOT_CLEARED' : 'NOT_DURABLE'));
+      },
       retry: () => void refresh(),
       checkAgain: () => {
         dispatch({ type: 'CHECK_AGAIN' });
@@ -152,16 +161,18 @@ export function AppProvider({ children }: { readonly children: ReactNode }) {
       enterMode: (mode) => (runtime ? runtime.enterMode(mode) : { kind: 'CHECKING' }),
       signOut: () => {
         if (runtime === null) return;
-        setSignOutIncomplete(false);
-        void runtime.session.signOut().then((result) => setSignOutIncomplete(!result.credentialCleared));
+        setSignOutState('NONE');
+        void runtime.session.signOut().then((result) => setSignOutState(!result.durable ? 'NOT_DURABLE' : result.credentialCleared ? 'NONE' : 'NOT_CLEARED'));
       },
     }),
-    [runtime, gate, session, eligibility, activeMode, modeEnded, boot, signOutIncomplete, refresh],
+    [runtime, gate, session, eligibility, activeMode, modeEnded, boot, signOutState, refresh],
   );
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Context.Provider value={value}>{children}</Context.Provider>
+      <MediaContext.Provider value={boot?.media ?? liveMedia}>
+        <Context.Provider value={value}>{children}</Context.Provider>
+      </MediaContext.Provider>
     </QueryClientProvider>
   );
 }

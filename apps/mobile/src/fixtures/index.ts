@@ -5,6 +5,7 @@
 // lives in memory and is lost on restart by design); no secret; no fixture string in packages/locale.
 import type { FixtureEnvironment, FixtureUi } from '../transport/port';
 import { FIXTURE_BANNER, FIXTURE_IDS, FIXTURE_TEST_HANDLE } from './ids';
+import { fixtureMedia } from './media';
 import { createFixtureTransport } from './transport';
 
 export * from './ids';
@@ -14,7 +15,7 @@ export { createFixtureTransport, type FixtureHandle, type OpLogEntry, type Clien
 const world = createFixtureTransport();
 
 export const fixtureUi: FixtureUi = { bannerText: FIXTURE_BANNER };
-export const fixtureEnv: FixtureEnvironment = { deviceId: FIXTURE_IDS.device };
+export const fixtureEnv: FixtureEnvironment = { deviceId: FIXTURE_IDS.device, media: fixtureMedia };
 export const fixtureTransport = world.transport;
 export const fixtureHandle = world.handle;
 

@@ -30,7 +30,8 @@ describe('selectTransport', () => {
     const selection = await select(true, 'on');
     expect(selection.transport.kind).toBe('fixture');
     expect(selection.fixtureUi?.bannerText).toBe(FIXTURE_BANNER);
-    expect(selection.fixtureEnv).toEqual({ deviceId: FIXTURE_IDS.device });
+    expect(selection.fixtureEnv).toMatchObject({ deviceId: FIXTURE_IDS.device });
+    expect(selection.fixtureEnv?.media('fx_media_demo_s1')).not.toBeNull();
   });
 
   it.each([
