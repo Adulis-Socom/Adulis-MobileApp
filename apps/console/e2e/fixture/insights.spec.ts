@@ -22,7 +22,7 @@ test.describe('SC-FE-10 Insights', () => {
     await expect(page.getByRole('region', { name: 'Storefront and inquiries' })).toContainText('Not known for this period.');
     await expect(page.getByRole('region', { name: 'Messaging' })).toContainText('Not available yet.');
     const notMeasured = page.getByRole('region', { name: 'Not measured in this release' });
-    await expect(notMeasured).toContainText('Purchase conversion');
+    await expect(notMeasured).toContainText('Conversion to a sale');
     await expect(notMeasured).toContainText('Not measured in this release.');
     await expect(notMeasured).not.toContainText(/\b0\b/);
     await expect(page.getByText('Definition version 1').first()).toBeVisible();

@@ -36,8 +36,8 @@ const SECTIONS: readonly { code: InsightSection; caps: readonly string[]; metric
   { code: 'STOREFRONT', caps: ['analytics.business_read'], metrics: ['STOREFRONT_VISITS', 'INQUIRIES_STARTED'] },
   { code: 'MESSAGING', caps: ['analytics.chatbot_read'], metrics: ['UNANSWERED_CONVERSATIONS', 'AUTOMATED_ANSWERS'] },
 ];
-/** Measured nowhere in this release: they need real purchases (ANL 24 November amendment). Always UNSUPPORTED, never zero. */
-const NOT_MEASURED = ['PURCHASE_CONVERSION', 'COMPLETED_PURCHASES'];
+/** Measured nowhere in this release: they need real sales (ANL 24 November amendment). Always UNSUPPORTED, never zero. */
+const NOT_MEASURED = ['CONVERSION_TO_SALE', 'COMPLETED_SALES'];
 const ANALYTICS = SECTIONS.flatMap((s) => s.caps);
 
 export function createInsights(kit: Kit, entitlementOff: (sellerId: string) => readonly DestinationKey[]): Insights {
