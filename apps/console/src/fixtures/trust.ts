@@ -15,7 +15,10 @@ export interface Trust {
   readonly handlers: Handlers<TrustOps>;
 }
 
-/** Demonstration standings. Iman shows a REBUILDING Seller and Dawit a TRUSTED one; a suspended Seller keeps only Home and Settings, so it is not used here. Everyone else starts NEW. */
+/**
+ * Demonstration standings. Iman shows a REBUILDING Seller and Dawit a TRUSTED one. Gelila (safety-suspended) keeps read-only access to its
+ * standing and historical Reviews (P-70), and is otherwise not given a level here: it starts NEW like everyone else.
+ */
 const LEVELS: Readonly<Record<string, TrustLevel>> = { fx_seller_alem: 'ESTABLISHED', fx_seller_iman: 'REBUILDING', fx_seller_dawit: 'TRUSTED' };
 
 interface ReviewRec {
@@ -27,8 +30,14 @@ interface ReviewRec {
   productId: string | null;
 }
 
-/** Only Alem Textiles has reviews, so the other Sellers show the empty state. */
+/** Alem Textiles has reviews, and Gelila keeps two historical ones; the other Sellers show the empty state. */
 function seedFor(sellerId: string): ReviewRec[] {
+  if (sellerId === 'fx_seller_gelila') {
+    return [
+      { id: 'fx_rev_gelila_1', dimension: 'PRODUCT', stars: 4, text: 'Fresh and fragrant.', daysAgo: 60, productId: 'fx_prod_gelila_1' },
+      { id: 'fx_rev_gelila_2', dimension: 'SELLER_SERVICE', stars: 5, text: 'Quick to answer.', daysAgo: 75, productId: null },
+    ];
+  }
   if (sellerId !== 'fx_seller_alem') return [];
   const r = (n: number, dimension: ReviewDimension, stars: Stars, text: string | null, daysAgo: number, productId: string | null): ReviewRec => ({ id: `fx_rev_alem_${n}`, dimension, stars, text, daysAgo, productId });
   return [

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Outlet, useLocation, useParams } from 'react-router';
 import { Shell } from '../layout/Shell';
 import { Skeleton } from '../components/Skeleton';
@@ -45,8 +45,11 @@ function SellerScope({ sellerId }: { sellerId: string }) {
   const accountId = session.state.status === 'READY' ? session.state.context.account.id : '';
   const [stored, setOutcome] = useState<Outcome | null>(null);
   const [attempt, setAttempt] = useState(0);
-  // Retry identity for writes of unknown outcome: outlives navigation inside this Seller, dies with the Seller, the account or the session.
-  const retryKeys = useRef(createRetryKeys());
+  // Retry identity for unresolved writes: outlives navigation inside this Seller, dies with the Seller, the account or the session.
+  const retryScope = `${accountId}|${session.epoch}`;
+  const [retryStore, setRetryStore] = useState(() => ({ scope: retryScope, keys: createRetryKeys() }));
+  if (retryStore.scope !== retryScope) setRetryStore({ scope: retryScope, keys: createRetryKeys() });
+  const retryKeys = retryStore.keys;
   const { transport } = session.selected;
   const expire = session.expire;
   const member = membership !== undefined;
@@ -112,7 +115,7 @@ function SellerScope({ sellerId }: { sellerId: string }) {
     );
   }
   return (
-    <RetryKeysContext.Provider value={retryKeys.current}>
+    <RetryKeysContext.Provider value={retryKeys}>
       <SellerContext.Provider value={value}>
         <Shell>
           <Outlet />

@@ -8,7 +8,8 @@ import { t } from '../../i18n/t';
 import { sellerPath } from '../../seller/access';
 import { useSeller } from '../../seller/context';
 import { useSellerQuery } from '../../seller/useSellerQuery';
-import { DirtyProvider, newer, UnsavedNote } from '../shared/dirty';
+import { fresher, tick, type Held } from '../../seller/freshness';
+import { DirtyProvider, UnsavedNote } from '../shared/dirty';
 
 export interface StoreProps {
   readonly view: StoreView;
@@ -75,15 +76,16 @@ export function StoreLayout() {
  */
 export function StoreFrame({ title, lead, children }: { title: string; lead?: string | undefined; children: (props: StoreProps) => ReactNode }) {
   const query = useSellerQuery('store.get', {});
-  const [view, setView] = useState<StoreView | null>(null);
+  const [held, setHeld] = useState<Held<StoreView> | null>(null);
+  const view = held?.value ?? null;
   const [epoch, setEpoch] = useState(0);
   const reloading = useRef(false);
   const retry = query.retry;
 
   useEffect(() => {
     if (query.state.status !== 'ready' || query.state.refreshing) return;
-    const incoming = query.state.data;
-    setView((prev) => newer(prev, incoming));
+    const incoming = { value: query.state.data, stamp: query.state.issued };
+    setHeld((prev) => fresher(prev, incoming));
     if (reloading.current) {
       reloading.current = false;
       setEpoch((n) => n + 1);
@@ -115,7 +117,10 @@ export function StoreFrame({ title, lead, children }: { title: string; lead?: st
         </StatePanel>
       ) : null}
       {query.state.status === 'loading' || (query.state.status === 'ready' && view === null) ? <Skeleton rows={4} /> : null}
-      {view ? <Fragment key={epoch}>{children({ view, onChange: (next) => setView((prev) => newer(prev, next)), onReload, editable: view.allowed_actions.includes('EDIT') })}</Fragment> : null}
+      {view ? <Fragment key={epoch}>{children({ view, onChange: (next) => {
+        const acknowledged = { value: next, stamp: tick() };
+        setHeld((prev) => fresher(prev, acknowledged));
+      }, onReload, editable: view.allowed_actions.includes('EDIT') })}</Fragment> : null}
     </DirtyProvider>
   );
 }

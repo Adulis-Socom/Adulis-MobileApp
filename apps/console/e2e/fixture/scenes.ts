@@ -508,6 +508,86 @@ export const SCENES: readonly Scene[] = [
       await expect(p.getByRole('heading', { level: 2, name: 'TikTok video' })).toBeVisible();
     },
   },
+  // ---- Batch 02D visual closure: states nobody had looked at, and the new SC-FE-07-09-CLOSE / SC-FE-08 screens ----
+  {
+    name: 'closure-unsaved-dialog',
+    dialog: true,
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox/fx_conv_alem_4`);
+      await p.getByLabel('Your message').fill('Not sent yet.');
+      await p.getByRole('link', { name: 'Back to the Inbox' }).click();
+      await expect(p.getByRole('dialog', { name: 'Leave without saving?' })).toBeVisible();
+    },
+  },
+  {
+    name: 'closure-product-multiple-images',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.biruk.name);
+      await goInApp(p, `/s/${SELLER.biruk.id}/products`);
+      await p.getByRole('button', { name: 'Add a Product' }).click();
+      await expect(p.getByRole('heading', { level: 1, name: 'New Product' })).toBeVisible();
+      const list = p.getByRole('list', { name: 'Product images', exact: true });
+      for (const [n, name] of ['front.png', 'back.png', 'detail.png'].entries()) {
+        await p.getByLabel('Add an image').setInputFiles({ name, mimeType: 'image/png', buffer: REAL_PNG });
+        await expect(list.getByRole('listitem')).toHaveCount(n + 1);
+      }
+    },
+  },
+  {
+    name: 'closure-tiktok-linked',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/products/fx_prod_alem_1`);
+      const region = p.getByRole('region', { name: 'TikTok video' });
+      await region.getByLabel('TikTok video link').fill('https://www.tiktok.com/@alem.textiles/video/456');
+      await region.getByRole('button', { name: 'Link video' }).click();
+      await expect(region.getByText('https://www.tiktok.com/@alem.textiles/video/456')).toBeVisible();
+    },
+  },
+  {
+    name: 'suspended-trust-read-only',
+    setup: async (p) => {
+      await statesAccountAt(p, SELLER.gelila.name);
+      await goInApp(p, `/s/${SELLER.gelila.id}/trust`);
+      await expect(p.getByText('Fresh and fragrant.')).toBeVisible();
+    },
+  },
+  {
+    name: 'inbox-thread-provenance',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox/fx_conv_alem_3`);
+      await expect(p.getByText('From the Scene The old kaftan, styled two ways, which can no longer be shown')).toHaveCount(2);
+    },
+  },
+  {
+    name: 'automation-overview',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox/automation`);
+      await expect(p.getByRole('heading', { level: 2, name: 'Questions it can answer' })).toBeVisible();
+    },
+  },
+  {
+    name: 'automation-knowledge',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox/automation/knowledge`);
+      await expect(p.getByRole('heading', { level: 2, name: 'Store knowledge' })).toBeVisible();
+    },
+  },
+  {
+    name: 'automation-test-result',
+    setup: async (p) => {
+      await atSellerHome(p, PHONE.owner, SELLER.alem.name);
+      await goInApp(p, `/s/${SELLER.alem.id}/inbox/automation/test`);
+      await p.getByLabel('Buyer question').fill('Is this still available?');
+      await p.getByLabel('Product the question is about').selectOption({ label: 'Linen wrap dress' });
+      await p.getByRole('button', { name: 'Run test' }).click();
+      await expect(p.getByRole('heading', { level: 2, name: 'Test result' })).toBeVisible();
+    },
+  },
 ];
 
 export { CODE };

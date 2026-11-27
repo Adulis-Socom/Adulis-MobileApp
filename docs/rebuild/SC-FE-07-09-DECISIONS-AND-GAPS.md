@@ -79,3 +79,23 @@ Trust requirement without Orders; whether an Analyst's review-quality aggregates
 Implemented: yes, for all three. Fixture-verified: by unit tests (`src/fixtures/simulation/model.test.ts`, `inbox.test.ts`, `trust.test.ts`) and browser specs
 (`e2e/fixture/simulation.spec.ts`, `inbox.spec.ts`, `trust.spec.ts`) in CI. Integrated: no (draft PRs, not merged). Commercial definitions pending: yes (Trust
 thresholds, dialogue, Order amounts). Backend pending: yes (no Seller backend exists). Release accepted: no.
+
+## 5. Batch 02D: SC-FE-07-09-CLOSE and the SC-FE-08 administration (27 November 2026)
+
+Founder dispositions P-47..P-70 are recorded in the 02D delivery reports (file 02); they are applied here, not reopened.
+
+| Item | What changed | Where |
+|---|---|---|
+| A retry identity (P-48) | One key per UNRESOLVED request (in flight or unknown), shared by concurrent attempts; settlement matched by key (a stale answer neither forgets nor resurrects a key); no unresolved entry is ever evicted (FE12-01); the store is keyed by account, session epoch and Seller scope. Durable idempotency is the backend's, so no copy promises a write cannot be done twice (P-49). | `src/seller/retry.ts` |
+| B session generation (P-47) | `expire()` is bound to the session epoch that issued the request; an obsolete session's 401 changes nothing; the current session's still ends it. The fixture issues a new session token per sign-in and answers a request of an older token with 401. | `src/session/SessionProvider.tsx`, `src/fixtures/world.ts` |
+| C freshness | Reads stamped at issue, acknowledged writes at adoption; equal versions are ordered by stamp, so a late pre-acknowledgement read cannot overwrite a write and a later equal-version read still lands. Replaces `newer()` (closes 02C O-06). | `src/seller/freshness.ts` |
+| D chat provenance (P-64) | One authoritative subject (NONE, PRODUCT, SCENE) plus Scene source context with the exact revision and an immutable display snapshot; membership is checked against the offered revision; only accessibility is resolved on read. Field codes are the CHAT-01 S15 names (MESSAGE_EMPTY, MESSAGE_SCENE_POST_INVALID, MESSAGE_PRODUCT_POST_INVALID, MESSAGE_PRODUCT_NOT_IN_SCENE_POST, MESSAGE_CONTEXT_CONFLICT); the 02C names in section 2 are superseded. ORDER is not served (D24-01). | `src/contracts/gap-sc-inbox.ts`, `src/fixtures/inbox.ts` |
+| E read high-water (P-61) | The shared Seller mark moves to the highest Message the screen showed; an unseen arrival stays unread; a reply no longer marks. | `src/features/inbox/Thread.tsx` |
+| F suspended Seller (P-70) | Read-only Trust and historical Reviews stay for roles that hold them; publication, catalogue, Content, Inbox and scripted assistance stay closed. | `src/fixtures/world.ts` |
+| SC-FE-08 administration | `inbox/automation` (SC-FE-00 path) gated by the AUTH-02 seller.chatbot codes, not the Inbox destination (CONSOLE S76). Overview (explainable readiness, platform-managed provisional intents with template versions, aggregates for analytics_read only, history), store knowledge (only facts no other domain owns; versioned), deterministic test simulator (test only). | `src/features/automation/`, GAP-SC-17 |
+
+New provisional proposals (not product rules): the route stays `inbox/automation` although CONSOLE S76 suggests `automation/chatbot`;
+readiness groups SELLER_POLICY and CATEGORY_KNOWLEDGE (the latter NOT_DEFINED until the taxonomy is ratified); three demonstration intents;
+returns window 1..365 days and 500-character texts are demonstration limits; non-ASCII text is treated as not English by the stand-in only.
+Still open: Seller feedback-submission permission (no AUTH-02 code, not granted); an automation on/off state; the approved dialogue catalogue;
+quotas (KB S52); MESSAGE_EMPTY versus TEXT_INPUT_UNSUPPORTED_FOR_LOCALE trigger semantics; a per-surface read list for suspended Sellers.

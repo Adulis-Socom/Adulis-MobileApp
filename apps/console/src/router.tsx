@@ -10,6 +10,7 @@ import { Home } from './features/home/Home';
 import { SceneEditor } from './features/content/SceneEditor';
 import { Scenes } from './features/content/Scenes';
 import { Stories } from './features/content/Stories';
+import { AutomationKnowledgePage, AutomationLayout, AutomationOverviewPage, AutomationTestRoute } from './features/automation/Automation';
 import { Inbox } from './features/inbox/Inbox';
 import { Thread } from './features/inbox/Thread';
 import { Notifications } from './features/notifications/Notifications';
@@ -69,8 +70,16 @@ const children: RouteObject[] = [
           { path: 'content/stories', element: <Gate dest="content"><Stories /></Gate> },
           deferred('content/*', 'content'),
           { path: 'inbox', element: <Gate dest="inbox"><Inbox /></Gate> },
-          // Scripted assistance settings: the chatbot requirements are under founder review (RB25-D09), so this is an honest "arrives later".
-          deferred('inbox/automation', 'inbox'),
+          // Scripted assistance administration (SC-FE-08): gated by the chatbot capabilities, not by the Inbox destination (CONSOLE-02 S76).
+          {
+            path: 'inbox/automation',
+            element: <AutomationLayout />,
+            children: [
+              { index: true, element: <AutomationOverviewPage /> },
+              { path: 'knowledge', element: <AutomationKnowledgePage /> },
+              { path: 'test', element: <AutomationTestRoute /> },
+            ],
+          },
           { path: 'inbox/:conversationId', element: <Gate dest="inbox"><Thread /></Gate> },
           deferred('insights/*', 'insights'),
           {

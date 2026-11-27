@@ -6,7 +6,7 @@ import { PageTitle } from '../../components/PageTitle';
 import { Skeleton } from '../../components/Skeleton';
 import { StatePanel } from '../../components/StatePanel';
 import { formatInstant, label, t } from '../../i18n/t';
-import { sellerPath } from '../../seller/access';
+import { can, sellerPath } from '../../seller/access';
 import { useSeller } from '../../seller/context';
 import { useSellerQuery } from '../../seller/useSellerQuery';
 
@@ -36,7 +36,7 @@ function Row({ conversation, sellerId, timezone }: { conversation: ConversationS
  * whether it is unread and whether a team member is needed. Nothing is searched, filtered or counted beyond what the server returns.
  */
 export function Inbox() {
-  const { sellerId } = useSeller();
+  const { sellerId, access } = useSeller();
   const [cursor, setCursor] = useState<string | null>(null);
   const [earlier, setEarlier] = useState<readonly ConversationSummary[]>([]);
   const { state, retry } = useSellerQuery('inbox.list', { cursor });
@@ -55,6 +55,11 @@ export function Inbox() {
     <>
       <PageTitle title={t('inbox.title')}>{t('inbox.title')}</PageTitle>
       <p className="lead">{t('inbox.lead')}</p>
+      {can(access, 'chatbot.read') ? (
+        <p>
+          <Link to={sellerPath(sellerId, 'inbox/automation')}>{t('auto.open_link')}</Link>
+        </p>
+      ) : null}
       {state.status === 'error' ? (
         <StatePanel
           kind="danger"

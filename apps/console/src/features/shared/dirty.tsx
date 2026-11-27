@@ -82,8 +82,3 @@ export function useDirty(id: string, dirty: boolean): void {
     return () => set?.(id, false);
   }, [set, id, dirty]);
 }
-
-/** The newer of an acknowledged answer and an incoming one: a late, older response never replaces newer acknowledged data. */
-export function newer<T extends { readonly version: number }>(current: T | null, incoming: T): T {
-  return current !== null && incoming.version < current.version ? current : incoming;
-}

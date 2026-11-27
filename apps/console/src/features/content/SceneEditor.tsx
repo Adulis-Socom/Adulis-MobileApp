@@ -10,7 +10,8 @@ import { sellerPath } from '../../seller/access';
 import { useSeller } from '../../seller/context';
 import { useSellerQuery } from '../../seller/useSellerQuery';
 import { NotFoundInSeller } from '../unavailable/NotFound';
-import { DirtyProvider, newer, UnsavedNote } from '../shared/dirty';
+import { fresher, tick, type Held } from '../../seller/freshness';
+import { DirtyProvider, UnsavedNote } from '../shared/dirty';
 import { SceneImageSection, SceneCaptionSection } from './SceneMedia';
 import { ScenePreview } from './ScenePreview';
 import { ScenePublication } from './ScenePublication';
@@ -22,7 +23,8 @@ function Editor({ sceneId }: { sceneId: string }) {
   const scene = useSellerQuery('scenes.get', { scene_id: sceneId });
   const market = useSellerQuery('market.context.get', {});
   const { sellerId } = useSeller();
-  const [detail, setDetail] = useState<SceneDetail | null>(null);
+  const [held, setHeld] = useState<Held<SceneDetail> | null>(null);
+  const detail = held?.value ?? null;
   // Forms re-initialise only when the Seller asked for a reload (a stale version); a quiet refresh never wipes unsaved work.
   const [epoch, setEpoch] = useState(0);
   const reloading = useRef(false);
@@ -44,8 +46,8 @@ function Editor({ sceneId }: { sceneId: string }) {
 
   useEffect(() => {
     if (scene.state.status !== 'ready' || scene.state.refreshing) return;
-    const incoming = scene.state.data;
-    setDetail((prev) => newer(prev, incoming));
+    const incoming = { value: scene.state.data, stamp: scene.state.issued };
+    setHeld((prev) => fresher(prev, incoming));
     if (reloading.current) {
       reloading.current = false;
       setEpoch((n) => n + 1);
@@ -81,7 +83,10 @@ function Editor({ sceneId }: { sceneId: string }) {
   if (!detail) return <Skeleton rows={6} />;
 
   const timezone = market.state.status === 'ready' ? market.state.data.timezone : undefined;
-  const adopt = (next: SceneDetail) => setDetail((prev) => newer(prev, next));
+  const adopt = (next: SceneDetail) => {
+    const acknowledged = { value: next, stamp: tick() };
+    setHeld((prev) => fresher(prev, acknowledged));
+  };
   const shared = { scene: detail, onChange: adopt, onReload, onRefresh, timezone, localImage: local, onLocalImage };
   const heading = detail.caption.trim() === '' ? t('scenes.new_title') : detail.caption;
   return (
