@@ -44,7 +44,7 @@ export const enConsole = {
   'account.sign_out': 'Sign out',
   'account.signing_out': 'Signing out',
   'account.close': 'Close',
-  'account.sessions_note': 'Your sessions, devices, notifications and privacy are on your account page.',
+  'account.sessions_note': 'Session and device management arrives in a later release.',
 
   // ---- screen states (CONSOLE-02 S25) ----------------------------------------------------------------------------
   'state.loading_title': 'Loading',
@@ -1278,4 +1278,7 @@ export const enConsole = {
   'field_error.MESSAGE_PRODUCT_NOT_IN_SCENE': 'This Product is not tagged in the chosen Scene.',
   'field_error.CONTEXT_SCENE_NOT_AVAILABLE': 'This Scene cannot be used right now.',
   'field_error.CONTEXT_PRODUCT_NOT_AVAILABLE': 'This Product cannot be used right now.',
+
+  // ---- SC-FE-11 account dialog note (proposed English, awaiting approval) ----
+  'acct.dialog_note': 'Your sessions, devices, notifications and privacy are on your account page.',
 } as const;
