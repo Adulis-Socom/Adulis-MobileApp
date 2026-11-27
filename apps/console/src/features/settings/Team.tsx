@@ -4,6 +4,7 @@ import { ASSIGNABLE_ROLES, type AssignableRole, type TeamMember, type TeamView }
 import { Badge } from '../../components/Badge';
 import { Dialog } from '../../components/Dialog';
 import { Field, Group } from '../../components/Form';
+import { Icon } from '../../components/Icon';
 import { PageTitle } from '../../components/PageTitle';
 import { Skeleton } from '../../components/Skeleton';
 import { StatePanel } from '../../components/StatePanel';
@@ -247,8 +248,17 @@ export function Team() {
           <ActionProblem action={transferAction} />
           {view.transfer ? (
             <div className="stack">
-              <p>{t('team.transfer_pending', { name: view.transfer.target_label, time: formatInstant(view.transfer.activates_at, timezone) })}</p>
-              <p className="hint">{t('team.transfer_outcome_gap')}</p>
+              {view.transfer.target_eligible ? (
+                <>
+                  <p>{t('team.transfer_pending', { name: view.transfer.target_label, time: formatInstant(view.transfer.activates_at, timezone) })}</p>
+                  <p className="hint">{t('team.transfer_outcome_gap')}</p>
+                </>
+              ) : (
+                <p className="notice">
+                  <Icon name="alert" />
+                  <span>{t('team.transfer_target_ineligible', { name: view.transfer.target_label })}</span>
+                </p>
+              )}
               <div className="actions">
                 <button type="button" className="btn btn-quiet" onClick={() => void act(() => run('ownership.transfer.cancel', {}), transferAction)}>
                   {t('team.transfer_cancel')}
@@ -291,6 +301,7 @@ export function Team() {
             open={stepUp}
             purpose="TRANSFER_OWNERSHIP"
             sellerId={sellerId}
+            recipientMembershipId={target === '' ? undefined : target}
             onClose={() => setStepUp(false)}
             onGranted={(grant) => {
               setStepUp(false);

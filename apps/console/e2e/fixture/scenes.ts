@@ -631,7 +631,7 @@ export const SCENES: readonly Scene[] = [
       await goInApp(p, `/s/${SELLER.alem.id}/settings/team`);
       await p.getByLabel('New Owner').selectOption({ label: 'Abel (demonstration)' });
       await p.getByRole('button', { name: 'Transfer ownership' }).click();
-      await expect(p.getByRole('dialog', { name: 'Confirm it is you' }).getByText('Enter the code to transfer ownership of Alem Textiles.')).toBeVisible();
+      await expect(p.getByRole('dialog', { name: 'Confirm it is you' }).getByText('Enter the code to transfer ownership of Alem Textiles to Abel (demonstration).')).toBeVisible();
     },
   },
   {

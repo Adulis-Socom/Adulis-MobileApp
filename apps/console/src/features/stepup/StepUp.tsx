@@ -20,7 +20,22 @@ const SENTENCE = {
  * to transfer ownership of Alem Textiles"), never a bare "enter your code". A correct code yields a grant the server accepts ONCE, for this
  * purpose and this target only; the dialog hands it to the command and closes. Step-up never supplies a missing permission.
  */
-export function StepUp({ open, purpose, sellerId, onClose, onGranted }: { open: boolean; purpose: StepUpPurpose; sellerId: string | null; onClose: () => void; onGranted: (grant: string) => void }) {
+export function StepUp({
+  open,
+  purpose,
+  sellerId,
+  recipientMembershipId,
+  onClose,
+  onGranted,
+}: {
+  open: boolean;
+  purpose: StepUpPurpose;
+  sellerId: string | null;
+  /** TRANSFER_OWNERSHIP: the membership the code is for. The server binds the grant to it, so it cannot be spent on anyone else. */
+  recipientMembershipId?: string | undefined;
+  onClose: () => void;
+  onGranted: (grant: string) => void;
+}) {
   const run = useAccountCommand();
   const starting = useAction();
   const verifying = useAction();
@@ -33,12 +48,13 @@ export function StepUp({ open, purpose, sellerId, onClose, onGranted }: { open: 
       setCode('');
       return;
     }
-    void starting.run(() => run('account.stepup.start', { purpose, seller_id: sellerId })).then((c) => {
+    const input = recipientMembershipId === undefined ? { purpose, seller_id: sellerId } : { purpose, seller_id: sellerId, recipient_membership_id: recipientMembershipId };
+    void starting.run(() => run('account.stepup.start', input)).then((c) => {
       if (c) setChallenge(c);
     });
     // A challenge is started once per opening, for this purpose and target.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, purpose, sellerId]);
+  }, [open, purpose, sellerId, recipientMembershipId]);
 
   async function verify(event: FormEvent) {
     event.preventDefault();
@@ -56,7 +72,11 @@ export function StepUp({ open, purpose, sellerId, onClose, onGranted }: { open: 
       <ActionProblem action={starting} />
       {challenge ? (
         <form onSubmit={(e) => void verify(e)} noValidate className="stack">
-          <p>{t(SENTENCE[challenge.purpose], { target: challenge.target_label })}</p>
+          <p>
+            {challenge.recipient_label !== null
+              ? t('stepup.purpose.TRANSFER_OWNERSHIP_TO', { target: challenge.target_label, recipient: challenge.recipient_label })
+              : t(SENTENCE[challenge.purpose], { target: challenge.target_label })}
+          </p>
           <ActionProblem action={verifying} />
           <Field id="stepup_code" label={t('stepup.code_label')} hint={t('stepup.code_hint')} error={verifying.fields['stepup_code']}>
             {(control) => <input {...control} className="text-input" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} />}

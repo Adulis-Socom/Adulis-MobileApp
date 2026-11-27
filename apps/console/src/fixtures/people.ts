@@ -36,7 +36,11 @@ export interface PeopleDeps {
   readonly personas: () => Persona[];
   /** The signed-in persona; throws AUTHENTICATION_REQUIRED without a session. */
   readonly current: () => Persona;
+  /** The id of the session the current request was sent under (null when signed out). */
+  readonly currentSession: () => string | null;
   readonly sellerName: (sellerId: string) => string | undefined;
+  /** Whether the Seller can take a new team member now: it exists and is not suspended (a closure request is checked here). */
+  readonly sellerOpenToMembers: (sellerId: string) => boolean;
   readonly codes: { readonly ok: string; readonly invalid: string; readonly expired: string };
 }
 
@@ -48,6 +52,16 @@ type PeopleOps =
   | 'privacy.get' | 'privacy.export.request' | 'privacy.deletion.request' | 'privacy.deletion.cancel';
 export interface People {
   readonly handlers: Handlers<PeopleOps>;
+  /** A sign-in: records a new live session for the persona and returns its id. */
+  openSession(personaId: string): string;
+  /** A sign-out: the session ends and is never valid again. */
+  endSession(sessionId: string): void;
+  /** False once the session was ended or revoked: a request under it is unauthenticated. */
+  sessionLive(sessionId: string): boolean;
+  /** True once the session was signed out of this Seller (team.session.revoke): no Seller authority under it (FE12-04). */
+  sellerAccessRevoked(sessionId: string, sellerId: string): boolean;
+  /** The persona a recorded session belongs to (test hook support). */
+  sessionPersona(sessionId: string): string | null;
 }
 
 const STEP_UP_VALID_MS = 300_000; // demonstration value: AUTH-02 says only "short-lived"
@@ -62,9 +76,22 @@ const CATEGORIES: readonly { code: string; suppressible: boolean }[] = [
 const isAssignable = (r: string): r is AssignableRole => (ASSIGNABLE_ROLES as readonly string[]).includes(r);
 
 interface Invite { id: string; sellerId: string; targetId: string; roles: AssignableRole[]; createdAt: number }
-interface Challenge { personaId: string; purpose: StepUpPurpose; sellerId: string | null; expiresAt: number }
-interface Grant { personaId: string; purpose: StepUpPurpose; sellerId: string | null; used: boolean }
-interface Transfer { targetMembershipId: string; requestedAt: number }
+/** The exact recipient membership a transfer grant is for: id AND version, so a role change after the code invalidates it (FE12-03). */
+interface Recipient { membershipId: string; version: number }
+interface Challenge { personaId: string; purpose: StepUpPurpose; sellerId: string | null; recipient: Recipient | null; expiresAt: number }
+interface Grant { personaId: string; purpose: StepUpPurpose; sellerId: string | null; recipient: Recipient | null; used: boolean; expiresAt: number }
+interface Transfer { targetMembershipId: string; targetLabel: string; requestedAt: number }
+/** One live sign-in. Account-level revocation ends it; Seller-level revocation removes its authority in one Seller only (FE12-04). */
+interface SessionRec {
+  id: string;
+  personaId: string;
+  audience: AccountSession['audience'];
+  device: string;
+  location: string | null;
+  lastUsed: number;
+  ended: boolean;
+  sellerRevoked: Set<string>;
+}
 interface PrivacyRec { export: 'NONE' | 'PREPARING'; deletion: PrivacyView['deletion']['state']; requestedAt: number | null }
 
 export function createPeople(deps: PeopleDeps): People {
@@ -74,8 +101,8 @@ export function createPeople(deps: PeopleDeps): People {
   const grants = new Map<string, Grant>();
   const transfers = new Map<string, Transfer>();
   const closures = new Map<string, number>();
-  const revokedTeamSessions = new Set<string>();
-  const accountSessions = new Map<string, AccountSession[]>();
+  const sessions = new Map<string, SessionRec>();
+  const seededSessions = new Set<string>();
   const prefs = new Map<string, Map<string, boolean>>();
   const privacy = new Map<string, PrivacyRec>();
 
@@ -84,12 +111,23 @@ export function createPeople(deps: PeopleDeps): People {
     deps.personas().flatMap((p) => p.memberships.filter((m) => m.sellerId === sellerId).map((m) => ({ p, m })));
   const teamSlotTaken = (p: Persona) => p.memberships.some((m) => m.relationship === 'TEAM');
 
-  /** Consume a grant: it must exist, be unused, belong to this Account, and match the purpose and the target. One use only (AUTH S45-S48). */
-  function spend(grant: string, personaId: string, purpose: StepUpPurpose, sellerId: string | null): void {
+  /**
+   * Consume a grant: it must exist, be unused and unexpired, belong to this Account, and match the purpose, the Seller and (for a transfer) the
+   * exact recipient membership. One use only (AUTH S45-S48). An expired grant is dropped, never revived (FE12-02).
+   */
+  function spend(grant: string, personaId: string, purpose: StepUpPurpose, sellerId: string | null, recipient: Recipient | null = null): void {
     const g = grants.get(grant);
-    if (!g || g.used || g.personaId !== personaId || g.purpose !== purpose || g.sellerId !== sellerId) throw new TransportError('PERMISSION_DENIED', { detail: 'STEP_UP_REQUIRED' });
+    const expired = g !== undefined && kit.now() >= g.expiresAt;
+    if (expired) grants.delete(grant);
+    const bound = g?.recipient ?? null;
+    const recipientOk = recipient === null ? bound === null : bound !== null && bound.membershipId === recipient.membershipId && bound.version === recipient.version;
+    if (!g || expired || g.used || g.personaId !== personaId || g.purpose !== purpose || g.sellerId !== sellerId || !recipientOk) {
+      throw new TransportError('PERMISSION_DENIED', { detail: 'STEP_UP_REQUIRED' });
+    }
     g.used = true;
   }
+  /** An eligible ownership recipient: an ACTIVE team member of this Seller holding Admin (CONSOLE S117). */
+  const eligibleRecipient = (m: PersonaMembership | undefined): m is PersonaMembership => !!m && m.relationship === 'TEAM' && m.standing === 'ACTIVE' && m.roles.includes('ADMIN');
 
   function memberView(a: Authz, p: Persona, m: PersonaMembership): TeamMember {
     const owner = m.relationship === 'OWNER';
@@ -113,6 +151,7 @@ export function createPeople(deps: PeopleDeps): People {
     const all = membershipsOf(a.sellerId);
     const t = transfers.get(a.sellerId);
     const target = t ? all.find((x) => x.m.id === t.targetMembershipId) : undefined;
+    const here = deps.currentSession();
     const actions: TeamAction[] = [
       ...(a.caps.has('team.invite') ? (['INVITE'] as const) : []),
       ...(a.caps.has('ownership.transfer') && !t ? (['TRANSFER_OWNERSHIP'] as const) : []),
@@ -127,13 +166,27 @@ export function createPeople(deps: PeopleDeps): People {
           const invitee = persona(i.targetId);
           return { invitation_id: i.id, target_label: invitee?.username ?? '', roles: i.roles, state: 'PENDING' as const, created_at: kit.iso(i.createdAt), eligibility: invitee && teamSlotTaken(invitee) ? ('IN_ANOTHER_TEAM' as const) : ('ELIGIBLE' as const) };
         }),
-      // Seller-scoped session administration: each active team member's Console session in this Seller (demonstration devices).
+      // Seller-scoped session administration: the live Console sessions of active team members that still hold authority in this Seller.
+      // The session this request came from is not listed: it ends with Sign out (FE12-04).
       sessions: a.caps.has('sessions.read')
         ? all
-            .filter(({ m }) => m.relationship === 'TEAM' && m.standing === 'ACTIVE' && !revokedTeamSessions.has(`${a.sellerId}|${m.id}`))
-            .map(({ p, m }) => ({ session_id: `fx_tsess_${m.id}`, member_label: p.display_name, device_label: 'Browser on a computer (demonstration)', last_used_at: kit.iso(kit.now() - 2 * HOUR_MS) }))
+            .filter(({ m }) => m.relationship === 'TEAM' && m.standing === 'ACTIVE')
+            .flatMap(({ p }) =>
+              liveSessionsOf(p.id)
+                .filter((x) => x.audience === 'CONSOLE' && x.id !== here && !x.sellerRevoked.has(a.sellerId))
+                .map((x) => ({ session_id: x.id, member_label: p.display_name, device_label: x.device, last_used_at: kit.iso(x.lastUsed) })),
+            )
         : null,
-      transfer: t && target ? { state: 'PENDING', target_label: target.p.display_name, requested_at: kit.iso(t.requestedAt), activates_at: kit.iso(t.requestedAt + TRANSFER_DELAY_MS) } : null,
+      // A pending transfer stays visible, and cancellable, even when its recipient is no longer eligible or no longer on the team (FE12-06).
+      transfer: t
+        ? {
+            state: 'PENDING',
+            target_label: target?.p.display_name ?? t.targetLabel,
+            target_eligible: eligibleRecipient(target?.m),
+            requested_at: kit.iso(t.requestedAt),
+            activates_at: kit.iso(t.requestedAt + TRANSFER_DELAY_MS),
+          }
+        : null,
       allowed_actions: actions,
     };
   }
@@ -159,18 +212,33 @@ export function createPeople(deps: PeopleDeps): People {
     };
   }
 
+  // Every persona starts with two demonstration sessions on other devices; each sign-in adds a real one.
+  function seedSessions(personaId: string): void {
+    if (seededSessions.has(personaId)) return;
+    seededSessions.add(personaId);
+    const add = (n: number, audience: SessionRec['audience'], device: string, hoursAgo: number, location: string | null) => {
+      const id = `fx_sess_${personaId}_${n}`;
+      sessions.set(id, { id, personaId, audience, device, location, lastUsed: kit.now() - hoursAgo * HOUR_MS, ended: false, sellerRevoked: new Set() });
+    };
+    add(2, 'MOBILE', 'Adulis app on a phone (demonstration)', 20, 'Adama (approximate)');
+    add(3, 'CONSOLE', 'Another browser (demonstration)', 70, null);
+  }
+  function liveSessionsOf(personaId: string): SessionRec[] {
+    seedSessions(personaId);
+    return [...sessions.values()].filter((x) => x.personaId === personaId && !x.ended);
+  }
   function sessionsOf(p: Persona): AccountSession[] {
-    let list = accountSessions.get(p.id);
-    if (!list) {
-      const ago = (h: number) => kit.iso(kit.now() - h * HOUR_MS);
-      list = [
-        { session_id: `fx_sess_${p.id}_1`, current: true, audience: 'CONSOLE', device_label: 'This browser', last_used_at: ago(0), approx_location: 'Addis Ababa (approximate)' },
-        { session_id: `fx_sess_${p.id}_2`, current: false, audience: 'MOBILE', device_label: 'Adulis app on a phone (demonstration)', last_used_at: ago(20), approx_location: 'Adama (approximate)' },
-        { session_id: `fx_sess_${p.id}_3`, current: false, audience: 'CONSOLE', device_label: 'Another browser (demonstration)', last_used_at: ago(70), approx_location: null },
-      ];
-      accountSessions.set(p.id, list);
-    }
-    return list;
+    const here = deps.currentSession();
+    return liveSessionsOf(p.id)
+      .map((x) => ({
+        session_id: x.id,
+        current: x.id === here,
+        audience: x.audience,
+        device_label: x.id === here ? 'This browser' : x.device,
+        last_used_at: kit.iso(x.id === here ? kit.now() : x.lastUsed),
+        approx_location: x.location,
+      }))
+      .sort((l, r) => Number(r.current) - Number(l.current));
   }
   function prefsView(p: Persona) {
     const mine = prefs.get(p.id) ?? new Map<string, boolean>();
@@ -178,10 +246,16 @@ export function createPeople(deps: PeopleDeps): People {
     const categories: PreferenceCategory[] = CATEGORIES.map((c) => ({ code: c.code, suppressible: c.suppressible, enabled: c.suppressible ? (mine.get(c.code) ?? true) : true }));
     return { provisional: true as const, categories };
   }
+  const sellerTakesMembers = (sellerId: string): boolean => deps.sellerOpenToMembers(sellerId) && !closures.has(sellerId);
   function invitationsFor(p: Persona): MyInvitation[] {
     return invites
       .filter((i) => i.targetId === p.id)
-      .map((i) => ({ invitation_id: i.id, seller_label: deps.sellerName(i.sellerId) ?? '', roles: i.roles, blocked: teamSlotTaken(p) ? ('SLOT_OCCUPIED' as const) : null }));
+      .map((i) => ({
+        invitation_id: i.id,
+        seller_label: deps.sellerName(i.sellerId) ?? '',
+        roles: i.roles,
+        blocked: !sellerTakesMembers(i.sellerId) ? ('SELLER_UNAVAILABLE' as const) : teamSlotTaken(p) ? ('SLOT_OCCUPIED' as const) : null,
+      }));
   }
   function privacyOf(p: Persona): PrivacyView {
     const rec: PrivacyRec = privacy.get(p.id) ?? { export: 'NONE', deletion: 'NONE', requestedAt: null };
@@ -267,18 +341,21 @@ export function createPeople(deps: PeopleDeps): People {
     },
     'team.session.revoke': ({ session_id }, ctx) => {
       const a = team(ctx, 'sessions.revoke');
-      const found = membershipsOf(a.sellerId).find(({ m }) => `fx_tsess_${m.id}` === session_id);
-      if (!found) throw notFound();
-      revokedTeamSessions.add(`${a.sellerId}|${found.m.id}`);
+      // Only a listed session: a live Console session of an active team member of THIS Seller, never the caller's own.
+      const rec = sessions.get(session_id);
+      if (!rec || !(teamView(a).sessions ?? []).some((x) => x.session_id === session_id)) throw notFound();
+      // Authority in this Seller ends for every later request under that session; the rest of the Account is untouched (FE12-04).
+      rec.sellerRevoked.add(a.sellerId);
       return teamView(a);
     },
     'ownership.transfer.start': ({ membership_id, step_up_grant }, ctx) => {
       const a = team(ctx, 'ownership.transfer');
       if (transfers.has(a.sellerId)) throw conflict();
-      const { m } = findMember(a, membership_id, null);
-      if (m.standing !== 'ACTIVE' || !m.roles.includes('ADMIN')) throw invalid({ target: 'TRANSFER_TARGET_NOT_ELIGIBLE' });
-      spend(step_up_grant, a.accountId, 'TRANSFER_OWNERSHIP', a.sellerId);
-      transfers.set(a.sellerId, { targetMembershipId: m.id, requestedAt: kit.now() });
+      const { p, m } = findMember(a, membership_id, null);
+      if (!eligibleRecipient(m)) throw invalid({ target: 'TRANSFER_TARGET_NOT_ELIGIBLE' });
+      // The code was for THIS membership at THIS version: another recipient, or the same one after a role change, needs a new code (FE12-03).
+      spend(step_up_grant, a.accountId, 'TRANSFER_OWNERSHIP', a.sellerId, { membershipId: m.id, version: m.version });
+      transfers.set(a.sellerId, { targetMembershipId: m.id, targetLabel: p.display_name, requestedAt: kit.now() });
       return teamView(a);
     },
     'ownership.transfer.cancel': (_i, ctx) => {
@@ -307,13 +384,27 @@ export function createPeople(deps: PeopleDeps): People {
     },
 
     // ---- the signed-in Account ----------------------------------------------------------------------------------------
-    'account.stepup.start': ({ purpose, seller_id }) => {
+    'account.stepup.start': ({ purpose, seller_id, recipient_membership_id }) => {
       const p = deps.current();
       // A Seller-bound purpose must name a Seller this Account owns; the label names exactly what the code will authorize.
       if (seller_id !== null && !p.memberships.some((m) => m.sellerId === seller_id && m.relationship === 'OWNER')) throw denied();
+      // A transfer code is for one named, eligible recipient (FE12-03); no other purpose takes one.
+      let recipient: { rec: Recipient; label: string } | null = null;
+      if (purpose === 'TRANSFER_OWNERSHIP') {
+        if (seller_id === null || recipient_membership_id === undefined) throw invalid({ target: 'TRANSFER_TARGET_REQUIRED' });
+        const found = membershipsOf(seller_id).find((x) => x.m.id === recipient_membership_id);
+        if (!found || !eligibleRecipient(found.m)) throw invalid({ target: 'TRANSFER_TARGET_NOT_ELIGIBLE' });
+        recipient = { rec: { membershipId: found.m.id, version: found.m.version }, label: found.p.display_name };
+      } else if (recipient_membership_id !== undefined) throw invalid({ target: 'TRANSFER_TARGET_NOT_ELIGIBLE' });
       const id = kit.next('fx_stepup');
-      challenges.set(id, { personaId: p.id, purpose, sellerId: seller_id, expiresAt: kit.now() + STEP_UP_VALID_MS });
-      return { challenge_id: id, purpose, target_label: seller_id === null ? 'your account' : (deps.sellerName(seller_id) ?? ''), expires_at: kit.iso(kit.now() + STEP_UP_VALID_MS) };
+      challenges.set(id, { personaId: p.id, purpose, sellerId: seller_id, recipient: recipient?.rec ?? null, expiresAt: kit.now() + STEP_UP_VALID_MS });
+      return {
+        challenge_id: id,
+        purpose,
+        target_label: seller_id === null ? 'your account' : (deps.sellerName(seller_id) ?? ''),
+        recipient_label: recipient?.label ?? null,
+        expires_at: kit.iso(kit.now() + STEP_UP_VALID_MS),
+      };
     },
     'account.stepup.verify': ({ challenge_id, code }) => {
       const p = deps.current();
@@ -325,7 +416,8 @@ export function createPeople(deps: PeopleDeps): People {
       if (code !== deps.codes.ok) throw new TransportError('OTP_INVALID');
       challenges.delete(challenge_id); // one challenge, one grant
       const grant = kit.next('fx_grant');
-      grants.set(grant, { personaId: p.id, purpose: c.purpose, sellerId: c.sellerId, used: false });
+      // The grant is short-lived too (FE12-02): it must be spent within the same window, or a new code is needed.
+      grants.set(grant, { personaId: p.id, purpose: c.purpose, sellerId: c.sellerId, recipient: c.recipient, used: false, expiresAt: kit.now() + STEP_UP_VALID_MS });
       return { grant };
     },
     'account.sessions.get': () => ({ sessions: sessionsOf(deps.current()) }),
@@ -335,13 +427,15 @@ export function createPeople(deps: PeopleDeps): People {
       const s = list.find((x) => x.session_id === session_id);
       if (!s) throw notFound();
       if (s.current) throw invalid({ session: 'USE_SIGN_OUT_FOR_THIS_SESSION' });
-      accountSessions.set(p.id, list.filter((x) => x !== s));
+      const rec = sessions.get(s.session_id);
+      if (rec) rec.ended = true; // every later request under it is unauthenticated
       return { sessions: sessionsOf(p) };
     },
     'account.sessions.revoke_others': ({ step_up_grant }) => {
       const p = deps.current();
       spend(step_up_grant, p.id, 'REVOKE_OTHER_SESSIONS', null);
-      accountSessions.set(p.id, sessionsOf(p).filter((x) => x.current));
+      const here = deps.currentSession();
+      for (const rec of liveSessionsOf(p.id)) if (rec.id !== here) rec.ended = true;
       return { sessions: sessionsOf(p) };
     },
     'account.security.get': () => {
@@ -361,13 +455,21 @@ export function createPeople(deps: PeopleDeps): People {
     'account.invitations.get': () => ({ items: invitationsFor(deps.current()) }),
     'account.invitations.accept': ({ invitation_id }) => {
       const p = deps.current();
+      // Everything is checked again at acceptance, against the state NOW, not as it was when the invitation was sent (FE12-05).
+      // Recipient identity and invitation state: a pending invitation addressed to THIS Account (a withdrawn one no longer exists).
       const at = invites.findIndex((i) => i.id === invitation_id && i.targetId === p.id);
       const invite = invites[at];
       if (!invite) throw notFound();
-      // The one team slot (AUTH S59-S60): a second invitation may wait, but cannot be accepted while the slot is held.
+      // Seller eligibility: it still exists, is not suspended, and has no closure request.
+      if (!sellerTakesMembers(invite.sellerId)) throw invalid({ invitation: 'INVITATION_SELLER_UNAVAILABLE' });
+      // Roles: still a non-empty set of assignable roles (never Owner).
+      const roles = [...new Set(invite.roles)];
+      if (roles.length === 0 || !roles.every(isAssignable)) throw invalid({ invitation: 'INVITATION_NO_LONGER_VALID' });
+      // Membership availability: not already related to this Seller, and the one team slot (AUTH S59-S60) is free.
+      if (p.memberships.some((m) => m.sellerId === invite.sellerId)) throw invalid({ invitation: 'INVITATION_NO_LONGER_VALID' });
       if (teamSlotTaken(p)) throw invalid({ invitation: 'TEAM_SLOT_OCCUPIED' });
       invites.splice(at, 1);
-      p.memberships.push({ id: kit.next('fx_mem'), sellerId: invite.sellerId, relationship: 'TEAM', roles: invite.roles, standing: 'ACTIVE', version: 1 });
+      p.memberships.push({ id: kit.next('fx_mem'), sellerId: invite.sellerId, relationship: 'TEAM', roles, standing: 'ACTIVE', version: 1 });
       return { items: invitationsFor(p) };
     },
     'privacy.get': () => privacyOf(deps.current()),
@@ -401,5 +503,20 @@ export function createPeople(deps: PeopleDeps): People {
       return privacyOf(p);
     },
   };
-  return { handlers: withIdempotency(kit, handlers, { 'team.invite': { dest: 'settings', cap: 'team.invite' } }) };
+  return {
+    handlers: withIdempotency(kit, handlers, { 'team.invite': { dest: 'settings', cap: 'team.invite' } }),
+    openSession(personaId) {
+      seedSessions(personaId);
+      const id = kit.next('fx_sess');
+      sessions.set(id, { id, personaId, audience: 'CONSOLE', device: 'A browser on a computer (demonstration)', location: 'Addis Ababa (approximate)', lastUsed: kit.now(), ended: false, sellerRevoked: new Set() });
+      return id;
+    },
+    endSession(sessionId) {
+      const rec = sessions.get(sessionId);
+      if (rec) rec.ended = true;
+    },
+    sessionLive: (sessionId) => sessions.get(sessionId)?.ended === false,
+    sellerAccessRevoked: (sessionId, sellerId) => sessions.get(sessionId)?.sellerRevoked.has(sellerId) ?? false,
+    sessionPersona: (sessionId) => sessions.get(sessionId)?.personaId ?? null,
+  };
 }

@@ -46,6 +46,8 @@ export interface TeamSession {
 export interface OwnershipTransfer {
   readonly state: 'PENDING';
   readonly target_label: string;
+  /** False when the recipient is no longer an active Admin (or no longer on the team): the transfer cannot complete and stays cancellable (FE12-06). */
+  readonly target_eligible: boolean;
   readonly requested_at: string;
   /** The 24-hour delay of CONSOLE S117, set by the server. */
   readonly activates_at: string;

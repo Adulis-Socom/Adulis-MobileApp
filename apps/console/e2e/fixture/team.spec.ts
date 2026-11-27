@@ -88,7 +88,7 @@ test.describe('SC-FE-11 team', () => {
     await teamPage(page);
     await page.getByLabel('New Owner').selectOption({ label: 'Abel (demonstration)' });
     await page.getByRole('button', { name: 'Transfer ownership' }).click();
-    await stepUp(page, `Enter the code to transfer ownership of ${SELLER.alem.name}.`, '111111');
+    await stepUp(page, `Enter the code to transfer ownership of ${SELLER.alem.name} to Abel (demonstration).`, '111111');
     await expect(page.getByRole('dialog', { name: 'Confirm it is you' }).getByRole('alert')).toBeVisible();
     await page.getByRole('dialog', { name: 'Confirm it is you' }).getByLabel('One-time code').fill(CODE);
     await page.getByRole('dialog', { name: 'Confirm it is you' }).getByRole('button', { name: 'Confirm' }).click();
@@ -98,6 +98,22 @@ test.describe('SC-FE-11 team', () => {
     await page.goto('/sign-in');
     await teamPage(page, PHONE.admin);
     await expect(page.getByRole('region', { name: 'Ownership' })).toHaveCount(0);
+  });
+
+  test('a pending transfer whose recipient is suspended stays visible, says why it cannot complete, and can be cancelled (FE12-06)', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await teamPage(page);
+    await page.getByLabel('New Owner').selectOption({ label: 'Abel (demonstration)' });
+    await page.getByRole('button', { name: 'Transfer ownership' }).click();
+    await stepUp(page, `Enter the code to transfer ownership of ${SELLER.alem.name} to Abel (demonstration).`);
+    await expect(page.getByText(/Ownership will pass to Abel \(demonstration\)/)).toBeVisible();
+    await page.getByRole('button', { name: 'Suspend Abel (demonstration)' }).click();
+    await page.getByRole('dialog', { name: 'Suspend Abel (demonstration)?' }).getByRole('button', { name: 'Suspend Abel (demonstration)' }).click();
+    const ownership = page.getByRole('region', { name: 'Ownership' });
+    await expect(ownership.getByText('Abel (demonstration) is no longer an active Admin, so ownership cannot pass to them. Cancel the transfer, then choose someone else.')).toBeVisible();
+    await expect(ownership.getByText(/Ownership will pass to/)).toHaveCount(0);
+    await ownership.getByRole('button', { name: 'Cancel the transfer' }).click();
+    await expect(ownership.getByText(/no longer an active Admin/)).toHaveCount(0);
   });
 
   test('closure states what it does and keeps, needs no payment, the exact name and a code, and can be cancelled', async ({ page }) => {

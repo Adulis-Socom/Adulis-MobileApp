@@ -259,6 +259,8 @@ export interface World {
     delayNext(op: string, ms: number, times?: number): void;
     /** Remove the signed-in account's relationship with a Seller, as if it left the team mid-session. */
     revokeMembership(sellerId: string): void;
+    /** Send later requests under an earlier, still-recorded session, as another device of that account would (FE12-04 tests). */
+    resumeSession(sessionId: string): void;
     /** Every call received, with the idempotency key it carried (null for none): tests read retry identity from it. */
     callLog(): readonly { op: string; sellerId: string | null; key: string | null }[];
     /** Put a Product under restriction, as an Operator decision would. Development only. */
@@ -285,6 +287,8 @@ export function createWorld(options: WorldOptions): World {
   let sessionRevoked = false;
   // Each sign-in issues a new session (a new cookie in a real server). A request sent under an earlier one is answered as unauthenticated.
   let sessionToken = 0;
+  // The recorded session the current requests are sent under (people.ts keeps the session table): its revocation is enforced here.
+  let currentSession: string | null = null;
   let counter = 0;
   const iso = (ms: number): string => new Date(ms).toISOString();
   // Fixture-only clock skew (hook below): lets a test move past a Story's 24-hour lifetime without waiting.
@@ -293,6 +297,11 @@ export function createWorld(options: WorldOptions): World {
 
   function persona(): Persona {
     if (session === null || sessionRevoked) {
+      session = null;
+      throw new TransportError('AUTHENTICATION_REQUIRED');
+    }
+    // A session revoked from another device (account.sessions.revoke, revoke_others) authorizes nothing afterwards.
+    if (currentSession !== null && !people.sessionLive(currentSession)) {
       session = null;
       throw new TransportError('AUTHENTICATION_REQUIRED');
     }
@@ -307,6 +316,8 @@ export function createWorld(options: WorldOptions): World {
     const s = sellers[sellerId];
     // Same answer whether the Seller does not exist or is not yours: existence is never disclosed.
     if (!m || !s) throw new TransportError('PERMISSION_DENIED');
+    // A session signed out of THIS Seller by its team administrators has no authority here; the rest of the account still works (FE12-04).
+    if (currentSession !== null && people.sellerAccessRevoked(currentSession, sellerId)) throw new TransportError('PERMISSION_DENIED');
     return { m, s };
   }
 
@@ -460,7 +471,15 @@ export function createWorld(options: WorldOptions): World {
   const trust = createTrust(kit, catalogue);
   const automation = createAutomation(kit, catalogue);
   const insights = createInsights(kit, (id) => sellers[id]?.entitlementOff ?? []);
-  const people = createPeople({ kit, personas: () => personas, current: persona, sellerName: (id) => sellers[id]?.summary.display_name, codes: DEMO_CODES });
+  const people = createPeople({
+    kit,
+    personas: () => personas,
+    current: persona,
+    currentSession: () => currentSession,
+    sellerName: (id) => sellers[id]?.summary.display_name,
+    sellerOpenToMembers: (id) => sellers[id] !== undefined && sellers[id]?.summary.status !== 'SUSPENDED',
+    codes: DEMO_CODES,
+  });
 
   type H = { [K in OpId]: (input: OpInput<K>, ctx: CallContext) => OpOutput<K> };
   const handlers: H = {
@@ -506,6 +525,7 @@ export function createWorld(options: WorldOptions): World {
       if (known) {
         session = known.id;
         sessionToken += 1;
+        currentSession = people.openSession(known.id);
         return { result: 'SIGNED_IN' };
       }
       pendingNew = c.phone;
@@ -519,11 +539,14 @@ export function createWorld(options: WorldOptions): World {
       pendingNew = null;
       session = p.id;
       sessionToken += 1;
+      currentSession = people.openSession(p.id);
       return { result: 'SIGNED_IN' };
     },
     // Enumeration resistance (AUTH-02 S22): the same answer for every number.
     'auth.recovery.start': () => ({ result: 'RECORDED' }),
     'auth.session.end': () => {
+      if (currentSession !== null) people.endSession(currentSession);
+      currentSession = null;
       session = null;
       return { result: 'ENDED' };
     },
@@ -654,6 +677,14 @@ export function createWorld(options: WorldOptions): World {
       revokeMembership(sellerId) {
         const who = personas.find((p) => p.id === session);
         if (who) who.memberships = who.memberships.filter((m) => m.sellerId !== sellerId);
+      },
+      resumeSession(sessionId) {
+        const owner = people.sessionPersona(sessionId);
+        if (owner === null) return;
+        session = owner;
+        currentSession = sessionId;
+        sessionRevoked = false;
+        sessionToken += 1; // a different cookie: requests already in flight under the previous one are refused
       },
       callLog: () => log,
       skewClock(ms) {

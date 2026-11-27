@@ -20,8 +20,9 @@ async function failure(promise: Promise<unknown>): Promise<TransportError> {
   }
   throw new Error('expected a TransportError, the call succeeded');
 }
-async function grant(world: World, purpose: StepUpPurpose, sellerId: string | null): Promise<string> {
-  const c = await world.handle('account.stepup.start', { purpose, seller_id: sellerId }, {});
+async function grant(world: World, purpose: StepUpPurpose, sellerId: string | null, recipient?: string): Promise<string> {
+  const input = recipient === undefined ? { purpose, seller_id: sellerId } : { purpose, seller_id: sellerId, recipient_membership_id: recipient };
+  const c = await world.handle('account.stepup.start', input, {});
   return (await world.handle('account.stepup.verify', { challenge_id: c.challenge_id, code: DEMO_CODES.ok }, {})).grant;
 }
 const ALEM = { sellerId: 'fx_seller_alem' };
@@ -133,6 +134,7 @@ describe('SC-FE-11 team: invitations, the one team slot, suspension and removal'
     expect(me?.allowed_actions).toEqual([]);
     const sessions = (await world.handle('team.get', {}, ALEM)).sessions ?? [];
     const first = sessions[0];
+    expect(first).toBeDefined();
     const after = await world.handle('team.session.revoke', { session_id: first?.session_id ?? '' }, ALEM);
     expect(after.sessions?.map((s) => s.session_id)).not.toContain(first?.session_id);
   });
@@ -145,11 +147,11 @@ describe('SC-FE-11 step-up: purpose-bound, target-bound, one use', () => {
     const abel = await member(world, 'Abel');
     const wrongPurpose = await grant(world, 'CLOSE_SELLER', 'fx_seller_alem');
     expect((await failure(world.handle('ownership.transfer.start', { membership_id: abel.membership_id, step_up_grant: wrongPurpose }, ALEM))).detail).toBe('STEP_UP_REQUIRED');
-    const wrongSeller = await grant(world, 'TRANSFER_OWNERSHIP', 'fx_seller_biruk');
+    const wrongSeller = await grant(world, 'CLOSE_SELLER', 'fx_seller_biruk');
     expect((await failure(world.handle('ownership.transfer.start', { membership_id: abel.membership_id, step_up_grant: wrongSeller }, ALEM))).detail).toBe('STEP_UP_REQUIRED');
-    const good = await grant(world, 'TRANSFER_OWNERSHIP', 'fx_seller_alem');
+    const good = await grant(world, 'TRANSFER_OWNERSHIP', 'fx_seller_alem', abel.membership_id);
     const view = await world.handle('ownership.transfer.start', { membership_id: abel.membership_id, step_up_grant: good }, ALEM);
-    expect(view.transfer).toMatchObject({ state: 'PENDING', target_label: 'Abel (demonstration)', activates_at: '2026-11-28T09:00:00.000Z' });
+    expect(view.transfer).toMatchObject({ state: 'PENDING', target_label: 'Abel (demonstration)', target_eligible: true, activates_at: '2026-11-28T09:00:00.000Z' });
     await world.handle('ownership.transfer.cancel', {}, ALEM);
     expect((await failure(world.handle('ownership.transfer.start', { membership_id: abel.membership_id, step_up_grant: good }, ALEM))).detail).toBe('STEP_UP_REQUIRED');
   });
@@ -168,8 +170,138 @@ describe('SC-FE-11 step-up: purpose-bound, target-bound, one use', () => {
     const world = setup();
     await signIn(world, 'fx_acct_owner');
     const saba = await member(world, 'Saba');
-    const g = await grant(world, 'TRANSFER_OWNERSHIP', 'fx_seller_alem');
+    const abel = await member(world, 'Abel');
+    // No code is even issued for an ineligible recipient, and a code for an eligible one does not make another eligible.
+    expect((await failure(world.handle('account.stepup.start', { purpose: 'TRANSFER_OWNERSHIP', seller_id: 'fx_seller_alem', recipient_membership_id: saba.membership_id }, {}))).fields).toEqual({ target: 'TRANSFER_TARGET_NOT_ELIGIBLE' });
+    const g = await grant(world, 'TRANSFER_OWNERSHIP', 'fx_seller_alem', abel.membership_id);
     expect((await failure(world.handle('ownership.transfer.start', { membership_id: saba.membership_id, step_up_grant: g }, ALEM))).fields).toEqual({ target: 'TRANSFER_TARGET_NOT_ELIGIBLE' });
+  });
+
+  it('a verified grant expires: after the step-up window it is refused and gone (FE12-02)', async () => {
+    const world = setup();
+    await signIn(world, 'fx_acct_owner');
+    const stale = await grant(world, 'CLOSE_SELLER', 'fx_seller_alem');
+    world.hooks.skewClock(300_001);
+    expect((await failure(world.handle('seller.closure.request', { step_up_grant: stale, typed_name: 'Alem Textiles' }, ALEM))).detail).toBe('STEP_UP_REQUIRED');
+    // Moving the clock back cannot revive it: an expired grant is dropped.
+    world.hooks.skewClock(-300_001);
+    expect((await failure(world.handle('seller.closure.request', { step_up_grant: stale, typed_name: 'Alem Textiles' }, ALEM))).detail).toBe('STEP_UP_REQUIRED');
+    const fresh = await grant(world, 'CLOSE_SELLER', 'fx_seller_alem');
+    expect((await world.handle('seller.closure.request', { step_up_grant: fresh, typed_name: 'Alem Textiles' }, ALEM)).state).toBe('CLOSURE_REQUESTED');
+  });
+
+  it('a transfer code names and binds the exact recipient membership (FE12-03)', async () => {
+    const world = setup();
+    await signIn(world, 'fx_acct_owner');
+    const abel = await member(world, 'Abel');
+    const saba = await member(world, 'Saba');
+    // A transfer code must name its recipient; no other purpose may name one.
+    expect((await failure(world.handle('account.stepup.start', { purpose: 'TRANSFER_OWNERSHIP', seller_id: 'fx_seller_alem' }, {}))).fields).toEqual({ target: 'TRANSFER_TARGET_REQUIRED' });
+    expect((await failure(world.handle('account.stepup.start', { purpose: 'CLOSE_SELLER', seller_id: 'fx_seller_alem', recipient_membership_id: abel.membership_id }, {}))).fields).toEqual({ target: 'TRANSFER_TARGET_NOT_ELIGIBLE' });
+    const c = await world.handle('account.stepup.start', { purpose: 'TRANSFER_OWNERSHIP', seller_id: 'fx_seller_alem', recipient_membership_id: abel.membership_id }, {});
+    expect(c).toMatchObject({ target_label: 'Alem Textiles', recipient_label: 'Abel (demonstration)' });
+    // Saba becomes a second Admin. A code for Abel cannot be spent on Saba.
+    await world.handle('team.roles.set', { membership_id: saba.membership_id, version: saba.version, roles: ['ADMIN'] }, ALEM);
+    const sabaNow = await member(world, 'Saba');
+    const forAbel = await grant(world, 'TRANSFER_OWNERSHIP', 'fx_seller_alem', abel.membership_id);
+    expect((await failure(world.handle('ownership.transfer.start', { membership_id: sabaNow.membership_id, step_up_grant: forAbel }, ALEM))).detail).toBe('STEP_UP_REQUIRED');
+    // A change to Abel's membership after the code (a new version) invalidates a code issued before it.
+    const before = await grant(world, 'TRANSFER_OWNERSHIP', 'fx_seller_alem', abel.membership_id);
+    await world.handle('team.roles.set', { membership_id: abel.membership_id, version: abel.version, roles: ['ADMIN', 'ANALYST'] }, ALEM);
+    expect((await failure(world.handle('ownership.transfer.start', { membership_id: abel.membership_id, step_up_grant: before }, ALEM))).detail).toBe('STEP_UP_REQUIRED');
+    const after = await grant(world, 'TRANSFER_OWNERSHIP', 'fx_seller_alem', abel.membership_id);
+    expect((await world.handle('ownership.transfer.start', { membership_id: abel.membership_id, step_up_grant: after }, ALEM)).transfer).toMatchObject({ target_label: 'Abel (demonstration)' });
+  });
+});
+
+describe('SC-FE-12 closure: revocation and re-validation take effect on authorization', () => {
+  const currentSession = async (world: World): Promise<string> => (await world.handle('account.sessions.get', {}, {})).sessions.find((s) => s.current)?.session_id ?? '';
+
+  it('signing a member out of this Seller ends that session\'s authority here, and only here (FE12-04)', async () => {
+    const world = setup();
+    await signIn(world, 'fx_acct_admin');
+    const adminSession = await currentSession(world);
+    expect((await world.handle('seller.access.get', {}, ALEM)).seller_id).toBe('fx_seller_alem');
+    await signIn(world, 'fx_acct_owner');
+    const ownerSession = await currentSession(world);
+    const listed = (await world.handle('team.get', {}, ALEM)).sessions ?? [];
+    expect(listed.map((x) => x.session_id)).toContain(adminSession);
+    expect(listed.map((x) => x.session_id)).not.toContain(ownerSession); // the caller's own session ends with Sign out
+    const after = await world.handle('team.session.revoke', { session_id: adminSession }, ALEM);
+    expect(after.sessions?.map((x) => x.session_id)).not.toContain(adminSession);
+    // The Admin's device sends its next request under the revoked session: no authority in this Seller.
+    world.hooks.resumeSession(adminSession);
+    expect((await failure(world.handle('seller.access.get', {}, ALEM))).code).toBe('PERMISSION_DENIED');
+    expect((await failure(world.handle('team.get', {}, ALEM))).code).toBe('PERMISSION_DENIED');
+    // The rest of the Account is untouched: the session itself is still signed in.
+    expect((await world.handle('account.sessions.get', {}, {})).sessions.some((x) => x.session_id === adminSession && x.current)).toBe(true);
+    // Revoking a session never suspends the person: a new sign-in has its authority back.
+    await signIn(world, 'fx_acct_admin');
+    expect((await world.handle('seller.access.get', {}, ALEM)).seller_id).toBe('fx_seller_alem');
+    // A session that is not listed (the caller's own, or a made-up id) cannot be revoked here.
+    expect((await failure(world.handle('team.session.revoke', { session_id: await currentSession(world) }, ALEM))).code).toBe('NOT_FOUND');
+    expect((await failure(world.handle('team.session.revoke', { session_id: 'fx_sess_nope' }, ALEM))).code).toBe('NOT_FOUND');
+  });
+
+  it('an Account-level revocation makes every later request under that session unauthenticated', async () => {
+    const world = setup();
+    await signIn(world, 'fx_acct_owner');
+    const first = await currentSession(world);
+    await signIn(world, 'fx_acct_owner');
+    expect((await world.handle('account.sessions.get', {}, {})).sessions.map((x) => x.session_id)).toContain(first);
+    await world.handle('account.sessions.revoke', { session_id: first }, {});
+    world.hooks.resumeSession(first);
+    expect((await failure(world.handle('account.sessions.get', {}, {}))).code).toBe('AUTHENTICATION_REQUIRED');
+  });
+
+  it('acceptance re-checks the Seller, the recipient, the invitation and the slot at that moment (FE12-05)', async () => {
+    const world = setup();
+    await signIn(world, 'fx_acct_owner');
+    await world.handle('team.invite', { username: 'hana', roles: ['ANALYST'] }, ALEM);
+    // The Seller asks to close after inviting: it cannot take a new member now.
+    await world.handle('seller.closure.request', { step_up_grant: await grant(world, 'CLOSE_SELLER', 'fx_seller_alem'), typed_name: 'Alem Textiles' }, ALEM);
+    await signIn(world, 'fx_acct_free');
+    const blocked = await world.handle('account.invitations.get', {}, {});
+    expect(blocked.items[0]).toMatchObject({ seller_label: 'Alem Textiles', blocked: 'SELLER_UNAVAILABLE' });
+    const id = blocked.items[0]?.invitation_id ?? '';
+    expect((await failure(world.handle('account.invitations.accept', { invitation_id: id }, {}))).fields).toEqual({ invitation: 'INVITATION_SELLER_UNAVAILABLE' });
+    expect((await world.handle('account.context.get', {}, {})).memberships).toHaveLength(0);
+    // Another Account cannot accept an invitation addressed to Hana.
+    await signIn(world, 'fx_acct_inventory');
+    expect((await failure(world.handle('account.invitations.accept', { invitation_id: id }, {}))).code).toBe('NOT_FOUND');
+    // The closure request is cancelled: now it can be accepted, once.
+    await signIn(world, 'fx_acct_owner');
+    await world.handle('seller.closure.cancel', {}, ALEM);
+    await signIn(world, 'fx_acct_free');
+    await world.handle('account.invitations.accept', { invitation_id: id }, {});
+    expect((await failure(world.handle('account.invitations.accept', { invitation_id: id }, {}))).code).toBe('NOT_FOUND');
+    // A withdrawn invitation no longer exists for its recipient.
+    await signIn(world, 'fx_acct_owner');
+    const later = await world.handle('team.invite', { username: 'ibsa', roles: ['ANALYST'] }, ALEM);
+    await world.handle('team.invitation.withdraw', { invitation_id: later.invitations.find((i) => i.target_label === 'ibsa')?.invitation_id ?? '' }, ALEM);
+    await signIn(world, 'fx_acct_inv_biruk');
+    expect((await world.handle('account.invitations.get', {}, {})).items).toHaveLength(0);
+  });
+
+  it('a pending transfer stays visible and cancellable when its recipient becomes ineligible (FE12-06)', async () => {
+    const world = setup();
+    await signIn(world, 'fx_acct_owner');
+    const abel = await member(world, 'Abel');
+    await world.handle('ownership.transfer.start', { membership_id: abel.membership_id, step_up_grant: await grant(world, 'TRANSFER_OWNERSHIP', 'fx_seller_alem', abel.membership_id) }, ALEM);
+    await world.handle('team.member.suspend', { membership_id: abel.membership_id, version: abel.version }, ALEM);
+    expect((await world.handle('team.get', {}, ALEM)).transfer).toMatchObject({ state: 'PENDING', target_label: 'Abel (demonstration)', target_eligible: false });
+    const suspended = await member(world, 'Abel');
+    await world.handle('team.member.remove', { membership_id: suspended.membership_id, version: suspended.version }, ALEM);
+    // Removed from the team entirely: the transfer is still shown, by the name it was started with, and still blocks closure.
+    const view = await world.handle('team.get', {}, ALEM);
+    expect(view.transfer).toMatchObject({ state: 'PENDING', target_label: 'Abel (demonstration)', target_eligible: false });
+    expect(view.allowed_actions).not.toContain('TRANSFER_OWNERSHIP');
+    expect((await world.handle('seller.closure.get', {}, ALEM)).blockers).toEqual(['OWNERSHIP_TRANSFER_PENDING']);
+    // Resolvable: the Owner cancels it, and both the transfer and the closure become available again.
+    const cancelled = await world.handle('ownership.transfer.cancel', {}, ALEM);
+    expect(cancelled.transfer).toBeNull();
+    expect(cancelled.allowed_actions).toContain('TRANSFER_OWNERSHIP');
+    expect((await world.handle('seller.closure.get', {}, ALEM)).allowed_actions).toEqual(['REQUEST']);
   });
 });
 
@@ -188,7 +320,7 @@ describe('SC-FE-11 closure (RB25-D11: debt-free)', () => {
     expect((await world.handle('products.list', { query: '', filter: 'ALL', cursor: null }, ALEM)).items.length).toBeGreaterThan(0);
     expect((await world.handle('seller.closure.cancel', {}, ALEM)).state).toBe('OPEN');
     const abel = await member(world, 'Abel');
-    await world.handle('ownership.transfer.start', { membership_id: abel.membership_id, step_up_grant: await grant(world, 'TRANSFER_OWNERSHIP', 'fx_seller_alem') }, ALEM);
+    await world.handle('ownership.transfer.start', { membership_id: abel.membership_id, step_up_grant: await grant(world, 'TRANSFER_OWNERSHIP', 'fx_seller_alem', abel.membership_id) }, ALEM);
     expect(await world.handle('seller.closure.get', {}, ALEM)).toMatchObject({ blockers: ['OWNERSHIP_TRANSFER_PENDING'], allowed_actions: [] });
   });
 });

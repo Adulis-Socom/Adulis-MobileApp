@@ -319,7 +319,7 @@ export function AccountInvitations() {
                   <strong>{i.seller_label}</strong>
                   <p className="ledger-meta">{i.roles.map((r) => label('role', r)).join(', ')}</p>
                   {i.blocked ? (
-                    <p className="hint">{t('acct.invitation_blocked')}</p>
+                    <p className="hint">{t(i.blocked === 'SELLER_UNAVAILABLE' ? 'acct.invitation_seller_unavailable' : 'acct.invitation_blocked')}</p>
                   ) : (
                     <div className="actions">
                       <button
@@ -327,7 +327,8 @@ export function AccountInvitations() {
                         className="btn btn-primary"
                         onClick={() =>
                           void action.run(() => run('account.invitations.accept', { invitation_id: i.invitation_id })).then(async (next) => {
-                            if (!next) return;
+                            // Refused on a re-check (FE12-05): show the invitation as the server now resolves it.
+                            if (!next) return invitations.retry();
                             invitations.replace(next);
                             // The new membership changes what the Account may open: ask the server again.
                             await session.refresh();

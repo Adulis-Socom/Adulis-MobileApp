@@ -14,6 +14,8 @@ export interface StepUpChallenge {
   readonly purpose: StepUpPurpose;
   /** What is being authorized, named by the server ("Alem Textiles", "your account"), so the person knows exactly what the code is for. */
   readonly target_label: string;
+  /** TRANSFER_OWNERSHIP only: the one recipient this code authorizes, named by the server (FE12-03). Null for every other purpose. */
+  readonly recipient_label: string | null;
   readonly expires_at: string;
 }
 
@@ -50,8 +52,11 @@ export interface MyInvitation {
   readonly invitation_id: string;
   readonly seller_label: string;
   readonly roles: readonly string[];
-  /** Null when it can be accepted now; SLOT_OCCUPIED while another team membership holds the one slot (AUTH S59, S146). */
-  readonly blocked: 'SLOT_OCCUPIED' | null;
+  /**
+   * Null when it can be accepted now; SLOT_OCCUPIED while another team membership holds the one slot (AUTH S59, S146); SELLER_UNAVAILABLE
+   * while the Seller cannot take new members (suspended, or closure requested). Acceptance re-checks all of it on the server (FE12-05).
+   */
+  readonly blocked: 'SLOT_OCCUPIED' | 'SELLER_UNAVAILABLE' | null;
 }
 export interface MyInvitationsView {
   readonly items: readonly MyInvitation[];
@@ -74,8 +79,9 @@ export interface PrivacyView {
 }
 
 export interface AccountOperations {
-  readonly 'account.stepup.start': { in: { purpose: StepUpPurpose; seller_id: string | null }; out: StepUpChallenge };
-  /** A correct code returns a grant usable ONCE, for this purpose and target only (AUTH S45-S48). */
+  /** TRANSFER_OWNERSHIP must name the recipient membership; no other purpose may (FE12-03). */
+  readonly 'account.stepup.start': { in: { purpose: StepUpPurpose; seller_id: string | null; recipient_membership_id?: string }; out: StepUpChallenge };
+  /** A correct code returns a short-lived grant usable ONCE, for this purpose and target only (AUTH S45-S48; FE12-02). */
   readonly 'account.stepup.verify': { in: { challenge_id: string; code: string }; out: { grant: string } };
   readonly 'account.sessions.get': { in: Record<string, never>; out: SessionsView };
   readonly 'account.sessions.revoke': { in: { session_id: string }; out: SessionsView };
