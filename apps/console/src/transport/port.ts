@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import type { RouteObject } from 'react-router';
 import type { OpId, OpInput, OpOutput } from '../contracts/gap-sc';
 
 /**
@@ -68,4 +69,6 @@ export function asTransportError(value: unknown): TransportError {
 export interface FixtureUi {
   readonly Banner: ComponentType;
   readonly SignInHelper: ComponentType<{ onPick: (phone: string) => void }>;
+  /** The internal Order experience demonstration (SC-FE-07): a whole route, so a release build holds neither the page nor its path. */
+  readonly simulationRoute: RouteObject;
 }

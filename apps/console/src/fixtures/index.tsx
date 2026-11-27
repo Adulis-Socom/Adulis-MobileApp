@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import type { OpId, OpInput, OpOutput } from '../contracts/gap-sc';
 import type { CallContext, FixtureUi, Transport } from '../transport/port';
+import { OrderSimulation } from './simulation/OrderSimulation';
 import { BANNER_SENTENCE, createWorld, DEMO_CODES, FIXTURE_MARKER, FIXTURE_VERSION, PERSONAS, type World } from './world';
 
 /**
@@ -74,8 +75,11 @@ function SignInHelper({ onPick }: { onPick: (phone: string) => void }) {
           </li>
         ))}
       </ul>
+      <p>
+        <a href="/internal/order-simulation">Internal Order experience demonstration</a>
+      </p>
     </section>
   );
 }
 
-export const fixtureUi: FixtureUi = { Banner, SignInHelper };
+export const fixtureUi: FixtureUi = { Banner, SignInHelper, simulationRoute: { path: 'internal/order-simulation', element: <OrderSimulation /> } };

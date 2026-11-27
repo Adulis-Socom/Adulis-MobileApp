@@ -25,6 +25,13 @@ test.describe('release build', () => {
     expect(await page.evaluate(() => typeof window.__ADULIS_FIXTURE__)).toBe('undefined');
   });
 
+  test('RN-6 (SC-FE-07): there is no Order simulation and no Order destination, only the unavailable state', async ({ page }) => {
+    await page.goto('/internal/order-simulation');
+    await expect(page.getByRole('heading', { name: 'Order experience demonstration' })).toHaveCount(0);
+    await expect(page.getByText('synthetic')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /Orders?$/ })).toHaveCount(0);
+  });
+
   test('RN-2: it fetches nothing from any API or other origin, and sends no Seller request', async ({ page, baseURL }) => {
     const requests: string[] = [];
     page.on('request', (r) => requests.push(r.url()));
