@@ -757,6 +757,7 @@ export const amConsole: { readonly [K in keyof typeof enConsole]: AmEntry } = {
 
   // ---- Batch 02C closure ----
   'error.uncertain': PENDING,
+  'error.retry_store_full': PENDING,
   'private_reason.ALL_TAGGED_PRODUCTS_UNAVAILABLE': PENDING,
 
   // ---- Batch 02C closure (UI) ----

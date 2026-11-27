@@ -777,6 +777,9 @@ export const enConsole = {
 
   // ---- Batch 02C closure (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
   'error.uncertain': 'We could not confirm whether this was saved. Check the current status before trying again.',
+  // SCR-2 (SC-FE-12): the Console's retry store is full of earlier changes whose outcome is still unknown. It tells the
+  // person to check status, never to reload: reloading does not resolve an uncertain operation. Distinct from error.uncertain.
+  'error.retry_store_full': 'Some of your earlier changes have not been confirmed. Check their current status before making another change.',
   'private_reason.ALL_TAGGED_PRODUCTS_UNAVAILABLE': 'None of the Products tagged in this Scene are currently available.',
 
   // ---- Batch 02C closure (UI) (proposed English, awaiting approval; see reports/locale_requirements_SC-FE-04-06) ----
