@@ -62,7 +62,7 @@ const SELLER_D = `${P}19`; // owned by OWNER; transferred to OTHER during the ru
 const OTP_CH = `${P}1a`;
 const STEP_UP = `${P}1b`;
 const TRANSFER = `${P}1c`;
-// INF-03 F1: seller-side claims evidence (a non-/v1/seller path; seller.claims:read is CONSOLE-only).
+// INF-03 F1: seller-side claims evidence (a non-/v1/seller path; seller.claims:respond is CONSOLE-only).
 const MEMBER_R3 = `${P}1d`; // ADMIN of SELLER_A, revoked during the run
 const MEMBER_S3 = `${P}1e`; // ADMIN of SELLER_A, suspended during the run
 const TM_R3 = `${P}1f`;
@@ -793,7 +793,7 @@ describe('WO-SEC-002 idempotency scope and identifier validation', () => {
   });
 
   describe('INF-03 F1 -- seller-side claims evidence: standing outside /v1/seller', () => {
-    /** The seller side of a claim, acting as the store from the header (seller.claims:read, CONSOLE). */
+    /** The seller side of a claim, acting as the store from the header (seller.claims:respond, CONSOLE). */
     const evidence = (session: string, key: string, ref: string) =>
       http().post(`/v1/claims/${CLAIM}/evidence`)
         .set('Cookie', `__Host-adulis_session=${sessionToken(session)}`).set('Origin', CONSOLE_ORIGIN)
