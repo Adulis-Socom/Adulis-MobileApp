@@ -8,9 +8,10 @@ import { t } from '../../../i18n/messages';
 import { theme } from '../../../ui/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
+// The tab bar colours come from our own tokens, so they are always strings; anything else falls back to the icon default.
 const icon = (name: IconName) =>
   function TabIcon({ color, size }: { color: ColorValue; size: number }) {
-    return <Ionicons name={name} color={color} size={size} />;
+    return <Ionicons name={name} color={typeof color === 'string' ? color : undefined} size={size} />;
   };
 
 export default function TabsLayout() {
