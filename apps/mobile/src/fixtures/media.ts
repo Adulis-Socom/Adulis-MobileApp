@@ -17,6 +17,9 @@ const ASSETS: Readonly<Record<string, number>> = {
   fx_media_demo_p6: require('./assets/p6.png') as number,
   fx_media_demo_p7: require('./assets/p7.png') as number,
   fx_media_demo_p8: require('./assets/p8.png') as number,
+  fx_media_demo_story1: require('./assets/story1.png') as number,
+  fx_media_demo_story2: require('./assets/story2.png') as number,
+  fx_media_demo_story3: require('./assets/story3.png') as number,
 };
 /* eslint-enable @typescript-eslint/no-require-imports */
 

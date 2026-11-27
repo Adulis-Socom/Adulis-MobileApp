@@ -6,7 +6,7 @@ import type { MobileOpId } from './gap-mob-session';
 /** PUBLIC never carries the bearer; OPTIONAL_AUTH carries it when there is one; AUTHENTICATED needs one. */
 export type OpAccess = 'PUBLIC' | 'OPTIONAL_AUTH' | 'AUTHENTICATED';
 export interface OpSpec {
-  readonly gap: 'GAP-L2-01' | 'GAP-L2-02';
+  readonly gap: 'GAP-L2-01' | 'GAP-L2-02' | 'SC-BE-05S';
   readonly access: OpAccess;
   /** Input paths that hold IDENTIFIERS (refused by the live guard when reserved). Free text is never listed. */
   readonly refFields: readonly (readonly string[])[];
@@ -37,4 +37,7 @@ export const OP_SPECS: Readonly<Record<MobileOpId, OpSpec>> = {
   'seller.get': read('PUBLIC', [['sellerRef']]),
   'seller.scenes.page': read('PUBLIC', [['sellerRef']]),
   'seller.products.page': read('PUBLIC', [['sellerRef']]),
+  // MOB-FE-02S Buyer Stories (SC-BE-05S is the authoritative owner; its live implementation is not a prerequisite for fixtures)
+  'stories.row.get': read('PUBLIC', [], 'SC-BE-05S'),
+  'stories.group.get': read('PUBLIC', [['sellerRef']], 'SC-BE-05S'),
 };

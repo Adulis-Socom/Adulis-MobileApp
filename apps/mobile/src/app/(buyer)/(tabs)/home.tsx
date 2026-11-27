@@ -7,6 +7,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { ChannelKey, ChannelState } from '../../../contracts/gap-mob-discovery';
 import { SceneFeed } from '../../../discovery/SceneFeed';
+import { StoriesRow } from '../../../stories/StoriesRow';
 import { useRead } from '../../../discovery/hooks';
 import { t, type UiMessageKey } from '../../../i18n/messages';
 import { useApp } from '../../../providers/AppProvider';
@@ -61,6 +62,7 @@ export default function Home() {
           </Pressable>
         ))}
       </ScrollView>
+      <StoriesRow />
       <View style={styles.content}>{content}</View>
     </Screen>
   );
