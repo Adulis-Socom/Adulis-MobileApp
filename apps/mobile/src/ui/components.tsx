@@ -41,7 +41,8 @@ export function Body({ children, muted }: { readonly children: ReactNode; readon
 export interface ButtonProps {
   readonly label: string;
   readonly onPress: () => void;
-  readonly kind?: 'primary' | 'secondary';
+  /** primary: the main action; secondary: everything else; highlight: the ONE standout action of a screen (lime, never decoration). */
+  readonly kind?: 'primary' | 'secondary' | 'highlight';
   readonly disabled?: boolean;
   readonly busy?: boolean;
   readonly selected?: boolean;
@@ -61,9 +62,9 @@ export function Button({ label, onPress, kind = 'primary', disabled = false, bus
       disabled={inactive}
       onPress={onPress}
       testID={testID}
-      style={({ pressed }) => [styles.button, kind === 'primary' ? styles.primary : styles.secondary, inactive && styles.inactive, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.button, FILL[kind], selected === true && kind === 'secondary' && styles.selected, inactive && styles.inactive, pressed && PRESSED[kind]]}
     >
-      <Text style={[styles.buttonText, kind === 'primary' ? styles.primaryText : styles.secondaryText]}>{label}</Text>
+      <Text style={[styles.buttonText, INK[kind]]}>{label}</Text>
     </Pressable>
   );
 }
@@ -113,16 +114,23 @@ export function Notice({ text, tone = 'info' }: { readonly text: string; readonl
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.color.bg },
   content: { flex: 1, padding: theme.space.md, gap: theme.space.md },
-  banner: { backgroundColor: theme.color.highlight, borderBottomWidth: 1, borderColor: theme.color.highlightBorder, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm },
-  bannerText: { ...theme.text.small, color: theme.color.highlightText, fontWeight: '600' },
+  banner: { backgroundColor: theme.color.warnBg, borderBottomWidth: 1, borderColor: theme.color.warnBorder, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm },
+  bannerText: { ...theme.text.small, color: theme.color.text, fontWeight: '600' },
   heading: { ...theme.text.title, color: theme.color.text },
   body: { ...theme.text.body, color: theme.color.text },
   muted: { ...theme.text.body, color: theme.color.textMuted },
   button: { minHeight: theme.touch, minWidth: theme.touch, borderRadius: theme.radius.md, paddingHorizontal: theme.space.md, paddingVertical: theme.space.smd, alignItems: 'center', justifyContent: 'center' },
   primary: { backgroundColor: theme.color.primary },
   secondary: { backgroundColor: theme.color.secondary, borderWidth: 1, borderColor: theme.color.borderStrong },
+  highlight: { backgroundColor: theme.color.highlight, borderWidth: 1, borderColor: theme.color.highlightBorder },
+  // Selected (a toggled control): a strong outline, so the state does not depend on colour alone (the label also changes).
+  selected: { borderWidth: 2, borderColor: theme.color.primary },
   inactive: { opacity: 0.6 },
-  pressed: { backgroundColor: theme.color.primaryActive },
+  // Each kind darkens within its own role when pressed; a pale fill never turns dark under dark text.
+  primaryPressed: { backgroundColor: theme.color.primaryActive },
+  secondaryPressed: { backgroundColor: theme.color.secondaryActive },
+  highlightPressed: { backgroundColor: theme.color.highlightActive },
+  highlightText: { color: theme.color.highlightText },
   buttonText: { ...theme.text.body, fontWeight: '600' },
   primaryText: { color: theme.color.primaryText },
   secondaryText: { color: theme.color.secondaryText },
@@ -136,3 +144,7 @@ const styles = StyleSheet.create({
   noticeWarn: { backgroundColor: theme.color.warnBg, borderColor: theme.color.warnBorder },
   noticeText: { ...theme.text.small, color: theme.color.text },
 });
+
+const FILL = { primary: styles.primary, secondary: styles.secondary, highlight: styles.highlight } as const;
+const PRESSED = { primary: styles.primaryPressed, secondary: styles.secondaryPressed, highlight: styles.highlightPressed } as const;
+const INK = { primary: styles.primaryText, secondary: styles.secondaryText, highlight: styles.highlightText } as const;
