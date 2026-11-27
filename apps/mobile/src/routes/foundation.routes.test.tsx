@@ -56,6 +56,30 @@ describe('initialization and guest Buyer', () => {
 });
 
 describe('sign-in, verification and return', () => {
+  it('reopening Sign in while its code step is already open starts a new attempt: an empty code field, and the return to Saved is kept (M02-R02)', async () => {
+    const r = await boot();
+    await findAllText('mobile.home.title');
+    await fireEvent.press(bottomTab(t('mobile.tab.saved')));
+    await findText('error.auth.authentication_required');
+    await fireEvent.press(button('mobile.auth.sign_in'));
+    const field = await screen.findByLabelText(t('mobile.auth.phone.label'), undefined, WAIT);
+    await fireEvent.changeText(field, phone('owner'));
+    await fireEvent.press(button('mobile.auth.send_code'));
+    const firstCode = await screen.findByLabelText(t('mobile.auth.code.label'), undefined, WAIT);
+    await fireEvent.changeText(firstCode, '111111'); // typed, never submitted
+    // The same destination is opened again while the code step is one screen down the stack (a link, or a second control).
+    await act(() => router.push('/auth/sign-in?returnTo=%2Fsaved'));
+    const again = await screen.findByLabelText(t('mobile.auth.phone.label'), undefined, WAIT);
+    await fireEvent.changeText(again, phone('owner'));
+    await fireEvent.press(button('mobile.auth.send_code'));
+    const secondCode = await screen.findByLabelText(t('mobile.auth.code.label'), undefined, WAIT);
+    expect(secondCode.props.value).toBe(''); // never the previous attempt's text
+    await fireEvent.changeText(secondCode, '246810');
+    await fireEvent.press(button('mobile.auth.verify'));
+    expect(await findText('mobile.saved.empty')).toBeTruthy();
+    expect(r.getPathname()).toBe('/saved');
+  });
+
   it('signs in from the Saved prompt and returns to Saved, signed in', async () => {
     const r = await boot();
     await findAllText('mobile.home.title');

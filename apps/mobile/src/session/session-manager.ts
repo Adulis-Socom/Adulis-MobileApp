@@ -47,7 +47,12 @@ export interface SignOutResult {
    */
   readonly durable: boolean;
 }
+const FORGET_RANK: Record<LocalForget, number> = { CLEARED: 0, FLAGGED: 1, FAILED: 2 };
+/** The less complete of two local-forget outcomes: a sign-out is only as clean as its worst storage step. */
+const worseOf = (a: LocalForget, b: LocalForget): LocalForget => (FORGET_RANK[a] >= FORGET_RANK[b] ? a : b);
+
 export type ConfirmResult = 'CONFIRMED' | 'ANOMALY' | 'STALE';
+type SettledSignIn = { readonly outcome: VerifyOutcome; readonly rollback: LocalForget | null };
 
 export interface SessionManagerDeps {
   readonly credentials: CredentialStore;
@@ -78,6 +83,11 @@ export class SessionManager {
    * authentication that finishes writing under an older generation is stale: it is rolled back, never committed.
    */
   private generation = 0;
+  /**
+   * The sign-in whose credential is being written, and rolled back if it went stale (M02-R01). A sign-out waits for it, so it
+   * never reports a durable sign-out before that clean-up has finished and said how it ended.
+   */
+  private signInSettling: Promise<SettledSignIn> | null = null;
   /** Every credential write and delete runs through this one queue, in order (M01-R02: no interleaving). */
   private storage: Promise<unknown> = Promise.resolve();
   private readonly listeners = new Set<SessionListener>();
@@ -268,14 +278,19 @@ export class SessionManager {
     if (state.kind === 'GUEST' || state.kind === 'RESTORING') {
       // Nothing is signed in, but a sign-in may still be persisting: cancel it, so it can never commit after this request.
       this.generation += 1;
-      const local: LocalForget = this.deletionPending ? 'FAILED' : 'CLEARED';
-      return { credentialCleared: local === 'CLEARED', local, server: 'NOT_ATTEMPTED', durable: local === 'CLEARED' };
+      const earlier: LocalForget = this.deletionPending ? 'FAILED' : 'CLEARED'; // an older failed delete, read before the roll-back can set it
+      // M02-R01: a write already under way finishes, and its roll-back runs, BEFORE anything is reported.
+      const rollback = (await this.signInSettling)?.rollback ?? 'CLEARED';
+      const local = worseOf(rollback, earlier);
+      return { credentialCleared: local === 'CLEARED', local, server: 'NOT_ATTEMPTED', durable: local !== 'FAILED' };
     }
+    const settling = this.signInSettling; // read before any await
     const oldStamp = this.stamp();
     const oldBearer = this.credential;
     this.move((epoch) => ({ kind: 'GUEST', epoch, lastEnd: { reason: 'SIGNED_OUT', endedEpoch: state.epoch, message: null, at: this.now() } }), true);
     const revoked: Promise<ServerRevoke> = oldBearer === null || state.kind !== 'AUTHENTICATED' ? Promise.resolve('NOT_ATTEMPTED') : this.revokeBestEffort(oldStamp, oldBearer);
-    const local = await this.forgetCredential();
+    const forgotten = await this.forgetCredential();
+    const local = worseOf(forgotten, (await settling)?.rollback ?? 'CLEARED');
     const server = await revoked;
     // Durable means something stops this credential coming back: it is gone or refused locally, or the server ended it.
     // When neither holds, the app is signed out in memory and says plainly that a restart may restore the sign-in.
@@ -321,53 +336,67 @@ export class SessionManager {
       const fixtureOnLive = isReservedId(wire.credential) && this.deps.transport.kind === 'live';
       if (notOrdinary || fixtureOnLive) return { kind: 'REJECTED_FOR_SURFACE' };
 
-      // Storage first: if the credential cannot be written the person is NOT signed in. The credential is written BEFORE
-      // the signed-out flag is lowered, so a failed write never leaves an older, signed-out credential restorable (M01-R01).
-      const persisted = await this.serial(async (): Promise<'STALE' | 'WRITE_FAILED' | 'WRITTEN'> => {
-        if (this.generation !== generation) return 'STALE';
-        try {
-          await this.deps.credentials.write(wire.credential);
-        } catch {
-          return 'WRITE_FAILED';
-        }
-        try {
-          await this.deps.credentials.writeSignedOutFlag(false);
-        } catch {
-          // Conservative: the flag stays raised, so this sign-in works now and a restart asks for a new sign-in.
-        }
-        return 'WRITTEN';
-      });
-      if (persisted === 'STALE') return { kind: 'STALE' };
-      if (persisted === 'WRITE_FAILED') return { kind: 'REFUSED', refusal: { code: 'INTERNAL', message: null, retryAt: null } };
-      if (this.generation !== generation) {
-        // Someone signed out, the server ended a session or another identity arrived while this was being written: do not
-        // commit. Put back the credential of whoever the app is now, or remove this one if nobody is signed in.
-        await this.serial(async () => {
-          if (this.credential !== null) {
-            const keep = this.credential;
-            await this.deps.credentials.write(keep).catch(() => undefined);
-          } else {
-            await this.forgetNow();
-          }
-        });
-        return { kind: 'STALE' };
-      }
-      this.deletionPending = false;
-      const prev = this.current;
-      const oldStamp = this.stamp();
-      const oldBearer = this.credential;
-      this.credential = wire.credential;
-      if (prev.kind === 'AUTHENTICATED' && prev.accountRef === wire.accountRef) {
-        this.move((epoch) => ({ kind: 'AUTHENTICATED', epoch, accountRef: wire.accountRef, confirmedAt: this.now() }), false);
-      } else {
-        // A different Account (or the first): A's private state is purged before B can render.
-        this.move((epoch) => ({ kind: 'AUTHENTICATED', epoch, accountRef: wire.accountRef, confirmedAt: this.now() }), true);
-        if (prev.kind === 'AUTHENTICATED' && oldBearer !== null) void this.revokeBestEffort(oldStamp, oldBearer);
-      }
-      return { kind: 'SIGNED_IN', accountRef: wire.accountRef };
+      const settling = this.settleSignIn(wire, generation);
+      this.signInSettling = settling;
+      const settled = await settling;
+      if (this.signInSettling === settling) this.signInSettling = null;
+      return settled.outcome;
     } finally {
       this.verifying = false;
     }
+  }
+
+  /**
+   * Write the credential, then commit the sign-in only if nothing changed identity meanwhile. Everything from the generation
+   * check to the state change is synchronous, so no transition can slip in between. When the sign-in went stale after its
+   * credential reached storage, the roll-back's own outcome is returned: a sign-out waits for it (M02-R01).
+   */
+  private async settleSignIn(wire: MobileOps['session.verifyCode']['out'], generation: number): Promise<SettledSignIn> {
+    // Storage first: if the credential cannot be written the person is NOT signed in. The credential is written BEFORE
+    // the signed-out flag is lowered, so a failed write never leaves an older, signed-out credential restorable (M01-R01).
+    const persisted = await this.serial(async (): Promise<'STALE' | 'WRITE_FAILED' | 'WRITTEN'> => {
+      if (this.generation !== generation) return 'STALE';
+      try {
+        await this.deps.credentials.write(wire.credential);
+      } catch {
+        return 'WRITE_FAILED';
+      }
+      try {
+        await this.deps.credentials.writeSignedOutFlag(false);
+      } catch {
+        // Conservative: the flag stays raised, so this sign-in works now and a restart asks for a new sign-in.
+      }
+      return 'WRITTEN';
+    });
+    if (persisted === 'STALE') return { outcome: { kind: 'STALE' }, rollback: null };
+    if (persisted === 'WRITE_FAILED') return { outcome: { kind: 'REFUSED', refusal: { code: 'INTERNAL', message: null, retryAt: null } }, rollback: null };
+    if (this.generation !== generation) {
+      // Someone signed out, the server ended a session or another identity arrived while this was being written: do not
+      // commit. Put back the credential of whoever the app is now, or remove this one if nobody is signed in.
+      const rollback = await this.serial(async (): Promise<LocalForget> => {
+        if (this.credential === null) return this.forgetNow();
+        try {
+          await this.deps.credentials.write(this.credential);
+          return 'CLEARED';
+        } catch {
+          return 'FAILED'; // the stale credential may still be the one on disk
+        }
+      });
+      return { outcome: { kind: 'STALE' }, rollback };
+    }
+    this.deletionPending = false;
+    const prev = this.current;
+    const oldStamp = this.stamp();
+    const oldBearer = this.credential;
+    this.credential = wire.credential;
+    if (prev.kind === 'AUTHENTICATED' && prev.accountRef === wire.accountRef) {
+      this.move((epoch) => ({ kind: 'AUTHENTICATED', epoch, accountRef: wire.accountRef, confirmedAt: this.now() }), false);
+    } else {
+      // A different Account (or the first): A's private state is purged before B can render.
+      this.move((epoch) => ({ kind: 'AUTHENTICATED', epoch, accountRef: wire.accountRef, confirmedAt: this.now() }), true);
+      if (prev.kind === 'AUTHENTICATED' && oldBearer !== null) void this.revokeBestEffort(oldStamp, oldBearer);
+    }
+    return { outcome: { kind: 'SIGNED_IN', accountRef: wire.accountRef }, rollback: null };
   }
 
   // ---- the commit point -----------------------------------------------------------------------------------------
