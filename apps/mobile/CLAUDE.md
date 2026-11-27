@@ -9,12 +9,21 @@ Mode switching never creates a second ordinary account and never re-authenticate
 > Treat it as evidence: individual units return through MOB-FE-01's reuse decisions, one verified unit at a time. Never
 > restore it wholesale, and never restore its API contracts or its financial models.
 
-## Status: L2-00B walking skeleton (workspace activation)
+## Status: L2-MOBILE-01 (MOB-FE-01, 02, 02S, 03 implemented on stacked draft PRs; none accepted or merged)
 
-What exists: Expo SDK 58 / React Native 0.88 / Expo Router configuration; Metro, TypeScript, ESLint and Jest; one route
-that selects a transport and shows an honest unavailable state; the GOV-06 fixture seam with its release controls; and
-the `Mobile (rebuild-20261125)` CI job. **No product behaviour is built.** MOB-FE-01 onward is Lane 2 work in the
-Mobile worktree, started through the launcher (`Start-AdulisClaude.ps1 -Workstream mobile`).
+What exists on these branches (L2-MOBILE-01 deliverables hold the evidence): the typed provisional ports and operation
+registry (`src/contracts`, GAP-L2-01 / GAP-L2-02 / SC-BE-05S; **no hand-written DTO pretends to be the contract**), the session
+manager with epoch, stamps and fail-closed credential deletion (`src/session`), server-authoritative mode eligibility, the
+closed route table, route guard and deep links (`src/modes`), the AppGate and runtime (`src/gate`, `src/providers`), the
+functional fixture world (`src/fixtures`), Buyer discovery, Stories and engagement screens, and the Mobile token adapter
+(`src/ui/theme.ts`). User strings come from `@adulis/locale/mobile` first; keys it does not carry yet are PROVISIONAL in
+`src/i18n/provisional.ts` and registered as request SR-L2M01-LOC-01 (delete an entry when the shared key lands).
+`scripts/check-static-guarantees.mjs` (run by `pnpm test`) holds the absences: no Operator, Reservation, Handoff, payout,
+paid Order, web storage, dark-mode switch, animation API or second fixture door.
+
+Rules that are easy to break quietly here: a private query key must be rooted at `acct` or `guest` (`public` only for reads
+anyone may make); a Story or Scene visibility change is the server's answer, never a client memory; likes belong to Scenes
+only; no price, count, discount or stock number is ever computed on the device.
 
 ## Binding rules (cite, do not restate)
 
@@ -68,5 +77,6 @@ App identity (founder decision D1): `com.adulis.app` on both platforms, Expo pro
 
 ## What is NOT claimed by this skeleton
 
-No native-device, accessibility or screenshot evidence; no iOS export (Android only in CI so far); no authentication, session,
-device, Market or mode code; no fixture world, banner component or personas (MOB-FE-01); no Amharic.
+No native-device, accessibility or screenshot evidence; no iOS export (Android only in CI so far); no live authentication
+(every live operation fails closed UNAVAILABLE); no photos (the media seam has no origin); no route rendered in a test; no
+Amharic; no Impeccable review pass.
