@@ -7,7 +7,7 @@ import { TransportError, type CallContext, type MobileTransport } from '../trans
 import { FIXTURE_CHALLENGE_PREFIX, FIXTURE_CREDENTIAL_PREFIX, FIXTURE_IDS, FIXTURE_REFUSAL, FIXTURE_VERSION } from './ids';
 import { CATEGORIES, CHANNELS, followedSellerRefs, knownCategory, pageOf, productDetail, productsOf, publicScene, search, sellerProfile, shopProducts, visibleScenes } from './discovery';
 import { PERSONAS, type Persona } from './personas';
-import { rowGroups, storiesOf } from './stories';
+import { createStoryWorld } from './stories';
 
 /** The deny-list backstop: never served, whatever the registry says (GOV-06 S2). */
 const PROHIBITED = /payment|payout|handoff|claim|report|moderation|evidence|trust|review_grant|reservation|order/i;
@@ -27,21 +27,26 @@ export interface FixtureHandle {
   setClient(scenario: ClientScenario): void;
   /** The server withdraws a Scene: it answers NOT_FOUND on open and drops out of every list (public visibility is a server fact). */
   withdraw(sceneRef: string): void;
-  /** The server expires or withdraws a Seller's Stories: the row drops them and a group read answers NOT_FOUND. */
+  /** The server expires, withdraws or restricts a Seller's Stories: the row drops them and a group read answers NOT_FOUND. */
   expireStories(sellerRef: string): void;
+  /** Linked content (a Product or Scene ref) stopped being public: its Story is suppressed. */
+  makeStoryTargetPrivate(ref: string): void;
+  /** The fixture server clock (null: the real clock). Story publication and expiry are re-taken from it on reset(). */
+  setNow(now: (() => number) | null): void;
   /** Accounts the fixture currently has a session for (isolation tests). */
   sessionAccounts(): readonly string[];
   reset(): void;
 }
 
 export function createFixtureTransport(): { readonly transport: MobileTransport; readonly handle: FixtureHandle } {
+  let clock: (() => number) | null = null;
+  const stories = createStoryWorld(() => (clock ?? Date.now)());
   const log: OpLogEntry[] = [];
   const sessions = new Map<string, Persona>(); // credential -> persona
   const challenges = new Map<string, Persona | null>(); // challenge ref -> persona (null: unknown number, still answered the same)
   const holds = new Map<string, Promise<void>[]>();
   const spent = new Set<string>(); // expiry / revocation scenarios fire once per credential
   const withdrawn = new Set<string>();
-  const expired = new Set<string>();
   let client: ClientScenario = 'OK';
   let sequence = 0;
 
@@ -101,9 +106,9 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
         return {};
       }
       case 'stories.row.get':
-        return { groups: rowGroups(expired), nextCursor: null };
+        return { groups: stories.row(), nextCursor: null };
       case 'stories.group.get': {
-        const found = storiesOf((input as MobileOps['stories.group.get']['in']).sellerRef, expired);
+        const found = stories.group((input as MobileOps['stories.group.get']['in']).sellerRef);
         if (found === null) throw new TransportError('NOT_FOUND');
         return found;
       }
@@ -193,7 +198,11 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
       client = scenario;
     },
     withdraw: (sceneRef) => void withdrawn.add(sceneRef),
-    expireStories: (sellerRef) => void expired.add(sellerRef),
+    expireStories: (sellerRef) => stories.makeUnavailable(sellerRef),
+    makeStoryTargetPrivate: (ref) => stories.makeTargetPrivate(ref),
+    setNow(now) {
+      clock = now;
+    },
     sessionAccounts: () => [...sessions.values()].map((p) => p.accountId),
     reset() {
       log.length = 0;
@@ -202,7 +211,7 @@ export function createFixtureTransport(): { readonly transport: MobileTransport;
       holds.clear();
       spent.clear();
       withdrawn.clear();
-      expired.clear();
+      stories.reset();
       client = 'OK';
       sequence = 0;
     },

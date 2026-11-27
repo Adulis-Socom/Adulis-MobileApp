@@ -134,6 +134,9 @@ export const provisionalEn = {
   'mobile.stories.previous': 'Previous story',
   'mobile.stories.close': 'Close',
   'mobile.stories.gone': 'This story is no longer available.',
+  'mobile.stories.time_left.less_than_hour': 'Less than an hour left.',
+  'mobile.stories.time_left.one_hour': 'About 1 hour left.',
+  'mobile.stories.time_left.hours': 'About {hours} hours left.',
   'mobile.market.unresolved': 'Your region is not set yet, so results may be limited.',
 } as const;
 
