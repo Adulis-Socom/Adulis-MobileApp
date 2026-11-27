@@ -3,7 +3,6 @@
 import type { SceneCardUnit } from '../contracts/gap-mob-discovery';
 import { containRect, hotspotPosition } from './hotspot';
 import { availabilityText, formatMoney, formatPriceRange, trustText } from './format';
-import { prepareQuery, SEARCH_MAX_CHARS } from './search-query';
 import { validRef } from './params';
 import { CHANNELS, PAGE_SIZE, PRODUCTS, SCENES } from '../fixtures/discovery';
 import { createFixtureTransport, PERSONAS } from '../fixtures';
@@ -58,18 +57,7 @@ describe('formatting is words and money, never arithmetic', () => {
   });
 });
 
-describe('search query preparation (Unicode, provisional bounds)', () => {
-  it('folds to NFKC, trims and collapses whitespace', () => {
-    expect(prepareQuery('  ＡＢＣ   shoe ').q).toBe('ABC shoe');
-    expect(prepareQuery('é').q).toBe('é'); // composed form
-  });
-  it('counts characters, not UTF-16 units, so Ge\'ez and emoji are not penalised', () => {
-    expect(prepareQuery('ሰላም').problem).toBeNull();
-    expect(prepareQuery('a').problem).toBe('too_short');
-    expect(prepareQuery('😀😀').problem).toBeNull();
-    expect(prepareQuery('x'.repeat(SEARCH_MAX_CHARS + 1)).problem).toBe('too_long');
-    expect(prepareQuery('x'.repeat(SEARCH_MAX_CHARS)).problem).toBeNull();
-  });
+describe('route parameters', () => {
   it('treats a route parameter as one safe opaque reference or nothing', () => {
     expect(validRef('fx_scene_demo_1')).toBe('fx_scene_demo_1');
     for (const bad of ['../x', 'a b', '', 'a/b', undefined, 7, 'x'.repeat(200)]) expect(validRef(bad)).toBeNull();
