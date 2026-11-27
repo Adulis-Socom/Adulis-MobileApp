@@ -35,7 +35,8 @@ describe('source hygiene (what no screen may contain)', () => {
   });
 
   it('console copy mentions no revenue, payout, Reservation, refund or surcharge, and Orders/payments only to say they are absent', () => {
-    const copy = Object.entries(en);
+    // mobile.* keys live in the shared part for the Mobile app and are never shown in the console (L2-ROOT-01).
+    const copy = Object.entries(en).filter(([k]) => !k.startsWith('mobile.'));
     expect(copy.filter(([, v]) => /revenue|gmv|payout|reservation|refund|surcharge|paid order/i.test(v)).map(([k]) => k)).toEqual([]);
     const negations = new Set(['home.honest_body']);
     // Orders and payments are never named. "Delivery" is allowed only where the governing designs NAME it as a configurable thing:

@@ -76,6 +76,9 @@ for (const [part, en, am, shared] of [['shared', enCommon, amCommon, true], ['co
   }
   for (const key of Object.keys(am)) if (!(key in en)) failures.push(`${part} ${key}: Amharic key with no English`);
 }
+// 6. a key lives in exactly one part (the spread in catalogue.ts would let console silently overwrite shared copy)
+for (const key of Object.keys(enCommon)) if (key in enConsole) failures.push(`${key}: defined in both the shared and the console part`);
+for (const key of Object.keys(enConsole)) if (key.startsWith('mobile.')) failures.push(`${key}: mobile.* keys belong to the shared part`);
 const catalogueText = readFileSync(path.join(src, 'catalogue.ts'), 'utf8');
 if (!/PUBLIC_LOCALES = \['en'\] as const/.test(catalogueText)) failures.push('PUBLIC_LOCALES must stay English-only until every Amharic entry is REVIEWED');
 
