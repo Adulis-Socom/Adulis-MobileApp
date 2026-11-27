@@ -33,9 +33,19 @@ const MARKERS = {
   'test handle': '__ADULIS_FIXTURE__',
   'demonstration phone': '+251900000001',
   'demonstration code': '246810',
+  // L2-MOBILE-01 (AUTO-R02): every id category and constant the functional fixture world introduces.
+  'fixture version': 'mob-fixture-world-1',
+  'second persona id': 'fx_acct_demo_second',
+  'revoked persona id': 'fx_acct_demo_revoked',
+  'restricted persona id': 'fx_acct_demo_restricted',
+  'operator persona id': 'fx_acct_demo_operator',
+  'challenge id prefix': 'fx_otp_demo',
+  'credential id prefix': 'fx_cred_demo',
+  'second demonstration phone': '+251900000002',
+  'operator demonstration phone': '+251900000099',
 };
 // A generic reserved-id pattern, so a fixture id that is not in the list above is still caught.
-const FIXTURE_ID = /fx_(acct|device|market|seller|scene|conv|cred|otp)_[a-z0-9]/;
+const FIXTURE_ID = /fx_(acct|device|market|seller|scene|conv|cred|otp|product|story|collection|session|persona)_[a-z0-9]/;
 // RN-6: strings that exist only in a demonstration. Specific UI strings and marker names, not bare words: library
 // code legitimately contains words such as "payment" or "handoff", and a scan that cries wolf is switched off.
 const FORBIDDEN_IN_RELEASE = {
