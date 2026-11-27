@@ -1104,4 +1104,10 @@ export const enConsole = {
   'plan.features_title': 'What this Seller includes',
   'plan.feature.INCLUDED': 'Included',
   'plan.feature.NOT_INCLUDED': 'Not included yet',
+
+  // ---- DEPRECATED 02C reply codes, kept so the shared locale change is additive; remove after SC-FE-07-09-CLOSE is integrated (proposed English, awaiting approval) ----
+  'field_error.MESSAGE_BODY_REQUIRED': 'Write a message before sending.',
+  'field_error.MESSAGE_PRODUCT_NOT_IN_SCENE': 'This Product is not tagged in the chosen Scene.',
+  'field_error.CONTEXT_SCENE_NOT_AVAILABLE': 'This Scene cannot be used right now.',
+  'field_error.CONTEXT_PRODUCT_NOT_AVAILABLE': 'This Product cannot be used right now.',
 } as const;
