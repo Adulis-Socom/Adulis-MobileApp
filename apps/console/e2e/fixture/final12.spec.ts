@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { atSellerHome, CODE, expectTextScale, goInApp, noHorizontalOverflow, PHONE, scaleText, SELLER, signedInChooser } from './helpers';
 
 /**
@@ -333,10 +333,68 @@ test.describe('SC-FE-12 closure: targeted responsive coverage at 390px and 200% 
     await page.getByRole('dialog', { name: 'Suspend Abel (demonstration)?' }).getByRole('button', { name: 'Suspend Abel (demonstration)' }).click();
     const ownership = page.getByRole('region', { name: 'Ownership' });
     await expect(ownership.getByText(/is no longer an active Admin/)).toBeVisible();
-    await ownership.scrollIntoViewIfNeeded();
     await check(page);
-    await ownership.screenshot({ path: 'screenshots/transfer-ineligible.phone-390-text200.png' });
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.screenshot({ path: 'screenshots/transfer-ineligible.desktop-1440.png', fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    // SC12-FINAL-03: real viewport screenshots while scrolling (never a stitched capture), and proof that nothing fixed or sticky covers the message or the control.
+    const notice = ownership.getByText(/is no longer an active Admin/);
+    const cancel = ownership.getByRole('button', { name: 'Cancel the transfer' });
+    // True when, with the element scrolled to the middle of the viewport, its sampled points are the top-most thing at that point (not a bar over it).
+    const unobscured = (loc: Locator) =>
+      loc.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const pts: Array<[number, number]> = [];
+        for (const fx of [0.1, 0.5, 0.9]) for (const fy of [0.1, 0.5, 0.9]) pts.push([r.left + r.width * fx, r.top + r.height * fy]);
+        return pts.every(([x, y]) => {
+          if (y < 0 || y > innerHeight) return false;
+          const top = document.elementFromPoint(x, y);
+          return top !== null && (el === top || el.contains(top));
+        });
+      });
+    // The message is fully readable: bring each band of it, in turn, to the viewport middle and require it uncovered.
+    const height = await notice.evaluate((el) => el.getBoundingClientRect().height);
+    for (let y = 0; y <= height; y += 24) {
+      await notice.evaluate((el, off) => {
+        const r = el.getBoundingClientRect();
+        scrollBy(0, r.top + off - innerHeight / 2);
+      }, y);
+      const covered = await notice.evaluate((el, off) => {
+        const r = el.getBoundingClientRect();
+        const x = r.left + r.width / 2;
+        const py = r.top + Math.min(off, r.height - 1);
+        const top = document.elementFromPoint(x, py);
+        return !(top && (el === top || el.contains(top)));
+      }, y);
+      expect(covered, `notice band at ${y}px is covered by something`).toBe(false);
+    }
+    // Walk the section top to bottom one viewport-sized step at a time.
+    await ownership.evaluate((el) => scrollTo(0, el.getBoundingClientRect().top + scrollY - 8));
+    for (let i = 1; i <= 4; i++) {
+      await page.screenshot({ path: `screenshots/transfer-ineligible.phone-390-text200.step${i}.png` });
+      const atEnd = (await ownership.evaluate((el) => el.getBoundingClientRect().bottom)) < 400;
+      if (atEnd) break;
+      await page.evaluate(() => scrollBy(0, innerHeight * 0.6));
+    }
+    // The control: reached by keyboard from the section heading, so the browser's own focus scroll is what is being tested.
+    await ownership.getByRole('heading').first().evaluate((h) => { h.setAttribute('tabindex', '-1'); (h as HTMLElement).focus(); });
+    let focused = false;
+    for (let i = 0; i < 25 && !focused; i++) {
+      await page.keyboard.press('Tab');
+      focused = await cancel.evaluate((el) => el === document.activeElement);
+    }
+    expect(focused, 'Cancel the transfer is reachable by Tab').toBe(true);
+    expect(await unobscured(cancel), 'Cancel the transfer is uncovered after keyboard focus').toBe(true);
+    const ring = await cancel.evaluate((el) => {
+      const c = getComputedStyle(el);
+      return { match: el.matches(':focus-visible'), outline: c.outlineStyle !== 'none' && parseFloat(c.outlineWidth) > 0, shadow: c.boxShadow !== 'none' };
+    });
+    expect(ring.match, 'keyboard focus is :focus-visible').toBe(true);
+    expect(ring.outline || ring.shadow, `a visible focus indicator ${JSON.stringify(ring)}`).toBe(true);
+    await page.screenshot({ path: 'screenshots/transfer-ineligible.phone-390-text200.cancel-focused.png' });
+    await page.keyboard.press('Enter');
+    await expect(page.getByText(/Ownership will pass to Abel/)).toHaveCount(0);
+    await page.screenshot({ path: 'screenshots/transfer-ineligible.phone-390-text200.after-cancel.png' });
   });
 });

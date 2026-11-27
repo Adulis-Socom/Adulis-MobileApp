@@ -13,7 +13,7 @@ import { useDirty } from '../shared/dirty';
 import { AvailabilityBadge } from '../products/badges';
 import { Section } from '../products/Section';
 import { CENTRE, fromPercent, toPercent, type Point } from './hotspot';
-import { canDo, imageSrc, type SceneSectionProps } from './sceneEditor';
+import { canDo, imageSrc, type SceneSectionProps } from './sceneEditorModel';
 import { Stage, type Marker } from './Stage';
 
 interface LocalHotspot {

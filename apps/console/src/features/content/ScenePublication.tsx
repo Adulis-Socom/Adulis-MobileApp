@@ -7,7 +7,7 @@ import { ActionProblem } from '../shared/ActionProblem';
 import { useAction } from '../shared/useAction';
 import { Section } from '../products/Section';
 import { ModerationNote, PrivateReason, SceneBadges } from './sceneBadges';
-import { canDo, type SceneSectionProps } from './sceneEditor';
+import { canDo, type SceneSectionProps } from './sceneEditorModel';
 
 /**
  * Publication (SCN S27-S33, CON S65): every blocker at once, linking to what resolves it; then publish or archive.

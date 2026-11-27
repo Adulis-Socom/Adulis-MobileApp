@@ -9,7 +9,7 @@ import { useAction } from '../shared/useAction';
 import { useDirty } from '../shared/dirty';
 import { Section } from '../products/Section';
 import { Stage } from './Stage';
-import { canDo, imageSrc, type SceneSectionProps } from './sceneEditor';
+import { canDo, imageSrc, type SceneSectionProps } from './sceneEditorModel';
 
 const LOOK: Record<'PROCESSING' | 'READY' | 'REJECTED', { tone: Tone; icon: IconName }> = {
   PROCESSING: { tone: 'info', icon: 'clock' },

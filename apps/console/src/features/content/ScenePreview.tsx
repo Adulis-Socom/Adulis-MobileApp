@@ -2,7 +2,7 @@ import { t } from '../../i18n/t';
 import { AvailabilityBadge } from '../products/badges';
 import { Section } from '../products/Section';
 import { PrivateReason } from './sceneBadges';
-import { imageSrc, type SceneSectionProps } from './sceneEditor';
+import { imageSrc, type SceneSectionProps } from './sceneEditorModel';
 import { Stage, type Marker } from './Stage';
 
 /**
