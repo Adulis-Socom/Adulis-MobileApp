@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { OpId, OpInput, OpOutput } from '../contracts/gap-sc';
-import { createRetryKeys, outcomeOfFailure, requestSignature } from '../seller/retry';
+import { outcomeOfFailure, requestSignature } from '../seller/retry';
 import { asTransportError, TransportError } from '../transport/port';
 import type { QueryState } from '../seller/useSellerQuery';
 import { useSession } from './SessionProvider';
@@ -49,10 +49,8 @@ export function useAccountCommand(): AccountCommand {
   const session = useSession();
   const { transport } = session.selected;
   const expire = session.expire;
-  // One retry store per session: an unresolved key never crosses into the next session.
-  const store = useRef({ epoch: session.epoch, keys: createRetryKeys() });
-  if (store.current.epoch !== session.epoch) store.current = { epoch: session.epoch, keys: createRetryKeys() };
-  const keys = store.current.keys;
+  // One retry store per authenticated session, owned by SessionProvider: it survives navigation and never crosses into the next session.
+  const keys = session.accountRetryKeys;
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -64,6 +62,7 @@ export function useAccountCommand(): AccountCommand {
     async <K extends OpId>(op: K, input: OpInput<K>): Promise<OpOutput<K>> => {
       const signature = requestSignature(op, input);
       const key = keys.begin(signature);
+      if (key === null) throw new TransportError('RETRY_STORE_FULL'); // refused before dispatch: nothing is sent
       try {
         const result = await transport.send(op, input, { idempotencyKey: key });
         keys.settle(signature, key, 'APPLIED');

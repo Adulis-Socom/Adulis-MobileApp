@@ -8,10 +8,12 @@
  * Settlement is matched by key: an answer for a key that is no longer the request's key (the request was resolved and a new command
  * began) is stale and changes nothing, so it can neither forget an unresolved key nor resurrect a resolved one.
  *
- * Never evicted (FE12-01): an unresolved request keeps its key for as long as its store lives, because dropping it would silently turn the
- * next retry into a possible duplicate. The store lives per Seller scope and session (SellerScope replaces it on a change of account,
- * session or Seller), in memory only, never in storage. Each entry is one write a person started whose outcome is unknown, so the store
- * grows only with those. The Console still never promises a write "will not be done twice" (P-49): durable idempotency is the backend's.
+ * Bounded and never evicted (FE12-01): an unresolved request keeps its key for as long as its store lives, because dropping it would silently
+ * turn the next retry into a possible duplicate. At capacity a NEW request is refused before dispatch (begin returns null) while retries of
+ * existing ones still work. The Seller store lives per Seller scope and session (SellerScope replaces it on a change of account, session or
+ * Seller); the Account store lives per authenticated session (SessionProvider, replaced when the session ends). Memory only, never storage;
+ * the signature is held in memory so it can include request values, and goes with the store. The Console still never promises a write "will
+ * not be done twice" (P-49): durable idempotency and recovery across reloads or sessions are the backend's.
  */
 export type WriteOutcome = 'APPLIED' | 'REFUSED' | 'UNKNOWN';
 
@@ -21,8 +23,11 @@ export const outcomeOfFailure = (code: string): WriteOutcome => (UNKNOWN_CODES.h
 export const isUnknownOutcome = (code: string): boolean => UNKNOWN_CODES.has(code);
 
 export interface RetryKeys {
-  /** Start an attempt: joins the unresolved request with the same signature, or begins a new one with a fresh key. */
-  begin(signature: string): string;
+  /**
+   * Start an attempt: joins the unresolved request with the same signature (always, even when full), or begins a new one with a fresh key.
+   * Returns null, minting nothing, when the store is at capacity and the request is new: the caller must not send it.
+   */
+  begin(signature: string): string | null;
   /** Record the answer to the attempt that used `key`. A stale key (not the request's current key) is ignored. */
   settle(signature: string, key: string, outcome: WriteOutcome): void;
   /** Unresolved requests held (in flight or unknown). */
@@ -36,8 +41,10 @@ interface Entry {
   resolved: boolean;
 }
 
-// shortcut: no size cap; entries are per-person unknown writes inside one scope's lifetime. Upgrade to a cap that REFUSES new writes (never evicts) if a scope can live long enough to matter.
-export function createRetryKeys(mint: () => string = () => crypto.randomUUID()): RetryKeys {
+/** PROVISIONAL fixture-era capacity (FE12-01). No approved production limit exists; this is not a product decision. */
+export const PROVISIONAL_RETRY_CAPACITY = 16;
+
+export function createRetryKeys(mint: () => string = () => crypto.randomUUID(), capacity: number = PROVISIONAL_RETRY_CAPACITY): RetryKeys {
   const entries = new Map<string, Entry>();
   return {
     begin(signature) {
@@ -46,6 +53,8 @@ export function createRetryKeys(mint: () => string = () => crypto.randomUUID()):
         found.inFlight += 1;
         return found.key;
       }
+      // A genuinely new request is refused when full (never evicting an unresolved one); a replacement of the same signature adds no slot.
+      if (!found && entries.size >= capacity) return null;
       const entry: Entry = { key: mint(), inFlight: 1, unknown: false, resolved: false };
       entries.set(signature, entry);
       return entry.key;

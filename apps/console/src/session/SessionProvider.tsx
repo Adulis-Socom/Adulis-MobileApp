@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AccountContext } from '../contracts/gap-sc';
+import { createRetryKeys, type RetryKeys } from '../seller/retry';
 import { asTransportError } from '../transport/port';
 import type { Selected } from '../transport/select';
 
@@ -37,6 +38,8 @@ export interface SessionApi {
   readonly expire: () => void;
   /** Changes whenever a session ends, so anything keyed by it (retry identity) starts fresh for the next session. */
   readonly epoch: number;
+  /** The Account's retry identities for this session (FE12-01): shared by every Account command, replaced when the session ends. Memory only. */
+  readonly accountRetryKeys: RetryKeys;
 }
 
 const SessionContext = createContext<SessionApi | null>(null);
@@ -102,6 +105,10 @@ export function SessionProvider({ selected, children }: { selected: Selected; ch
     setState((current) => (current.status === 'READY' ? { status: 'EXPIRED' } : current));
   }, [epoch, endEpoch]);
 
-  const api = useMemo<SessionApi>(() => ({ state, selected, refresh, signOut, expire, epoch }), [state, selected, refresh, signOut, expire, epoch]);
+  const [retryStore, setRetryStore] = useState(() => ({ epoch, keys: createRetryKeys() }));
+  if (retryStore.epoch !== epoch) setRetryStore({ epoch, keys: createRetryKeys() });
+  const accountRetryKeys = retryStore.keys;
+
+  const api = useMemo<SessionApi>(() => ({ state, selected, refresh, signOut, expire, epoch, accountRetryKeys }), [state, selected, refresh, signOut, expire, epoch, accountRetryKeys]);
   return <SessionContext.Provider value={api}>{children}</SessionContext.Provider>;
 }

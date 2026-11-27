@@ -44,6 +44,7 @@ export function useSellerCommand(): SellerCommand {
     async <K extends SellerOp>(op: K, input: OpInput<K>): Promise<OpOutput<K>> => {
       const signature = requestSignature(op, input);
       const key = retryKeys.begin(signature);
+      if (key === null) throw new TransportError('RETRY_STORE_FULL'); // refused before dispatch: nothing is sent
       let result: OpOutput<K>;
       try {
         result = await runScoped(transport, op, sellerId, input, undefined, key);

@@ -64,7 +64,7 @@ export interface People {
   sessionPersona(sessionId: string): string | null;
 }
 
-const STEP_UP_VALID_MS = 300_000; // demonstration value: AUTH-02 says only "short-lived"
+const STEP_UP_VALID_MS = 300_000; // PROVISIONAL demonstration value: AUTH-02 says only "short-lived"; no production duration is approved (P-4)
 const TRANSFER_DELAY_MS = 24 * HOUR_MS; // CONSOLE-02 S117
 const CATEGORIES: readonly { code: string; suppressible: boolean }[] = [
   { code: 'SECURITY', suppressible: false },
@@ -78,8 +78,9 @@ const isAssignable = (r: string): r is AssignableRole => (ASSIGNABLE_ROLES as re
 interface Invite { id: string; sellerId: string; targetId: string; roles: AssignableRole[]; createdAt: number }
 /** The exact recipient membership a transfer grant is for: id AND version, so a role change after the code invalidates it (FE12-03). */
 interface Recipient { membershipId: string; version: number }
-interface Challenge { personaId: string; purpose: StepUpPurpose; sellerId: string | null; recipient: Recipient | null; expiresAt: number }
-interface Grant { personaId: string; purpose: StepUpPurpose; sellerId: string | null; recipient: Recipient | null; used: boolean; expiresAt: number }
+/** Both are bound to the ORIGINATING session and its audience as well as the Account (AUTH-02 S47, FE12-02): a later session of the same Account cannot adopt them. */
+interface Challenge { personaId: string; sessionId: string; audience: AccountSession['audience']; purpose: StepUpPurpose; sellerId: string | null; recipient: Recipient | null; expiresAt: number }
+interface Grant { personaId: string; sessionId: string; audience: AccountSession['audience']; purpose: StepUpPurpose; sellerId: string | null; recipient: Recipient | null; used: boolean; expiresAt: number }
 interface Transfer { targetMembershipId: string; targetLabel: string; requestedAt: number }
 /** One live sign-in. Account-level revocation ends it; Seller-level revocation removes its authority in one Seller only (FE12-04). */
 interface SessionRec {
@@ -107,13 +108,21 @@ export function createPeople(deps: PeopleDeps): People {
   const privacy = new Map<string, PrivacyRec>();
 
   const persona = (id: string) => deps.personas().find((p) => p.id === id);
+  /** The live session this request was sent under, or undefined (never a second session authority: it reads the one session table). */
+  const sessionHere = (): SessionRec | undefined => {
+    const id = deps.currentSession();
+    const rec = id === null ? undefined : sessions.get(id);
+    return rec && !rec.ended ? rec : undefined;
+  };
   const membershipsOf = (sellerId: string) =>
     deps.personas().flatMap((p) => p.memberships.filter((m) => m.sellerId === sellerId).map((m) => ({ p, m })));
   const teamSlotTaken = (p: Persona) => p.memberships.some((m) => m.relationship === 'TEAM');
 
   /**
-   * Consume a grant: it must exist, be unused and unexpired, belong to this Account, and match the purpose, the Seller and (for a transfer) the
-   * exact recipient membership. One use only (AUTH S45-S48). An expired grant is dropped, never revived (FE12-02).
+   * Consume a grant: it must exist, be unused and unexpired, belong to this Account AND to the live session that earned it (same audience, and
+   * still holding authority in the Seller), and match the purpose, the Seller and (for a transfer) the exact recipient membership. One use only
+   * (AUTH S45-S48). An expired grant is dropped, never revived (FE12-02). Normal authorization runs BEFORE this, so a grant never restores a
+   * revoked capability or revoked Seller authority.
    */
   function spend(grant: string, personaId: string, purpose: StepUpPurpose, sellerId: string | null, recipient: Recipient | null = null): void {
     const g = grants.get(grant);
@@ -121,7 +130,10 @@ export function createPeople(deps: PeopleDeps): People {
     if (expired) grants.delete(grant);
     const bound = g?.recipient ?? null;
     const recipientOk = recipient === null ? bound === null : bound !== null && bound.membershipId === recipient.membershipId && bound.version === recipient.version;
-    if (!g || expired || g.used || g.personaId !== personaId || g.purpose !== purpose || g.sellerId !== sellerId || !recipientOk) {
+    const here = deps.currentSession();
+    const sess = here === null ? undefined : sessions.get(here);
+    const sessionOk = !!g && !!sess && !sess.ended && g.sessionId === sess.id && g.audience === sess.audience && !(sellerId !== null && sess.sellerRevoked.has(sellerId));
+    if (!g || expired || g.used || !sessionOk || g.personaId !== personaId || g.purpose !== purpose || g.sellerId !== sellerId || !recipientOk) {
       throw new TransportError('PERMISSION_DENIED', { detail: 'STEP_UP_REQUIRED' });
     }
     g.used = true;
@@ -386,6 +398,9 @@ export function createPeople(deps: PeopleDeps): People {
     // ---- the signed-in Account ----------------------------------------------------------------------------------------
     'account.stepup.start': ({ purpose, seller_id, recipient_membership_id }) => {
       const p = deps.current();
+      const sess = sessionHere();
+      // Sensitive actions are Console workflows: only a live Console session may ask for the code (no cross-surface capability is invented).
+      if (!sess || sess.audience !== 'CONSOLE') throw denied();
       // A Seller-bound purpose must name a Seller this Account owns; the label names exactly what the code will authorize.
       if (seller_id !== null && !p.memberships.some((m) => m.sellerId === seller_id && m.relationship === 'OWNER')) throw denied();
       // A transfer code is for one named, eligible recipient (FE12-03); no other purpose takes one.
@@ -397,7 +412,7 @@ export function createPeople(deps: PeopleDeps): People {
         recipient = { rec: { membershipId: found.m.id, version: found.m.version }, label: found.p.display_name };
       } else if (recipient_membership_id !== undefined) throw invalid({ target: 'TRANSFER_TARGET_NOT_ELIGIBLE' });
       const id = kit.next('fx_stepup');
-      challenges.set(id, { personaId: p.id, purpose, sellerId: seller_id, recipient: recipient?.rec ?? null, expiresAt: kit.now() + STEP_UP_VALID_MS });
+      challenges.set(id, { personaId: p.id, sessionId: sess.id, audience: sess.audience, purpose, sellerId: seller_id, recipient: recipient?.rec ?? null, expiresAt: kit.now() + STEP_UP_VALID_MS });
       return {
         challenge_id: id,
         purpose,
@@ -409,7 +424,10 @@ export function createPeople(deps: PeopleDeps): People {
     'account.stepup.verify': ({ challenge_id, code }) => {
       const p = deps.current();
       const c = challenges.get(challenge_id);
-      if (!c || c.personaId !== p.id || kit.now() >= c.expiresAt || code === deps.codes.expired) {
+      const sess = sessionHere();
+      // A challenge belongs to the session that started it: from any other session it is simply not there (the same generic answer, nothing revealed).
+      if (!c || !sess || c.sessionId !== sess.id || c.audience !== sess.audience) throw new TransportError('OTP_EXPIRED');
+      if (c.personaId !== p.id || kit.now() >= c.expiresAt || code === deps.codes.expired) {
         challenges.delete(challenge_id);
         throw new TransportError('OTP_EXPIRED');
       }
@@ -417,7 +435,7 @@ export function createPeople(deps: PeopleDeps): People {
       challenges.delete(challenge_id); // one challenge, one grant
       const grant = kit.next('fx_grant');
       // The grant is short-lived too (FE12-02): it must be spent within the same window, or a new code is needed.
-      grants.set(grant, { personaId: p.id, purpose: c.purpose, sellerId: c.sellerId, recipient: c.recipient, used: false, expiresAt: kit.now() + STEP_UP_VALID_MS });
+      grants.set(grant, { personaId: p.id, sessionId: c.sessionId, audience: c.audience, purpose: c.purpose, sellerId: c.sellerId, recipient: c.recipient, used: false, expiresAt: kit.now() + STEP_UP_VALID_MS });
       return { grant };
     },
     'account.sessions.get': () => ({ sessions: sessionsOf(deps.current()) }),

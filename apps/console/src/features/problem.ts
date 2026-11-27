@@ -32,6 +32,8 @@ export function problemText(error: TransportError): string {
       return t('error.conflict');
     case 'REFUSED':
       return t('error.refused');
+    case 'RETRY_STORE_FULL':
+      return t('error.retry_store_full');
     case 'INTERNAL':
       return t('error.request.internal');
     default:
