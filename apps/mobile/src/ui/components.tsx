@@ -1,6 +1,6 @@
 // The small set of primitives MOB-FE-01 needs. Values come from the token adapter; strings come from the catalogue; every
 // interactive element has an accessible name, role and state and a 44-point minimum target, and no text container fixes a height.
-import type { ReactNode, Ref } from 'react';
+import type { ComponentRef, ReactNode, Ref } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -47,7 +47,7 @@ export interface ButtonProps {
   readonly selected?: boolean;
   readonly testID?: string;
   /** For focus management (returning screen-reader focus to the control that opened something). */
-  readonly buttonRef?: Ref<View>;
+  readonly buttonRef?: Ref<ComponentRef<typeof Pressable>>;
 }
 
 export function Button({ label, onPress, kind = 'primary', disabled = false, busy = false, selected, testID, buttonRef }: ButtonProps) {
