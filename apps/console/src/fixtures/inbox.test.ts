@@ -181,6 +181,25 @@ describe('SC-FE-08 fixture Inbox: context rules (CHAT S4-S5) and sending', () =>
     expect(refused.fields).toEqual({ product: 'MESSAGE_PRODUCT_NOT_IN_SCENE_POST' });
   });
 
+  it('labels the Scene source as it was at the referenced revision, not as it is now (FE12-07)', async () => {
+    const { world } = setup();
+    await signIn(world, 'fx_acct_owner');
+    const offered = await world.handle('inbox.context.get', { scene_id: null }, ALEM);
+    const before = offered.scenes.find((s) => s.id === 'fx_scene_alem_1');
+    expect(before?.label).toBe('Linen wrap dress styled for the rainy season');
+    // The caption changes after the composer offered the old revision.
+    const scene = await world.handle('scenes.get', { scene_id: 'fx_scene_alem_1' }, ALEM);
+    await world.handle('scenes.update', { scene_id: 'fx_scene_alem_1', version: scene.version, caption: 'A new caption' }, ALEM);
+    const sent = await world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_4', body: 'This look.', scene_id: 'fx_scene_alem_1', scene_revision: before?.revision ?? 0, product_id: null }, ALEM);
+    expect(sent.messages[sent.messages.length - 1]?.subject).toMatchObject({ kind: 'SCENE', revision: before?.revision, label: 'Linen wrap dress styled for the rainy season' });
+    // The seeded history reads the label from the Scene's own revision 1, and keeps it after the caption change.
+    const t = await world.handle('inbox.thread.get', { conversation_id: 'fx_conv_alem_1' }, ALEM);
+    expect(t.messages[0]?.source).toMatchObject({ ref: 'fx_scene_alem_1', revision: 1, label: 'Linen wrap dress styled for the rainy season' });
+    // A revision that was never seen has no label to borrow: it is refused, not labelled with the current caption.
+    const unseen = await failure(world.handle('inbox.reply.send', { conversation_id: 'fx_conv_alem_4', body: 'x', scene_id: 'fx_scene_alem_1', scene_revision: 99, product_id: null }, ALEM));
+    expect(unseen.fields).toEqual({ scene: 'MESSAGE_SCENE_POST_INVALID' });
+  });
+
   it('keeps the display snapshot of a sent message when the Product is renamed later', async () => {
     const { world } = setup();
     await signIn(world, 'fx_acct_owner');

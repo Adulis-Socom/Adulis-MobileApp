@@ -84,15 +84,29 @@ export interface Content {
   readonly handlers: Handlers<ContentOps>;
   /** For the Inbox: this Seller's Scenes at their current revision, with their LIVE publicity and tagged Products. Resolved on each call. */
   scenesForContext(sellerId: string): readonly { id: string; label: string; revision: number; isPublic: boolean; productIds: readonly string[] }[];
-  /** The Products tagged in one exact revision the Inbox has offered (CHAT S4 provenance), or null for a revision never offered. */
-  tagsAtRevision(sellerId: string, sceneId: string, revision: number): readonly string[] | null;
+  /**
+   * One exact revision as it was (CHAT S4 provenance): its label and tagged Products, or null for a revision never seen. Recorded for every
+   * seeded revision and every revision the Inbox offered, so a message names the Scene as it was at THAT revision, not as it is now (FE12-07).
+   */
+  sceneAtRevision(sellerId: string, sceneId: string, revision: number): RevisionSnapshot | null;
+}
+
+export interface RevisionSnapshot {
+  readonly label: string;
+  readonly productIds: readonly string[];
 }
 
 const BLOCKING_MODERATION = new Set(['RESTRICTED', 'REMOVED']);
+const labelOf = (s: { id: string; caption: string }): string => (s.caption.trim() === '' ? s.id : s.caption);
 
 export function createContent(kit: Kit, catalogue: Catalogue): Content {
   const data = new Map<string, SceneRec[]>();
-  const offered = new Map<string, readonly string[]>();
+  const revisions = new Map<string, RevisionSnapshot>();
+  const remember = (sellerId: string, s: SceneRec): RevisionSnapshot => {
+    const snap = { label: labelOf(s), productIds: s.tags.map((t) => t.product_id) };
+    revisions.set(`${sellerId}|${s.id}@${s.version}`, snap);
+    return snap;
+  };
 
   function seedFor(sellerId: string): SceneRec[] {
     if (sellerId !== 'fx_seller_alem') return [];
@@ -127,6 +141,7 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
     if (!list) {
       list = seedFor(sellerId);
       data.set(sellerId, list);
+      for (const s of list) remember(sellerId, s);
     }
     return list;
   };
@@ -444,12 +459,14 @@ export function createContent(kit: Kit, catalogue: Catalogue): Content {
   return {
     scenesForContext: (sellerId) =>
       scenesOf(sellerId).map((s) => {
-        const productIds = s.tags.map((t) => t.product_id);
-        // Remember the tag set of every revision that is offered, so a reply can be checked against the EXACT revision it was composed on.
-        offered.set(`${sellerId}|${s.id}@${s.version}`, productIds);
-        return { id: s.id, label: s.caption.trim() === '' ? s.id : s.caption, revision: s.version, isPublic: publicScene(sellerId, s.id), productIds };
+        // Remember every revision that is offered, so a reply is checked against, and labelled by, the EXACT revision it was composed on.
+        const { label, productIds } = remember(sellerId, s);
+        return { id: s.id, label, revision: s.version, isPublic: publicScene(sellerId, s.id), productIds };
       }),
-    tagsAtRevision: (sellerId, sceneId, revision) => offered.get(`${sellerId}|${sceneId}@${revision}`) ?? null,
+    sceneAtRevision: (sellerId, sceneId, revision) => {
+      scenesOf(sellerId);
+      return revisions.get(`${sellerId}|${sceneId}@${revision}`) ?? null;
+    },
     handlers: withIdempotency(kit, handlers, {
       'scenes.create': { dest: 'content', cap: 'content.write' },
       'scenes.media.set': { dest: 'content', cap: 'content.write' },
