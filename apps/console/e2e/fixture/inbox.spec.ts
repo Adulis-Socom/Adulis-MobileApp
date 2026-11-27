@@ -68,6 +68,8 @@ test.describe('SC-FE-08: a conversation', () => {
     await open(page, PHONE.owner);
     await thread(page, 'Demonstration buyer D');
     const products = page.getByLabel('Product (optional)');
+    // Scenes and Products arrive in ONE answer (inbox.context.get): once the Scene option exists the Product list is complete. Counting earlier read the loading list.
+    await expect(page.getByLabel('Scene (optional)').locator('option', { hasText: 'Linen wrap dress styled for the rainy season' })).toHaveCount(1);
     const all = await products.locator('option').count();
     await page.getByLabel('Scene (optional)').selectOption({ label: 'Linen wrap dress styled for the rainy season' });
     await expect(page.getByText('Only the Products tagged in this Scene are listed.')).toBeVisible();
