@@ -6,6 +6,10 @@ import { theme } from '../../ui/theme';
 // shows a header with a visible, labelled Back control (no gesture is the only way back); the tabs themselves have none.
 export const unstable_settings = { anchor: '(tabs)' };
 
+// One screen per destination: a second tap before the first push settles reuses that screen instead of stacking a copy
+// (ISS-039, archived deep-link-reliability parity). A detail screen is one per ref, so a different ref still pushes.
+const single = () => 'single';
+
 export default function BuyerLayout() {
   return (
     <Stack
@@ -18,6 +22,8 @@ export default function BuyerLayout() {
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="auth/sign-in" getId={single} />
+      <Stack.Screen name="auth/verify" getId={single} />
     </Stack>
   );
 }
