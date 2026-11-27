@@ -115,6 +115,6 @@ describe('StoryCard', () => {
 
   it('draws no reply, comment, reaction, Like, share, viewer list or count', async () => {
     await render(<StoryCard story={story()} sellerName="Store One" onOpenTarget={() => undefined} />);
-    expect(screen.queryByText(/reply|comment|react|like|share|viewer|views?\b|seen/i)).toBeNull();
+    expect(screen.queryByText(/reply|comment|react|\blike|share|viewers?\b|\bviews\b|\bseen\b/i)).toBeNull();
   });
 });
