@@ -10,7 +10,9 @@ on:
   push:
     branches: ['rebuild/**', 'dev']   # dev: first promotion, RB26-D01 (docs/rebuild/DEV-PROMOTION-PROCEDURE.md)
   pull_request:
-    branches: ['rebuild/2026-11-25', 'dev']
+    # rebuild/l2-mobile: the Lane 2 Mobile integration branch (RB27-D06/D07, L2-R01). Trigger only: it exists
+    # before the branch does, so the first activation PR into it gets a merge-candidate run from this file.
+    branches: ['rebuild/2026-11-25', 'rebuild/l2-mobile', 'dev']
   workflow_dispatch:
 
 concurrency:
