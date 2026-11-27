@@ -44,9 +44,9 @@ Supersedes, and only to the extent stated below:
 |---|---|---|
 | E Mobile frontend | SC-BE-08 accepted | RBL-05 accepted (holds) + this addendum effective + L2-00B Mobile workspace activation accepted on the Lane 2 integration branch with its protection and CI in place (RB27-D07) |
 | F Mobile backend | MOB-FE-12 accepted | MOB-FE-12, SF-FE-07 and OP-FE-09 accepted + per-order owner dependencies + allocated write slot |
-| G Storefront frontend | MOB-BE-09 accepted | MOB-FE-12 accepted + root activation of the Storefront path, permissions and CI. Whether SF-FE-01 may start while the MOB-FE-12 promotion is HELD (RB27-D06) is a founder decision recorded in the L2-00A report |
+| G Storefront frontend | MOB-BE-09 accepted | MOB-FE-12 accepted + root activation of the Storefront path, permissions and CI. SF-FE-01 may start while the MOB-FE-12 promotion into `dev` is HELD (RB27-D06): founder decision of the L2-AUTO-02 assignment, 27 November 2026 |
 | H Storefront backend | SF-FE-07 accepted | as Stage F |
-| I Operator frontend | SF-BE-05 accepted | SF-FE-07 accepted + root activation of the Operator path, permissions and CI (same held-promotion question as Stage G) |
+| I Operator frontend | SF-BE-05 accepted | SF-FE-07 accepted + root activation of the Operator path, permissions and CI. The same held-promotion decision applies: the preceding frontend's acceptance gate must pass; its promotion may still be held |
 | J Operator backend | OP-FE-09 accepted | as Stage F |
 | K Release acceptance | OP-BE-07 accepted | ALL EIGHT surface milestones accepted: SC-FE-12, SC-BE-08, MOB-FE-12, MOB-BE-09, SF-FE-07, SF-BE-05, OP-FE-09, OP-BE-07 (the master chain implied all eight; this states it) |
 Stage C (Console frontend) and Stage D (Console backend, entry SC-FE-12) are unchanged. Stage L (P2) is
@@ -72,10 +72,30 @@ and `packages/api-client` generated files (by the official generators only); `pa
 `packages/locale`, `packages/config`; `pnpm-workspace.yaml`, root `package.json`, `pnpm-lock.yaml`
 (regenerated from reviewed manifests, never hand-merged); `.github/**`; `.dependency-cruiser.cjs`; root
 `CLAUDE.md`, `.claude/**`, `docs/amendments/**` and `docs/rebuild/**` governance records.
-- A lane needing a shared change files a request (contract register row, RB27-D05); the root coordinator
-  implements it in its own root PR, which both lanes acknowledge before merge. Never bundled into an app PR.
+- A lane needing a shared change submits a change request in its report or an explicit request document; it never
+  writes the cross-lane contract register (RB27-D05), which lives in `docs/rebuild/**` and is maintained only by
+  the root coordinator under an allocated root write scope. The root coordinator implements the accepted request
+  in its own root PR, which both lanes acknowledge before merge. Never bundled into an app PR.
+- Every repository-writing session starts in its assigned worktree through the approved launcher and verifies
+  its permission denials before its first write. If an expected denial is not enforced, repository writes stop
+  immediately and only authorised read-only analysis and reports outside the repository continue. A historical
+  deviation, or its retrospective acceptance, never authorises a repeat. Procedure: GOV-PARALLEL-01 section 6.
 - One backend writer at a time. A second backend writer needs an explicit, non-overlapping allocation, and
-  shared schema changes are still serialised through the root coordinator.
+  shared schema changes are still serialised through the root coordinator. Migrations are single-writer: only an
+  allocated `api`-workstream session under an assigned work order authors them, one at a time, sequenced by the
+  root coordinator; every other workstream is denied by the launcher (GOV-PARALLEL-01 sections 6 and 7).
+- Assigned backend domain implementation. The paths above are the SHARED backend resources. Within them, the
+  work order that the master plan names as a domain's owner implements that domain's own modules in `apps/api`
+  (for Lane 1, SC-BE-01..08 including SC-BE-05S), under the one-active-backend-writer rule, and routes the
+  shared pieces (migrations, events, auth and capability definitions, the generated contract) through root PRs.
+  This confirms authority for domains the master plan already assigns. It allocates NO unassigned domain: the
+  Mobile, Storefront and Operator backend orders stay governed by RB27-D01, and any domain without a named owner
+  order stays unassigned until a founder decision names one.
+- Transitional shared changes. Reviewed Console localisation changes already open in Lane 1 PRs #203 to #206
+  (`packages/locale`, additive) were made before this addendum took effect and are grandfathered: they proceed
+  through ordinary review and integration and are not retroactive violations. The grandfathering is limited to
+  those PRs. From the merge of this addendum, every new shared-resource change follows this section and
+  GOV-PARALLEL-01 section 2 (a request, then a root PR); a historical deviation never authorises a later one.
 - A domain is implemented once, by its owner order. Consumers use the generated API when it exists; a
   consumer never implies ownership.
 - Surface activation (registering `apps/mobile`, later `apps/storefront`, `apps/operator`, in the workspace
@@ -84,7 +104,8 @@ and `packages/api-client` generated files (by the official generators only); `pa
 Procedure: `docs/rebuild/GOV-PARALLEL-01-EXECUTION-CONTROLS.md`.
 
 ## RB27-D05 -- Cross-lane contracts and provisional ports
-One cross-lane contract register (`docs/rebuild/GOV-PARALLEL-01-CONTRACT-REGISTER.csv`): per operation the
+One cross-lane contract register (`docs/rebuild/GOV-PARALLEL-01-CONTRACT-REGISTER.csv`), written only by the
+root coordinator (RB27-D04); lanes submit proposed changes, they do not edit it: per operation the
 requirement and design section, owner order, consumers, status (PROVISIONAL / APPROVED / GENERATED /
 INTEGRATED), revision, request/response fields, audience, capabilities, data classification, error and retry
 semantics, freshness, tests and the generated replacement SHA. Until the owner's generated operation exists,
@@ -133,6 +154,8 @@ has fewer required checks than before:
   (trigger only: no job, no dependency, no workspace change). A pull request must not be the only carrier of the
   workflow that verifies it. Push runs on `rebuild/**` already give exact-head CI; the trigger adds the
   merge-candidate run for pull requests (today only `rebuild/2026-11-25` and `dev`).
+- The complete twelve-step Mobile activation sequence, from the merge of this addendum to the post-merge
+  verification, is GOV-PARALLEL-01 section 5. It is kept in that one place; this addendum does not restate it.
 - A ruleset for the lane integration branches by EXACT name (`refs/heads/rebuild/l2-mobile`, later
   `-storefront`, `-operator`; not a `rebuild/l2-*` wildcard, which would also capture topic branches): no
   deletion, no non-fast-forward, pull request required with review-thread resolution, zero bypass actors.
