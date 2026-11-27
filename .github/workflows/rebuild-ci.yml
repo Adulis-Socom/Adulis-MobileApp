@@ -276,6 +276,85 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm --filter @adulis/console test:e2e
 
+      # SCR-1 (SC-FE-12 screen-reader review): the fixture-control build that the Playwright `fixture` project has just
+      # built and tested (vite build --mode fixture-control, ADULIS_FIXTURES=on), published for local download. It is
+      # staged, never rebuilt, and only when EVERY step above succeeded (success(), not the !cancelled() used to keep
+      # reporting). SYNTHETIC DEMONSTRATION DATA ONLY: not a release, never deployed, retained 7 days. The ordinary
+      # release build (dist) and its exclusion controls above are untouched.
+      - name: Stage the fixture-control build (only after every verification step passed)
+        if: ${{ success() }}
+        env:
+          STAGE: ${{ runner.temp }}/console-fixture-control
+          EVENT_NAME: ${{ github.event_name }}
+          GH_REF: ${{ github.ref }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          src=apps/console/dist-fixture
+          test -f "$src/index.html" || { echo "missing $src/index.html: the fixture-control build was not produced"; exit 1; }
+          rm -rf "$STAGE"; mkdir -p "$STAGE"
+          cp -R "$src"/. "$STAGE"/
+          # Positive guard: this really is the fixture-control build (it carries the fixture module marker), not a release.
+          grep -rq 'ADULIS_FIXTURE_MODULE_MARKER_7f3a' "$STAGE" || { echo "the staged build has no fixture marker: refusing to publish it as fixture-control"; exit 1; }
+          # Negative guard: nothing that looks like a credential, environment file, backup or log may be published.
+          bad="$(find "$STAGE" \( -iname '.env*' -o -iname '*.pem' -o -iname '*.key' -o -iname '*.p12' -o -iname '*.sql' -o -iname '*.bak' -o -iname '*.dump' -o -iname '*.sqlite*' -o -iname '*.log' -o -iname 'credentials*' -o -iname '*.map' \) -print)"
+          if [ -n "$bad" ]; then echo "refusing to publish unexpected files:"; echo "$bad"; exit 1; fi
+          if grep -rIlE -e '-----BEGIN [A-Z ]*PRIVATE KEY-----' "$STAGE"; then echo "a private key pattern is present: refusing to publish"; exit 1; fi
+          case "$EVENT_NAME" in
+            push) KIND=exact-head ;;
+            pull_request) KIND=merge-candidate ;;
+            *) KIND=manual ;;
+          esac
+          export KIND TREE="$(git rev-parse 'HEAD^{tree}')" COMMIT="$(git rev-parse HEAD)" FILES="$(find "$STAGE" -type f | wc -l)" INDEX_SHA="$(sha256sum "$STAGE/index.html" | cut -d' ' -f1)" BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          node -e '
+            const e = process.env;
+            const info = {
+              artifact: "console-fixture-control",
+              purpose: "Seller Console screen-reader review (SC-FE-12). SYNTHETIC DEMONSTRATION DATA ONLY. Not a release. Never deploy.",
+              build_mode: "vite build --mode fixture-control with ADULIS_FIXTURES=on (the build the Playwright fixture project tested)",
+              synthetic_data_only: true,
+              candidate_kind: e.KIND,
+              checked_out_commit: e.COMMIT,
+              checked_out_tree: e.TREE,
+              event: e.EVENT_NAME,
+              ref: e.GH_REF,
+              repository: e.REPOSITORY,
+              workflow: "Rebuild CI",
+              job: "console",
+              workflow_run_id: e.RUN_ID,
+              workflow_run_attempt: e.RUN_ATTEMPT,
+              built_at_utc: e.BUILT_AT,
+              file_count: Number(e.FILES),
+              index_html_sha256: e.INDEX_SHA,
+            };
+            if (e.EVENT_NAME === "pull_request") Object.assign(info, { pull_request: Number(e.PR_NUMBER), pull_request_head_sha: e.PR_HEAD_SHA, pull_request_base_sha: e.PR_BASE_SHA, note: "checked_out_commit is the merge that GitHub makes of the PR head onto its base (the merge candidate); the exact head is pull_request_head_sha" });
+            require("fs").writeFileSync(e.STAGE + "/BUILD_INFO.json", JSON.stringify(info, null, 2) + "\n");
+          '
+          printf '%s\n' \
+            'Adulis Seller Console - fixture-control build (SYNTHETIC DEMONSTRATION DATA ONLY).' \
+            'Not a release. Do not deploy. Read BUILD_INFO.json for the exact commit, tree and workflow run.' \
+            '' \
+            'Serve this folder from its root with single-page-app fallback, then open http://127.0.0.1:4173/ :' \
+            '  npx serve -s . -l 4173' \
+            '(a plain static server also works if you enter at / and navigate inside the app; a deep link needs the fallback)' \
+            > "$STAGE/README.txt"
+          echo "staged $FILES files as $KIND of $COMMIT"
+          cat "$STAGE/BUILD_INFO.json"
+
+      - name: Upload the fixture-control build (console-fixture-control)
+        if: ${{ success() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: console-fixture-control
+          path: ${{ runner.temp }}/console-fixture-control
+          retention-days: 7
+          if-no-files-found: error
+
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
