@@ -1065,4 +1065,10 @@ export const enConsole = {
   'field_error.RETURNS_WINDOW_INVALID': 'Enter a whole number of days from 1 to 365.',
   'field_error.TEXT_TOO_LONG': 'Use 500 characters or fewer.',
   'field_error.QUESTION_REQUIRED': 'Type a question to test.',
+
+  // ---- DEPRECATED 02C reply codes, kept so the shared locale change is additive; remove after SC-FE-07-09-CLOSE is integrated (proposed English, awaiting approval) ----
+  'field_error.MESSAGE_BODY_REQUIRED': 'Write a message before sending.',
+  'field_error.MESSAGE_PRODUCT_NOT_IN_SCENE': 'This Product is not tagged in the chosen Scene.',
+  'field_error.CONTEXT_SCENE_NOT_AVAILABLE': 'This Scene cannot be used right now.',
+  'field_error.CONTEXT_PRODUCT_NOT_AVAILABLE': 'This Product cannot be used right now.',
 } as const;
