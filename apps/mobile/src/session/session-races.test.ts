@@ -147,8 +147,10 @@ describe('sign-in persistence (M01-R01 / M01-R02)', () => {
     const held = store.hold('write');
     const pending = signIn(runtime, phone('second'));
     await flush();
-    await runtime.session.endFromServer(epoch, 'EXPIRED', null);
+    // The expiry's own credential delete queues behind the held write, so it is awaited only after the release.
+    const ending = runtime.session.endFromServer(epoch, 'EXPIRED', null);
     held.release();
+    await ending;
     expect(await pending).toEqual({ kind: 'STALE' });
     await runtime.session.idle();
     expect(seen).toEqual(['GUEST']); // the second Account was never adopted
@@ -179,8 +181,9 @@ describe('sign-in persistence (M01-R01 / M01-R02)', () => {
     const held = store.hold('write');
     const late = signIn(runtime, phone('second'));
     await flush();
-    await runtime.session.endFromServer(runtime.session.state().epoch, 'REVOKED', null);
+    const ending = runtime.session.endFromServer(runtime.session.state().epoch, 'REVOKED', null);
     held.release();
+    await ending;
     expect(await late).toEqual({ kind: 'STALE' });
     await runtime.session.idle();
     const again = await signIn(runtime, phone('owner'));

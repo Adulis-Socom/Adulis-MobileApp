@@ -14,13 +14,18 @@ export function fixturesOn(on: boolean): void {
   else delete process.env.EXPO_PUBLIC_ADULIS_FIXTURES;
 }
 
-export const boot = (initialUrl?: string) => renderRouter(APP_DIR, initialUrl === undefined ? {} : { initialUrl });
+export const boot = (initialUrl?: string): ReturnType<typeof renderRouter> => renderRouter(APP_DIR, initialUrl === undefined ? {} : { initialUrl });
 
-/** The stock bottom tab bar marks its items role "tab" on Android and "button" on iOS (jest-expo renders iOS). */
-export const bottomTab = (name: string) => screen.getByRole(Platform.OS === 'ios' ? 'button' : 'tab', { name });
-export const findText = (key: UiMessageKey, slots?: Readonly<Record<string, string | number>>) => screen.findByText(t(key, slots), undefined, WAIT);
-export const findAllText = (key: UiMessageKey) => screen.findAllByText(t(key), undefined, WAIT);
-export const button = (key: UiMessageKey, slots?: Readonly<Record<string, string | number>>) => screen.getByRole('button', { name: t(key, slots) });
+type Found = ReturnType<typeof screen.getByRole>;
+
+/**
+ * A bottom tab item. The stock tab bar labels each item "<title>, tab, n of 5" with role "tab" on Android and "button" on iOS
+ * (jest-expo renders iOS).
+ */
+export const bottomTab = (name: string): Found => screen.getByRole(Platform.OS === 'ios' ? 'button' : 'tab', { name: (label: string) => label.startsWith(`${name}, tab`) });
+export const findText = (key: UiMessageKey, slots?: Readonly<Record<string, string | number>>): ReturnType<typeof screen.findByText> => screen.findByText(t(key, slots), undefined, WAIT);
+export const findAllText = (key: UiMessageKey): ReturnType<typeof screen.findAllByText> => screen.findAllByText(t(key), undefined, WAIT);
+export const button = (key: UiMessageKey, slots?: Readonly<Record<string, string | number>>): Found => screen.getByRole('button', { name: t(key, slots) });
 
 /** Signs in through the real screens, from wherever a "Sign in" control is showing or from the sign-in screen itself. */
 export async function signInThroughScreens(phone: string, code = '246810'): Promise<void> {
