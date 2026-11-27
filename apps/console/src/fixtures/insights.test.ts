@@ -32,7 +32,7 @@ describe('SC-FE-10 Insights: server projections with every metric state kept apa
     expect(all['PRODUCT_SAVES']).toEqual({ state: 'WITHHELD' });
     expect(all['STOREFRONT_VISITS']).toEqual({ state: 'UNKNOWN' });
     expect(all['AUTOMATED_ANSWERS']).toEqual({ state: 'UNAVAILABLE' });
-    expect(all['PURCHASE_CONVERSION']).toEqual({ state: 'UNSUPPORTED' });
+    expect(all['CONVERSION_TO_SALE']).toEqual({ state: 'UNSUPPORTED' });
     expect(view.window.days).toBe(30);
     expect(view.timezone).toBe('Africa/Addis_Ababa');
     expect(view.sections.flatMap((s) => s.metrics).every((m) => m.definition_version >= 1)).toBe(true);
